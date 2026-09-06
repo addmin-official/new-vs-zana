@@ -1,4 +1,4 @@
-import { AuthService, VerifiedTokenClaims } from '../../services/authService.ts';
+import { verifyFirebaseIdToken, VerifiedTokenClaims } from './tokenVerification.ts';
 
 export async function verifyAuthToken(
   token: string,
@@ -11,7 +11,7 @@ export async function verifyAuthToken(
   const projectId = env?.FIREBASE_PROJECT_ID || (typeof process !== 'undefined' ? process.env?.FIREBASE_PROJECT_ID : undefined);
 
   try {
-    const claims = await AuthService.verifyFirebaseIdToken(token, projectId);
+    const claims = await verifyFirebaseIdToken(token, projectId);
     return claims;
   } catch (error) {
     if (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production') {

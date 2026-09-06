@@ -1,39 +1,5 @@
 import { VisionQuestionResult, VisionRequestMode, VisionStudyContext } from "./visionTypes.ts";
-import { parseResponseJson } from "../../lib/apiClient.ts";
-
-const getApiUrl = (path: string): string => {
-  const baseUrl = import.meta.env.VITE_API_BASE_URL;
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  if (!baseUrl || !baseUrl.trim()) {
-    return normalizedPath;
-  }
-  const normalizedBase = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
-  return `${normalizedBase}${normalizedPath}`;
-};
-
-async function fetchWithFallback(path: string, init: RequestInit): Promise<Response> {
-  const primaryUrl = getApiUrl(path);
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-
-  if (primaryUrl === normalizedPath) {
-    return fetch(primaryUrl, init);
-  }
-
-  try {
-    const response = await fetch(primaryUrl, init);
-    if (!response.ok && (response.status === 404 || response.status === 502 || response.status === 503)) {
-      try {
-        return await fetch(normalizedPath, init);
-      } catch {
-        return response;
-      }
-    }
-    return response;
-  } catch (err) {
-    console.warn(`Fetch to ${primaryUrl} failed (${err instanceof Error ? err.message : String(err)}), falling back to relative endpoint: ${normalizedPath}`);
-    return fetch(normalizedPath, init);
-  }
-}
+import { parseResponseJson, fetchWithFallback } from "../../lib/apiClient.ts";
 
 export class VisionApi {
   /**

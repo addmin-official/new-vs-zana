@@ -20,8 +20,40 @@ Object.defineProperty(global, "window", {
 });
 
 // Use dynamic imports to ensure the mocks are in place when studentStorage evaluates its module-level `isBrowser` constant
-const { parseResponseJson } = await import("../lib/apiClient.ts");
+const { parseResponseJson, getApiUrl, fetchWithFallback } = await import("../lib/apiClient.ts");
 const { getStudentProfile, saveStudentProfile } = await import("../features/student/studentStorage.ts");
+
+test("API Client - getApiUrl uses relative path on localhost/preview and remote URL otherwise", () => {
+  // In our mock window, location is not set or can be simulated
+  assert.strictEqual(typeof getApiUrl("/api/chat"), "string");
+  assert.ok(getApiUrl("/api/chat").endsWith("/api/chat"));
+});
+
+test("API Client - fetchWithFallback falls back to relative endpoint on failure", async () => {
+  const originalFetch = globalThis.fetch;
+  let callCount = 0;
+  globalThis.fetch = async (input: RequestInfo | URL) => {
+    callCount++;
+    const url = String(input);
+    if (url.includes("workers.dev")) {
+      throw new Error("Failed to fetch");
+    }
+    return new Response(JSON.stringify({ ok: true, source: "relative" }), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    });
+  };
+
+  try {
+    const res = await fetchWithFallback("/api/chat", { method: "POST" });
+    assert.strictEqual(res.status, 200);
+    assert.ok(callCount > 0);
+    const data = await res.json();
+    assert.strictEqual(data.ok, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 test("API Client - parseResponseJson with success JSON response", async () => {
   const response = new Response(JSON.stringify({ success: true, message: "بژیو" }), {

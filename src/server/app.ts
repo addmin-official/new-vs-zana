@@ -19,7 +19,7 @@ import { StudyTaskStatus, PlanGenerationMode } from "../planning/domain/Learning
 import { PlanRebalancer } from "../planning/engine/PlanRebalancer.ts";
 import { AdaptiveLearningEngine as StudentMasteryAdaptiveEngine } from "../learning/engine/AdaptiveLearningEngine.ts";
 import { CurriculumRegistry } from "../curriculum/registry/CurriculumRegistry.ts";
-import { AuthService } from "../services/authService.ts";
+import { verifyFirebaseIdToken } from "./auth/tokenVerification.ts";
 import { DifficultyLevel, MisconceptionStatus } from "../learning/domain/MasteryTypes.ts";
 import { handleStudyPlanRoute } from "./api/study/plan.ts";
 import { handlePracticeSnapshotRoute, handlePracticeEvaluateRoute } from "./api/study/practice.ts";
@@ -150,7 +150,7 @@ async function getAuthenticatedStudentId(req: Request): Promise<string> {
   }
 
   try {
-    const claims = await AuthService.verifyFirebaseIdToken(token, process.env.FIREBASE_PROJECT_ID);
+    const claims = await verifyFirebaseIdToken(token, process.env.FIREBASE_PROJECT_ID);
     return claims.uid;
   } catch {
     if (process.env.NODE_ENV !== "production") {
