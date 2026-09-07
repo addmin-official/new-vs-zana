@@ -19,7 +19,6 @@
     "noFallthroughCasesInSwitch": true,
     "allowJs": false,
     "jsx": "react-jsx",
-    "types": ["vite/client"],
     "paths": {
       "@/*": [
         "./*"
