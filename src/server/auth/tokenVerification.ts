@@ -67,7 +67,8 @@ export async function verifyFirebaseIdToken(
 
   const expectedProjectId =
     overrideProjectId ||
-    (typeof process !== "undefined" ? process.env?.FIREBASE_PROJECT_ID : undefined);
+    (typeof process !== "undefined" ? process.env?.FIREBASE_PROJECT_ID : undefined) ||
+    "gen-lang-client-0009572581";
 
   if (!expectedProjectId) {
     throw new Error("FIREBASE_PROJECT_ID is not configured");

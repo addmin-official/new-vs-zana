@@ -147,20 +147,35 @@ describe("Patch 19.2 - Curriculum Index & Retrieval Engine", () => {
 
   it("CurriculumDocumentProvider fails closed and reports PDF_NOT_CONNECTED_TO_RUNTIME when unconfigured", async () => {
     const { CurriculumDocumentProvider } = await import("../providers/CurriculumDocumentProvider.ts");
-    const docProvider = new CurriculumDocumentProvider();
+    const origIds = process.env.ZANA_CURRICULUM_DOCUMENT_IDS;
+    const origUri = process.env.ZANA_CURRICULUM_DOCUMENT_URI;
+    const origId = process.env.ZANA_CURRICULUM_DOCUMENT_ID;
+    const origPath = process.env.ZANA_CURRICULUM_FILE_PATH;
+    delete process.env.ZANA_CURRICULUM_DOCUMENT_IDS;
+    delete process.env.ZANA_CURRICULUM_DOCUMENT_URI;
+    delete process.env.ZANA_CURRICULUM_DOCUMENT_ID;
+    delete process.env.ZANA_CURRICULUM_FILE_PATH;
+    try {
+      const docProvider = new CurriculumDocumentProvider({ documentIds: [] });
 
-    const isAvailable = await docProvider.isDocumentAvailable();
-    assert.strictEqual(isAvailable, false, "Should report unavailable when no physical PDF or valid URI is connected.");
+      const isAvailable = await docProvider.isDocumentAvailable();
+      assert.strictEqual(isAvailable, false, "Should report unavailable when no physical PDF or valid URI is connected.");
 
-    const status = await docProvider.getStatus();
-    assert.strictEqual(status.pdfAccessible, false);
-    assert.strictEqual(status.runtimeConnected, false);
-    assert.strictEqual(status.ingestionStatus, "NOT_CONFIGURED");
+      const status = await docProvider.getStatus();
+      assert.strictEqual(status.pdfAccessible, false);
+      assert.strictEqual(status.runtimeConnected, false);
+      assert.strictEqual(status.ingestionStatus, "NOT_CONFIGURED");
 
-    const report = await docProvider.executeVerification("خێرایی کارلێک چییە؟");
-    assert.strictEqual(report.pdf_accessible, false);
-    assert.strictEqual(report.runtime_connected, false);
-    assert.strictEqual(report.grounding_verdict, "PDF_NOT_CONNECTED_TO_RUNTIME");
+      const report = await docProvider.executeVerification("خێرایی کارلێک چییە؟");
+      assert.strictEqual(report.pdf_accessible, false);
+      assert.strictEqual(report.runtime_connected, false);
+      assert.strictEqual(report.grounding_verdict, "PDF_NOT_CONNECTED_TO_RUNTIME");
+    } finally {
+      if (origIds !== undefined) process.env.ZANA_CURRICULUM_DOCUMENT_IDS = origIds;
+      if (origUri !== undefined) process.env.ZANA_CURRICULUM_DOCUMENT_URI = origUri;
+      if (origId !== undefined) process.env.ZANA_CURRICULUM_DOCUMENT_ID = origId;
+      if (origPath !== undefined) process.env.ZANA_CURRICULUM_FILE_PATH = origPath;
+    }
   });
 
   it("CurriculumRetriever with requireRealPdfDocument fails closed when document is missing", async () => {

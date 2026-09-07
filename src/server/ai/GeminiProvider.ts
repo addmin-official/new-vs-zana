@@ -53,8 +53,15 @@ export class GeminiProvider {
             "User-Agent": "aistudio-build",
           };
 
+          let normalizedContents: unknown = params.contents;
+          if (typeof normalizedContents === "string") {
+            normalizedContents = [{ role: "user", parts: [{ text: normalizedContents }] }];
+          } else if (Array.isArray(normalizedContents) && normalizedContents.length > 0 && typeof normalizedContents[0] === "string") {
+            normalizedContents = [{ role: "user", parts: (normalizedContents as unknown as string[]).map((t) => ({ text: t })) }];
+          }
+
           const body: Record<string, unknown> = {
-            contents: params.contents,
+            contents: normalizedContents,
           };
 
           if (params.config && typeof params.config === "object") {

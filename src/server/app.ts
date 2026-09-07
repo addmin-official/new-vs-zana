@@ -207,7 +207,7 @@ app.post("/api/assessment", rateLimitMiddleware(60, 60 * 1000), async (req: Requ
 });
 
 // 3. REPORT ENDPOINT
-app.post("/api/report", rateLimitMiddleware(60, 60 * 1000), async (req: Request, res: Response) => {
+app.post(["/api/report", "/api/reports"], rateLimitMiddleware(60, 60 * 1000), async (req: Request, res: Response) => {
   try {
     const reportReq = parseReportRequest(req.body);
     const result = await ProviderAdapter.report(process.env.GEMINI_API_KEY || "", reportReq);

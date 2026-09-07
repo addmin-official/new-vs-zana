@@ -181,6 +181,7 @@ function getCorsHeaders(origin: string | null, env: Env): Headers {
 
   if (origin && isOriginAllowed(origin, env)) {
     headers.set("Access-Control-Allow-Origin", origin);
+    headers.set("Vary", "Origin");
   }
 
   headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -401,12 +402,12 @@ async function getWorkerAuthenticatedStudentId(req: Request, env: Env): Promise<
     throw new Error("UNAUTHORIZED");
   }
   const token = authHeader.substring(7).trim();
-  if (!token) {
+  if (!token || token === "null" || token === "undefined") {
     throw new Error("UNAUTHORIZED");
   }
 
   try {
-    const claims = await AuthService.verifyFirebaseIdToken(token, env.FIREBASE_PROJECT_ID);
+    const claims = await AuthService.verifyFirebaseIdToken(token, env.FIREBASE_PROJECT_ID || "gen-lang-client-0009572581");
     return claims.uid;
   } catch {
     throw new Error("UNAUTHORIZED");
@@ -431,6 +432,9 @@ export default {
       return applySecurityHeaders(rawResponse);
     } catch (error: unknown) {
       console.error("[Worker Fatal Error]", error);
+      const origin = request.headers.get("Origin");
+      const errHeaders = getCorsHeaders(origin, env);
+      errHeaders.set("Content-Type", "application/json");
       const errResponse = new Response(
         JSON.stringify({
           error: "Service Unavailable",
@@ -438,7 +442,7 @@ export default {
         }),
         {
           status: 503,
-          headers: { "Content-Type": "application/json" },
+          headers: errHeaders,
         }
       );
       return applySecurityHeaders(errResponse);
@@ -494,9 +498,13 @@ export default {
       }
     }
 
-    // Static assets & SPA fallback
-    if (!pathname.startsWith("/api/")) {
+    // Static assets & SPA fallback (Strictly excluded for /api routes)
+    const isApiRoute = pathname === "/api" || pathname.startsWith("/api/");
+    if (!isApiRoute) {
       if (env.ASSETS) {
+        if (request.method !== "GET" && request.method !== "HEAD") {
+          return new Response(JSON.stringify({ error: "Method Not Allowed" }), { status: 405, headers: responseHeaders });
+        }
         try {
           const assetResponse = await env.ASSETS.fetch(request.clone());
           if (assetResponse.status === 404) {
@@ -504,6 +512,10 @@ export default {
             const hasExtension = lastSegment.includes(".") && !lastSegment.endsWith(".");
             if (hasExtension) {
               return new Response(JSON.stringify({ error: "فایلەکە نەدۆزرایەوە." }), { status: 404, headers: responseHeaders });
+            }
+            const accept = request.headers.get("Accept") || "";
+            if (accept.includes("application/json") && !accept.includes("text/html")) {
+              return new Response(JSON.stringify({ error: "Not Found" }), { status: 404, headers: responseHeaders });
             }
             const indexUrl = new URL(request.url);
             indexUrl.pathname = "/index.html";
@@ -684,8 +696,8 @@ export default {
         );
       }
 
-      // POST /api/report
-      if (pathname === "/api/report" && request.method === "POST") {
+      // POST /api/report & /api/reports
+      if ((pathname === "/api/report" || pathname === "/api/reports") && request.method === "POST") {
         let reportReq: ReportRequest;
         try {
           const body = await request.json().catch(() => ({}));

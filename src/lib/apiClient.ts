@@ -95,15 +95,29 @@ export async function fetchWithFallback(path: string, init: RequestInit): Promis
   const primaryUrl = getApiUrl(path);
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
 
+  const requestInit: RequestInit = {
+    ...init,
+    headers: {
+      Accept: "application/json",
+      ...init?.headers,
+    },
+  };
+
   if (primaryUrl === normalizedPath) {
-    return fetch(primaryUrl, init);
+    return fetch(primaryUrl, requestInit);
   }
 
   try {
-    const response = await fetch(primaryUrl, init);
+    const response = await fetch(primaryUrl, requestInit);
     if (!response.ok && (response.status === 404 || response.status === 502 || response.status === 503)) {
       try {
-        return await fetch(normalizedPath, init);
+        const fallbackRes = await fetch(normalizedPath, requestInit);
+        const fallbackType = fallbackRes.headers.get("content-type") || "";
+        // If the fallback returned HTML (e.g. Firebase Hosting SPA index.html), do NOT return it as API response!
+        if (fallbackType.includes("text/html")) {
+          return response;
+        }
+        return fallbackRes;
       } catch {
         return response;
       }
@@ -111,7 +125,17 @@ export async function fetchWithFallback(path: string, init: RequestInit): Promis
     return response;
   } catch (err) {
     console.warn(`Fetch to ${primaryUrl} failed (${err instanceof Error ? err.message : String(err)}), falling back to relative endpoint: ${normalizedPath}`);
-    return fetch(normalizedPath, init);
+    try {
+      const fallbackRes = await fetch(normalizedPath, requestInit);
+      const fallbackType = fallbackRes.headers.get("content-type") || "";
+      if (fallbackType.includes("text/html")) {
+        throw new ApiResponseError("API service unreachable and fallback returned HTML", 503);
+      }
+      return fallbackRes;
+    } catch (fallbackErr) {
+      if (fallbackErr instanceof ApiResponseError) throw fallbackErr;
+      throw err;
+    }
   }
 }
 

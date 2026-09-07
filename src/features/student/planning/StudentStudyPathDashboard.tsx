@@ -13,7 +13,7 @@ import { WeeklyPlanView } from "./WeeklyPlanView.tsx";
 import { GoalManagementView } from "./GoalManagementView.tsx";
 import { Calendar, Compass, Target } from "lucide-react";
 import { AuthService } from "../../../services/authService.ts";
-import { parseResponseJson } from "../../../lib/apiClient.ts";
+import { parseResponseJson, fetchWithFallback } from "../../../lib/apiClient.ts";
 
 export interface StudentStudyPathDashboardProps {
   studentId: string;
@@ -53,7 +53,7 @@ export const StudentStudyPathDashboard: React.FC<StudentStudyPathDashboardProps>
 
   const safeFetchJson = async <T = unknown,>(url: string, headers: Record<string, string>): Promise<T | null> => {
     try {
-      const res = await fetch(url, { headers });
+      const res = await fetchWithFallback(url, { headers });
       return await parseResponseJson<T>(res);
     } catch {
       return null;
@@ -101,7 +101,7 @@ export const StudentStudyPathDashboard: React.FC<StudentStudyPathDashboardProps>
   const handleStartTask = async (taskId: string) => {
     try {
       const headers = await fetchHeaders();
-      const res = await fetch(`/api/planning/tasks/${taskId}/start`, {
+      const res = await fetchWithFallback(`/api/planning/tasks/${taskId}/start`, {
         method: "POST",
         headers
       });
@@ -116,7 +116,7 @@ export const StudentStudyPathDashboard: React.FC<StudentStudyPathDashboardProps>
   const handleCompleteTask = async (taskId: string) => {
     try {
       const headers = await fetchHeaders();
-      const res = await fetch(`/api/planning/tasks/${taskId}/complete`, {
+      const res = await fetchWithFallback(`/api/planning/tasks/${taskId}/complete`, {
         method: "POST",
         headers,
         body: JSON.stringify({ actualDurationMinutes: 20 })
@@ -132,7 +132,7 @@ export const StudentStudyPathDashboard: React.FC<StudentStudyPathDashboardProps>
   const handleSkipTask = async (taskId: string) => {
     try {
       const headers = await fetchHeaders();
-      const res = await fetch(`/api/planning/tasks/${taskId}/skip`, {
+      const res = await fetchWithFallback(`/api/planning/tasks/${taskId}/skip`, {
         method: "POST",
         headers
       });
@@ -148,7 +148,7 @@ export const StudentStudyPathDashboard: React.FC<StudentStudyPathDashboardProps>
     setIsRebalancing(true);
     try {
       const headers = await fetchHeaders();
-      const res = await fetch("/api/planning/rebalance", {
+      const res = await fetchWithFallback("/api/planning/rebalance", {
         method: "POST",
         headers
       });
@@ -165,7 +165,7 @@ export const StudentStudyPathDashboard: React.FC<StudentStudyPathDashboardProps>
   const handleSavePreferences = async (newPrefs: Partial<StudentLearningPreferences>) => {
     try {
       const headers = await fetchHeaders();
-      const res = await fetch("/api/planning/preferences", {
+      const res = await fetchWithFallback("/api/planning/preferences", {
         method: "POST",
         headers,
         body: JSON.stringify(newPrefs)

@@ -8,8 +8,9 @@
   ],
   "vars": {
     "ALLOWED_ORIGINS": "https://zana.krd,https://zana-api-worker.zana-platform.workers.dev",
-    "GEMINI_PRIMARY_MODEL": "gemini-3.5-flash",
-    "GEMINI_VISION_MODEL": "gemini-3.5-flash"
+    "FIREBASE_PROJECT_ID": "gen-lang-client-0009572581",
+    "GEMINI_PRIMARY_MODEL": "gemini-3.7-flash",
+    "GEMINI_VISION_MODEL": "gemini-3.7-flash"
   },
   "assets": {
     "directory": "./dist/client",

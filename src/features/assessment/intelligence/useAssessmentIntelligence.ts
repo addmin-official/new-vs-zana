@@ -19,7 +19,7 @@ import { AdaptiveLearningEngine } from "../../adaptive/AdaptiveLearningEngine.ts
 import { AdaptiveEventBridge } from "../../adaptive/AdaptiveEventBridge.ts";
 import { AuthService } from "../../../services/authService.ts";
 import { AnswerSubmission } from "../../../assessment/domain/AssessmentTypes.ts";
-import { parseResponseJson } from "../../../lib/apiClient.ts";
+import { parseResponseJson, fetchWithFallback } from "../../../lib/apiClient.ts";
 
 /**
  * Hook to manage Assessment Intelligence Platform state,
@@ -86,7 +86,8 @@ export function useAssessmentIntelligence(
         if (studentId && studentId !== "default-guest") {
           try {
             const token = await AuthService.getClientToken(studentId);
-            const response = await fetch("/api/assessment/start", {
+            if (!token) throw new Error("No token available");
+            const response = await fetchWithFallback("/api/assessment/start", {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -255,7 +256,8 @@ export function useAssessmentIntelligence(
         if (studentId && studentId !== "default-guest" && session.blueprint) {
           try {
             const token = await AuthService.getClientToken(studentId);
-            const response = await fetch("/api/assessment/submit", {
+            if (!token) throw new Error("No token available");
+            const response = await fetchWithFallback("/api/assessment/submit", {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -356,21 +358,24 @@ export function useAssessmentIntelligence(
 
         // Record locally synced attempts for Student Mastery Engine ONLY if session is authoritative
         if (currentQuestion.conceptId && studentId && studentId !== "default-guest" && session.authoritative !== false) {
-          fetch("/api/learning/attempts", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${studentId}`
-            },
-            body: JSON.stringify({
-              conceptId: currentQuestion.conceptId,
-              isCorrect,
-              responseTimeMs: 8000,
-              difficulty: "STANDARD",
-              questionText: currentQuestion.prompt,
-              studentResponse: legacyAnswerText
-            })
-          }).catch(err => console.warn("Backend mastery attempt sync pending:", err));
+          AuthService.getClientToken(studentId).then((token) => {
+            if (!token) return;
+            fetchWithFallback("/api/learning/attempts", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                conceptId: currentQuestion.conceptId,
+                isCorrect,
+                responseTimeMs: 8000,
+                difficulty: "STANDARD",
+                questionText: currentQuestion.prompt,
+                studentResponse: legacyAnswerText
+              })
+            }).catch(err => console.warn("Backend mastery attempt sync pending:", err));
+          }).catch(() => {});
         }
 
         setSession(updatedSession);
@@ -413,7 +418,8 @@ export function useAssessmentIntelligence(
         if (studentId && studentId !== "default-guest" && session.blueprint) {
           try {
             const token = await AuthService.getClientToken(studentId);
-            const response = await fetch("/api/assessment/finish", {
+            if (!token) throw new Error("No token available");
+            const response = await fetchWithFallback("/api/assessment/finish", {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",

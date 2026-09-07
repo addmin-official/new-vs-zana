@@ -41,8 +41,8 @@ requireMatch(wrangler, /https:\/\/zana\.krd/, 'Canonical frontend origin https:/
 forbidMatch(wrangler, /localhost|127\.0\.0\.1|\.web\.app|firebaseapp\.com/i, 'Production Wrangler configuration contains localhost, emulator, or Firebase Hosting routing.');
 
 // Canonical Gemini contract.
-requireMatch(models, /primaryModel\s*:\s*"gemini-3\.5-flash"/, 'Primary Gemini model changed from gemini-3.5-flash.');
-requireMatch(models, /visionModel\s*:\s*"gemini-3\.5-flash"/, 'Vision Gemini model changed from gemini-3.5-flash.');
+requireMatch(models, /primaryModel\s*:\s*"gemini-3\.7-flash"/, 'Primary Gemini model changed from gemini-3.7-flash.');
+requireMatch(models, /visionModel\s*:\s*"gemini-3\.7-flash"/, 'Vision Gemini model changed from gemini-3.7-flash.');
 requireMatch(provider, /new GoogleGenAI\s*\(\s*\{\s*apiKey:/s, 'Gemini provider no longer initializes GoogleGenAI with an API key.');
 requireMatch(provider, /ai\.models\.generateContent\s*\(/, 'Gemini provider no longer uses models.generateContent.');
 requireMatch(worker, /GEMINI_API_KEY\s*:\s*string/, 'Worker GEMINI_API_KEY binding contract is missing.');
