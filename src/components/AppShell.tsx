@@ -42,7 +42,7 @@ export function AppShell({ children, profile, activeTab, onTabChange, isOfflineF
       )}
 
       {/* Main Container */}
-      <main className={`flex-1 w-full max-w-md mx-auto px-4 pt-4 ${showNav ? "pb-24" : "pb-6"} flex flex-col`}>
+      <main className={`flex-1 w-full ${activeTab === "practice" ? "max-w-lg" : "max-w-md"} mx-auto px-4 pt-4 ${showNav ? "pb-24" : "pb-6"} flex flex-col`}>
         {children}
       </main>
 

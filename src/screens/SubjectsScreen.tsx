@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ZanaButton } from "../components/ZanaButton.tsx";
 import { StudentProfile, SubjectKey } from "../features/student/studentTypes.ts";
 import { SUBJECTS_DATA } from "../data/subjects.ts";
-import { BookOpen, Calculator, Flame, Atom, Languages, ChevronDown, ChevronUp, MessageSquare } from "lucide-react";
+import { BookOpen, Calculator, Flame, Atom, Languages, ChevronDown, ChevronUp, MessageSquare, FlaskConical } from "lucide-react";
 
 interface SubjectsScreenProps {
   profile: StudentProfile;
@@ -136,15 +136,28 @@ export function SubjectsScreen({ profile, onSelectSubject, onNavigate }: Subject
                     )}
                   </div>
 
-                  {/* Actions to Study */}
-                  <ZanaButton
-                    variant={isActiveSubject ? "secondary" : "primary"}
-                    fullWidth
-                    onClick={() => handleStartStudy(subjectId)}
-                  >
-                    <span>دەستپێکردنی وانەکە</span>
-                    <MessageSquare className="w-4 h-4 mr-2" />
-                  </ZanaButton>
+                  {/* Actions to Study & Practice */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <ZanaButton
+                      variant={isActiveSubject ? "secondary" : "primary"}
+                      fullWidth
+                      onClick={() => handleStartStudy(subjectId)}
+                    >
+                      <span className="text-xs">دەستپێکردنی وانە</span>
+                      <MessageSquare className="w-3.5 h-3.5 mr-1" />
+                    </ZanaButton>
+
+                    <button
+                      onClick={() => {
+                        onSelectSubject(subjectId);
+                        onNavigate("practice");
+                      }}
+                      className="w-full py-2.5 px-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition-colors flex items-center justify-center gap-1 cursor-pointer border border-blue-200/80 shadow-xs"
+                    >
+                      <FlaskConical className="w-3.5 h-3.5 text-blue-600" />
+                      <span>ڕاهێنانی کارلێککار</span>
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

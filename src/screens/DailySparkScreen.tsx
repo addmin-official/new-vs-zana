@@ -12,7 +12,8 @@ import {
   BookOpen,
   Clock,
   Flame,
-  AlertCircle
+  AlertCircle,
+  FlaskConical
 } from "lucide-react";
 import { useState } from "react";
 
@@ -223,6 +224,26 @@ export function DailySparkScreen({ profile: _profile, onNavigate, onStartAssessm
         <h4 className="font-sans font-bold text-sm text-slate-800 text-right mb-2">
           کردارە خێراکان
         </h4>
+
+        {/* Interactive Practice Action */}
+        <button
+          onClick={() => onNavigate("practice")}
+          className="w-full flex items-center justify-between p-3.5 rounded-xl border border-blue-100 bg-blue-50/20 hover:bg-blue-50/50 hover:border-blue-300 transition-all text-right cursor-pointer min-h-[48px]"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center shrink-0">
+              <FlaskConical className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <p className="font-sans text-sm font-bold text-slate-800">ڕاهێنانی کارلێککارانە</p>
+                <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.2 rounded-md">نوێ</span>
+              </div>
+              <p className="font-sans text-xs text-slate-500 mt-0.5">تاقیگەی مەجازی، شیکارکەری هەنگاو بە هەنگاو و دیاگرام</p>
+            </div>
+          </div>
+          <ArrowLeft className="w-4 h-4 text-blue-500 flip-rtl shrink-0" />
+        </button>
 
         {/* Assessment Action */}
         <button

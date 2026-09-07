@@ -1,6 +1,6 @@
-import { Sparkles, Compass, BookOpen, BookMarked, FileText, User } from "lucide-react";
+import { Sparkles, Compass, BookOpen, BookMarked, FileText, User, FlaskConical } from "lucide-react";
 
-export type NavTab = "daily" | "plan" | "subjects" | "chat" | "report" | "profile";
+export type NavTab = "daily" | "practice" | "plan" | "subjects" | "chat" | "report" | "profile";
 
 interface BottomNavigationProps {
   activeTab: NavTab;
@@ -10,9 +10,10 @@ interface BottomNavigationProps {
 export function BottomNavigation({ activeTab, onTabChange }: BottomNavigationProps) {
   const tabs = [
     { id: "daily" as NavTab, label: "ڕۆژانە", icon: Sparkles },
-    { id: "plan" as NavTab, label: "پلانی خوێندن", icon: Compass },
+    { id: "practice" as NavTab, label: "ڕاهێنان", icon: FlaskConical },
     { id: "subjects" as NavTab, label: "بابەتەکان", icon: BookOpen },
     { id: "chat" as NavTab, label: "خوێندن", icon: BookMarked },
+    { id: "plan" as NavTab, label: "پلان", icon: Compass },
     { id: "report" as NavTab, label: "ڕاپۆرت", icon: FileText },
     { id: "profile" as NavTab, label: "پڕۆفایل", icon: User }
   ];
