@@ -202,7 +202,7 @@ describe("Patch 19.3 - Real Chemistry AI Tutor Grounding & Security Verification
 
   // --- TEST 6: Chat route integration ---
   it("Chat route integration: /api/chat enforces server-side context resolution and rejects client provenance", async () => {
-    const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/chat", {
+    const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/chat", {
       method: "POST",
       headers: {
         Origin: "https://zana.krd",
@@ -313,7 +313,7 @@ describe("Patch 19.3 - Real Chemistry AI Tutor Grounding & Security Verification
 
   // --- TEST 9: Student isolation ---
   it("Student isolation: server-authoritative authentication overrides any client-supplied body identifiers", async () => {
-    const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/chat", {
+    const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/chat", {
       method: "POST",
       headers: {
         Origin: "https://zana.krd",

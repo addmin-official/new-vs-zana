@@ -48,7 +48,7 @@ app.get("/api/health", (req: Request, res: Response) => {
   res.json({
     ok: true,
     status: "ok",
-    service: "zana-api-worker",
+    service: "new-vs-zana",
     revision: process.env.ZANA_REVISION || "unknown",
   });
 });

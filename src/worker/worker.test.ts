@@ -30,7 +30,7 @@ const createMockEnv = (assetsMock?: { fetch: (req: Request) => Promise<Response>
 });
 
 test("Worker - GET /api/health with approved Origin returns 200 and exact CORS origin", async () => {
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/health", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/health", {
     method: "GET",
     headers: {
       Origin: "https://zana.krd",
@@ -48,11 +48,11 @@ test("Worker - GET /api/health with approved Origin returns 200 and exact CORS o
   const body = (await res.json()) as ApiJsonResponse;
   assert.strictEqual(body.ok, true);
   assert.strictEqual(body.status, "ok");
-  assert.strictEqual(body.service, "zana-api-worker");
+  assert.strictEqual(body.service, "new-vs-zana");
 });
 
 test("Worker - GET /api/health meets strict health contract", async () => {
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/health", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/health", {
     method: "GET",
   });
 
@@ -65,7 +65,7 @@ test("Worker - GET /api/health meets strict health contract", async () => {
   
   assert.strictEqual(body.ok, true);
   assert.strictEqual(body.status, "ok");
-  assert.strictEqual(body.service, "zana-api-worker");
+  assert.strictEqual(body.service, "new-vs-zana");
   assert.strictEqual(/^[0-9a-f]{7}$/.test(body.revision), true);
   
   // Verify no sensitive fields leak
@@ -77,7 +77,7 @@ test("Worker - GET /api/health meets strict health contract", async () => {
 });
 
 test("Worker - GET /api/provider/preflight with POST returns 405", async () => {
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/provider/preflight", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/provider/preflight", {
     method: "POST",
     headers: {
       Authorization: "Bearer test-token",
@@ -91,7 +91,7 @@ test("Worker - GET /api/provider/preflight with POST returns 405", async () => {
 });
 
 test("Worker - GET /api/provider/preflight without token returns 401", async () => {
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/provider/preflight", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/provider/preflight", {
     method: "GET",
   });
 
@@ -105,7 +105,7 @@ test("Worker - GET /api/provider/preflight without token returns 401", async () 
 });
 
 test("Worker - GET /api/provider/preflight with malformed Bearer header returns 401", async () => {
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/provider/preflight", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/provider/preflight", {
     method: "GET",
     headers: {
       Authorization: "Basic invalid-token",
@@ -122,7 +122,7 @@ test("Worker - GET /api/provider/preflight with malformed Bearer header returns 
 });
 
 test("Worker - GET /api/provider/preflight with wrong token returns 401", async () => {
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/provider/preflight", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/provider/preflight", {
     method: "GET",
     headers: {
       Authorization: "Bearer invalid-token",
@@ -139,7 +139,7 @@ test("Worker - GET /api/provider/preflight with wrong token returns 401", async 
 });
 
 test("Worker - GET /api/provider/preflight with valid token but no API KEY returns 503", async () => {
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/provider/preflight", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/provider/preflight", {
     method: "GET",
     headers: {
       Authorization: "Bearer test-token",
@@ -158,7 +158,7 @@ test("Worker - GET /api/provider/preflight with valid token but no API KEY retur
 
 // Since we cannot easily mock ProviderAdapter.generate in this test environment natively without setup, we will just ensure it reaches the provider by testing the error response when API_KEY is invalid/dummy.
 test("Worker - GET /api/provider/preflight with valid token returns sanitized 503 on provider error", async () => {
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/provider/preflight", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/provider/preflight", {
     method: "GET",
     headers: {
       Authorization: "Bearer test-token",
@@ -179,7 +179,7 @@ test("Worker - GET /api/provider/preflight with valid token returns sanitized 50
   assert.strictEqual(body.token, undefined);
 });
 test("Worker - GET /api/health without Origin header returns 200 without CORS header", async () => {
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/health", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/health", {
     method: "GET",
   });
 
@@ -193,7 +193,7 @@ test("Worker - GET /api/health without Origin header returns 200 without CORS he
 });
 
 test("Worker - GET /api/health with unapproved Origin returns 200 health without CORS header", async () => {
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/health", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/health", {
     method: "GET",
     headers: {
       Origin: "https://unauthorized.example",
@@ -219,7 +219,7 @@ test("Worker - GET /api/health rejects denied Firebase Hosting and localhost ori
   ];
 
   for (const origin of deniedOrigins) {
-    const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/health", {
+    const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/health", {
       method: "GET",
       headers: { Origin: origin },
     });
@@ -231,7 +231,7 @@ test("Worker - GET /api/health rejects denied Firebase Hosting and localhost ori
 });
 
 test("Worker - GET /api/health is unaffected by missing GEMINI_API_KEY, JWT_SECRET, or KV", async () => {
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/health", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/health", {
     method: "GET",
   });
 
@@ -250,7 +250,7 @@ test("Worker - GET /api/health is unaffected by missing GEMINI_API_KEY, JWT_SECR
 });
 
 test("Worker - GET /api/health/ with trailing slash normalizes to /api/health and returns 200", async () => {
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/health/", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/health/", {
     method: "GET",
     headers: {
       Origin: "https://zana.krd",
@@ -267,7 +267,7 @@ test("Worker - GET /api/health/ with trailing slash normalizes to /api/health an
 });
 
 test("Worker - Protected API route rejects unapproved Origin with 403", async () => {
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/chat", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/chat", {
     method: "POST",
     headers: {
       Origin: "https://unauthorized.example",
@@ -294,7 +294,7 @@ test("Worker - Protected API route rejects denied Firebase Hosting and localhost
   ];
 
   for (const origin of deniedOrigins) {
-    const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/chat", {
+    const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/chat", {
       method: "POST",
       headers: {
         Origin: origin,
@@ -313,7 +313,7 @@ test("Worker - Protected API route rejects denied Firebase Hosting and localhost
 });
 
 test("Worker - Protected API route allows approved Origin", async () => {
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/chat", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/chat", {
     method: "POST",
     headers: {
       Origin: "https://zana.krd",
@@ -335,7 +335,7 @@ test("Worker - GET /api/health is not captured by SPA fallback", async () => {
     fetch: async () => new Response("index html file content", { status: 200 }),
   };
 
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/health", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/health", {
     method: "GET",
     headers: {
       Origin: "https://zana.krd",
@@ -352,7 +352,7 @@ test("Worker - GET /api/health is not captured by SPA fallback", async () => {
 });
 
 test("Worker - unknown /api route returns JSON 404", async () => {
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/unknown-route-xyz", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/unknown-route-xyz", {
     method: "GET",
     headers: {
       Origin: "https://zana.krd",
@@ -373,7 +373,7 @@ test("Worker - missing static asset returns real 404", async () => {
     fetch: async () => new Response("Not Found", { status: 404 }),
   };
 
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/assets/nonexistent-file.css", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/assets/nonexistent-file.css", {
     method: "GET",
     headers: {
       Origin: "https://zana.krd",
@@ -399,7 +399,7 @@ test("Worker - SPA fallback works for paths without extensions", async () => {
     },
   };
 
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/some-app-route", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/some-app-route", {
     method: "GET",
     headers: {
       Origin: "https://zana.krd",
@@ -416,7 +416,7 @@ test("Worker - SPA fallback works for paths without extensions", async () => {
 
 test("Worker - Canonical URL / slash normalization is correct", async () => {
   // Test double slashes are normalized inside worker
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev//api//health", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev//api//health", {
     method: "GET",
     headers: {
       Origin: "https://zana.krd",
@@ -441,15 +441,15 @@ test("CI Utility - HTTP production URL is rejected", () => {
     return true;
   };
 
-  assert.strictEqual(validateUrl("https://zana-api-worker.zana-platform.workers.dev"), true);
-  assert.throws(() => validateUrl("http://zana-api-worker.zana-platform.workers.dev"), /must use HTTPS/);
-  assert.throws(() => validateUrl("https://zana-api-worker.zana-platform.workers.dev/"), /must not have a trailing slash/);
-  assert.throws(() => validateUrl("https://zana-api-worker.zana-platform.workers.dev/api/health"), /must be the domain origin/);
+  assert.strictEqual(validateUrl("https://new-vs-zana.zana-platform.workers.dev"), true);
+  assert.throws(() => validateUrl("http://new-vs-zana.zana-platform.workers.dev"), /must use HTTPS/);
+  assert.throws(() => validateUrl("https://new-vs-zana.zana-platform.workers.dev/"), /must not have a trailing slash/);
+  assert.throws(() => validateUrl("https://new-vs-zana.zana-platform.workers.dev/api/health"), /must be the domain origin/);
   assert.throws(() => validateUrl(""), /URL is empty/);
 });
 
 test("Worker - missing GEMINI_API_KEY on AI endpoint returns safe Kurdish error and 500", async () => {
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/chat", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/chat", {
     method: "POST",
     headers: {
       Origin: "https://zana.krd",
@@ -477,7 +477,7 @@ test("Worker - missing GEMINI_API_KEY on AI endpoint returns safe Kurdish error 
 });
 
 test("Worker - missing payload on /api/chat returns 400 with correct Kurdish spelling (کەموکوڕی)", async () => {
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/chat", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/chat", {
     method: "POST",
     headers: {
       Origin: "https://zana.krd",
@@ -495,7 +495,7 @@ test("Worker - missing payload on /api/chat returns 400 with correct Kurdish spe
 });
 
 test("Worker - missing payload on /api/study/ask returns 400 with correct Kurdish spelling (کەموکوڕی)", async () => {
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/study/ask", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/study/ask", {
     method: "POST",
     headers: {
       Origin: "https://zana.krd",
@@ -513,7 +513,7 @@ test("Worker - missing payload on /api/study/ask returns 400 with correct Kurdis
 });
 
 test("Worker - missing payload on /api/report returns 400 without calling AI service", async () => {
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/report", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/report", {
     method: "POST",
     headers: {
       Origin: "https://zana.krd",
@@ -629,7 +629,7 @@ test("Worker - Provider error classification for 401, 404, 429, 400, 500, missin
 });
 
 test("Worker - No API key or prompt leakage on error responses", async () => {
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/chat", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/chat", {
     method: "POST",
     headers: {
       Origin: "https://zana.krd",
@@ -656,7 +656,7 @@ test("Worker - No API key or prompt leakage on error responses", async () => {
 });
 
 test("Worker - POST /api/chat contract accepts academicContext", async () => {
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/chat", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/chat", {
     method: "POST",
     headers: {
       Origin: "https://zana.krd",
@@ -686,7 +686,7 @@ test("Worker - POST /api/chat contract accepts academicContext", async () => {
 });
 
 test("Worker - POST /api/assessment validates missing state", async () => {
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/assessment", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/assessment", {
     method: "POST",
     headers: {
       Origin: "https://zana.krd",
@@ -705,7 +705,7 @@ test("Worker - POST /api/assessment validates missing state", async () => {
 });
 
 test("Worker - Edge security headers applied on all responses", async () => {
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/health", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/health", {
     method: "GET",
   });
   const env = createMockEnv();
@@ -719,7 +719,7 @@ test("Worker - Edge security headers applied on all responses", async () => {
 });
 
 test("Worker - GET /api/health/deep handles missing dependencies gracefully with degraded status", async () => {
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/health/deep", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/health/deep", {
     method: "GET",
   });
   const env = createMockEnv();
@@ -758,7 +758,7 @@ test("Config - validateProductionEnv validates presence of required keys", () =>
 });
 
 test("Worker - POST /api/feedback requires authentication", async () => {
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/feedback", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/feedback", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -772,7 +772,7 @@ test("Worker - POST /api/feedback requires authentication", async () => {
 });
 
 test("Worker - POST /api/feedback validates malformed payload", async () => {
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/feedback", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/feedback", {
     method: "POST",
     headers: {
       Authorization: "Bearer valid-dev-token",
@@ -789,7 +789,7 @@ test("Worker - POST /api/feedback validates malformed payload", async () => {
 });
 
 test("Worker - POST /api/feedback successfully records student feedback into KV", async () => {
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/feedback", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/feedback", {
     method: "POST",
     headers: {
       Authorization: "Bearer valid-dev-token",
@@ -823,7 +823,7 @@ test("Worker - POST /api/chat enforces 429 when rate limit of 50 is exceeded", a
     delete: async () => {},
   };
 
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/chat", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/chat", {
     method: "POST",
     headers: {
       Authorization: "Bearer rate-limited-student",
@@ -849,13 +849,13 @@ test("Worker - GET /api/internal/telemetry rejects unauthorized request with 403
   const env = createMockEnv();
   env.ADMIN_TELEMETRY_SECRET = "super-secret-admin-key";
 
-  const reqNoAuth = new Request("https://zana-api-worker.zana-platform.workers.dev/api/internal/telemetry", {
+  const reqNoAuth = new Request("https://new-vs-zana.zana-platform.workers.dev/api/internal/telemetry", {
     method: "GET",
   });
   const resNoAuth = await worker.fetch(reqNoAuth, env);
   assert.strictEqual(resNoAuth.status, 403);
 
-  const reqBadAuth = new Request("https://zana-api-worker.zana-platform.workers.dev/api/internal/telemetry", {
+  const reqBadAuth = new Request("https://new-vs-zana.zana-platform.workers.dev/api/internal/telemetry", {
     method: "GET",
     headers: {
       Authorization: "Bearer wrong-secret",
@@ -901,7 +901,7 @@ test("Worker - GET /api/internal/telemetry returns feedback records in descendin
     delete: async () => {},
   };
 
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/internal/telemetry", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/internal/telemetry", {
     method: "GET",
     headers: {
       Authorization: "Bearer super-secret-admin-key",
@@ -918,7 +918,7 @@ test("Worker - GET /api/internal/telemetry returns feedback records in descendin
 });
 
 test("Worker - GET /api/health/curriculum returns 200 with curriculum health status", async () => {
-  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/health/curriculum", {
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/health/curriculum", {
     method: "GET",
   });
   const env = createMockEnv();
@@ -999,7 +999,7 @@ test("Worker - Uses Vertex AI endpoint for 'AQ.' keys with streamGenerateContent
   };
 
   try {
-    const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/chat", {
+    const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/chat", {
       method: "POST",
       headers: {
         Origin: "https://zana.krd",

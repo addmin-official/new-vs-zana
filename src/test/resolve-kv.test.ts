@@ -23,7 +23,7 @@ const VALID_KV_ID_3 = "cccccccccccccccccccccccccccccccc";
 test("1. parseJsonc correctly parses comments, trailing commas, and strings with slashes", () => {
   const jsoncString = `{
     // Single line comment
-    "name": "zana-api-worker",
+    "name": "new-vs-zana",
     /* Multi line 
        comment */
     "url": "https://example.com/api//v1",
@@ -34,7 +34,7 @@ test("1. parseJsonc correctly parses comments, trailing commas, and strings with
   }`;
 
   const parsed = parseJsonc(jsoncString);
-  assert.equal(parsed.name, "zana-api-worker");
+  assert.equal(parsed.name, "new-vs-zana");
   assert.equal(parsed.url, "https://example.com/api//v1");
   assert.equal(parsed.assets.directory, "./dist/client");
   assert.deepEqual(parsed.list, [1, 2, 3]);
@@ -150,7 +150,7 @@ test("6. Strategy B: Resolves existing Worker script binding when configured ID 
   };
 
   const mockFetch = async (url: string) => {
-    if (url.includes("/workers/scripts/zana-api-worker/bindings")) {
+    if (url.includes("/workers/scripts/new-vs-zana/bindings")) {
       return new Response(
         JSON.stringify({
           success: true,
@@ -170,7 +170,7 @@ test("6. Strategy B: Resolves existing Worker script binding when configured ID 
         JSON.stringify({
           success: true,
           errors: [],
-          result: [{ id: VALID_KV_ID_2, title: "zana-api-worker-LEARNING_RECORDS_KV" }],
+          result: [{ id: VALID_KV_ID_2, title: "new-vs-zana-LEARNING_RECORDS_KV" }],
         })
       );
     }
@@ -194,7 +194,7 @@ test("7. Strategy C: Resolves single exact title match when no binding or config
   };
 
   const mockFetch = async (url: string) => {
-    if (url.includes("/workers/scripts/zana-api-worker/bindings")) {
+    if (url.includes("/workers/scripts/new-vs-zana/bindings")) {
       return new Response(JSON.stringify({ success: true, errors: [], result: [] }));
     }
     if (url.includes("/storage/kv/namespaces")) {
@@ -202,7 +202,7 @@ test("7. Strategy C: Resolves single exact title match when no binding or config
         JSON.stringify({
           success: true,
           errors: [],
-          result: [{ id: VALID_KV_ID_3, title: "zana-api-worker-LEARNING_RECORDS_KV" }],
+          result: [{ id: VALID_KV_ID_3, title: "new-vs-zana-LEARNING_RECORDS_KV" }],
         })
       );
     }
@@ -225,7 +225,7 @@ test("8. Strategy C Failure: Fails on duplicate title matches (ambiguity)", asyn
   };
 
   const mockFetch = async (url: string) => {
-    if (url.includes("/workers/scripts/zana-api-worker/bindings")) {
+    if (url.includes("/workers/scripts/new-vs-zana/bindings")) {
       return new Response(JSON.stringify({ success: true, errors: [], result: [] }));
     }
     if (url.includes("/storage/kv/namespaces")) {
@@ -234,8 +234,8 @@ test("8. Strategy C Failure: Fails on duplicate title matches (ambiguity)", asyn
           success: true,
           errors: [],
           result: [
-            { id: VALID_KV_ID_1, title: "zana-api-worker-LEARNING_RECORDS_KV" },
-            { id: VALID_KV_ID_2, title: "zana-api-worker-LEARNING_RECORDS_KV" },
+            { id: VALID_KV_ID_1, title: "new-vs-zana-LEARNING_RECORDS_KV" },
+            { id: VALID_KV_ID_2, title: "new-vs-zana-LEARNING_RECORDS_KV" },
           ],
         })
       );
@@ -245,7 +245,7 @@ test("8. Strategy C Failure: Fails on duplicate title matches (ambiguity)", asyn
 
   await assert.rejects(
     () => resolveKvNamespace({ env, fetchImpl: mockFetch as unknown as typeof fetch }),
-    /Ambiguity error: Multiple KV namespaces \(2\) match title 'zana-api-worker-LEARNING_RECORDS_KV'/
+    /Ambiguity error: Multiple KV namespaces \(2\) match title 'new-vs-zana-LEARNING_RECORDS_KV'/
   );
 });
 
@@ -258,7 +258,7 @@ test("9. Strategy D: Explicit creation when 0 matches exist and verifies re-list
   let created = false;
 
   const mockFetch = async (url: string, opts: { method?: string; body?: string }) => {
-    if (url.includes("/workers/scripts/zana-api-worker/bindings")) {
+    if (url.includes("/workers/scripts/new-vs-zana/bindings")) {
       return new Response(JSON.stringify({ success: true, errors: [], result: [] }));
     }
     if (url.includes("/storage/kv/namespaces")) {
@@ -268,7 +268,7 @@ test("9. Strategy D: Explicit creation when 0 matches exist and verifies re-list
           JSON.stringify({
             success: true,
             errors: [],
-            result: { id: VALID_KV_ID_1, title: "zana-api-worker-LEARNING_RECORDS_KV" },
+            result: { id: VALID_KV_ID_1, title: "new-vs-zana-LEARNING_RECORDS_KV" },
           })
         );
       }
@@ -277,7 +277,7 @@ test("9. Strategy D: Explicit creation when 0 matches exist and verifies re-list
         JSON.stringify({
           success: true,
           errors: [],
-          result: created ? [{ id: VALID_KV_ID_1, title: "zana-api-worker-LEARNING_RECORDS_KV" }] : [],
+          result: created ? [{ id: VALID_KV_ID_1, title: "new-vs-zana-LEARNING_RECORDS_KV" }] : [],
         })
       );
     }
@@ -349,7 +349,7 @@ test("12. Pagination: Fetches all pages when multiple pages exist", async () => 
         JSON.stringify({
           success: true,
           errors: [],
-          result: [{ id: VALID_KV_ID_2, title: "zana-api-worker-LEARNING_RECORDS_KV" }],
+          result: [{ id: VALID_KV_ID_2, title: "new-vs-zana-LEARNING_RECORDS_KV" }],
           result_info: { page: 2, per_page: 1, total_count: 2 },
         })
       );
@@ -359,7 +359,7 @@ test("12. Pagination: Fetches all pages when multiple pages exist", async () => 
 
   const list = await fetchKvNamespaces(VALID_ACCOUNT_ID, VALID_TOKEN, mockFetch as unknown as typeof fetch);
   assert.equal(list.length, 2);
-  assert.equal(list[1].title, "zana-api-worker-LEARNING_RECORDS_KV");
+  assert.equal(list[1].title, "new-vs-zana-LEARNING_RECORDS_KV");
 });
 
 test("13. Creation Response Validation: Throws if creation response lacks valid ID", async () => {
@@ -368,13 +368,13 @@ test("13. Creation Response Validation: Throws if creation response lacks valid 
       JSON.stringify({
         success: true,
         errors: [],
-        result: { id: "invalid-short-id", title: "zana-api-worker-LEARNING_RECORDS_KV" },
+        result: { id: "invalid-short-id", title: "new-vs-zana-LEARNING_RECORDS_KV" },
       })
     );
   };
 
   await assert.rejects(
-    () => createKvNamespace(VALID_ACCOUNT_ID, "zana-api-worker-LEARNING_RECORDS_KV", VALID_TOKEN, mockFetch as unknown as typeof fetch),
+    () => createKvNamespace(VALID_ACCOUNT_ID, "new-vs-zana-LEARNING_RECORDS_KV", VALID_TOKEN, mockFetch as unknown as typeof fetch),
     /invalid namespace ID/
   );
 });

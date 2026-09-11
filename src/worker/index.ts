@@ -165,7 +165,7 @@ function isOriginAllowed(origin: string | null, env: Env): boolean {
 
   const allowed = [
     ...(env.ALLOWED_ORIGINS || "").split(","),
-    "https://zana-api-worker.zana-platform.workers.dev",
+    "https://new-vs-zana.zana-platform.workers.dev",
     "https://zana.krd",
   ]
     .map((o) => o.trim().toLowerCase().replace(/\/$/, ""))
@@ -469,7 +469,7 @@ export default {
           JSON.stringify({
             ok: true,
             status: "ok",
-            service: "zana-api-worker",
+            service: "new-vs-zana",
             revision: env.ZANA_REVISION || "unknown",
           }),
           { status: 200, headers: responseHeaders }
@@ -606,7 +606,7 @@ export default {
                 googleErrorCode: e.code || undefined,
                 sdkErrorName: e.name || undefined,
                 model: resolvePrimaryModel(env),
-                apiService: "zana-api-worker"
+                apiService: "new-vs-zana"
               }
             }),
             { status: 503, headers: responseHeaders }
