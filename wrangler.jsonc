@@ -1,36 +1,49 @@
 {
-	"name": "new-vs-zana",
-	"observability": {
-		"logs": {
-			"enabled": true,
-			"head_sampling_rate": 1,
-			"invocation_logs": true,
-			"persist": true
-		},
-		"traces": {
-			"enabled": true,
-			"head_sampling_rate": 1,
-			"persist": true
-		}
-	},
-	"main": "src/worker/index.ts",
-	"compatibility_date": "2024-04-03",
-	"compatibility_flags": [
-		"nodejs_compat"
-	],
-	"vars": {
-		"ALLOWED_ORIGINS": "https://zana.krd,https://zana-api-worker.zana-platform.workers.dev",
-		"GEMINI_PRIMARY_MODEL": "gemini-3.5-flash",
-		"GEMINI_VISION_MODEL": "gemini-3.5-flash"
-	},
-	"assets": {
-		"directory": "./dist/client",
-		"binding": "ASSETS"
-	},
-	"kv_namespaces": [
-		{
-			"binding": "LEARNING_RECORDS_KV",
-			"id": "9ff7b6464e6c458b996c5ad1110ed4df"
-		}
-	]
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "zana-api-worker",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2025-02-04",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "invocation_logs": true,
+      "persist": true
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true
+    }
+  },
+
+  "assets": {
+    "directory": "./dist/client",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+
+  "vars": {
+    "ALLOWED_ORIGINS": "https://zana.krd,https://zana-api-worker.zana-platform.workers.dev",
+    "GEMINI_PRIMARY_MODEL": "gemini-3.7-flash",
+    "GEMINI_VISION_MODEL": "gemini-3.7-flash",
+    "FIREBASE_PROJECT_ID": "gen-lang-client-0009572581"
+  },
+
+  "kv_namespaces": [
+    {
+      "binding": "LEARNING_RECORDS_KV",
+      "id": "9ff7b6464e6c458b996c5ad1110ed4df",
+      "preview_id": "173850f56683467b8019a9cc459287a9"
+    },
+    {
+      "binding": "RATE_LIMIT_KV",
+      "id": "45a7824a49234edfa6c4efe4089b02eb",
+      "preview_id": "c8f0dd5ea2034e439b83a98731fb2a41"
+    }
+  ]
 }

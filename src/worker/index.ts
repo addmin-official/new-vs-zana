@@ -47,7 +47,7 @@ import { applySecurityHeaders } from "../server/middleware/security.ts";
 import { validateProductionEnv } from "../server/config/envValidator.ts";
 
 export interface Env {
-  GEMINI_API_KEY: string;
+  GEMINI_API_KEY?: string;
   ALLOWED_ORIGINS: string;
   FIREBASE_PROJECT_ID: string;
   GEMINI_PRIMARY_MODEL?: string;
@@ -563,9 +563,12 @@ export default {
           return new Response(JSON.stringify({ ok: false, status: "error", error: "Unauthorized" }), { status: 401, headers: responseHeaders });
         }
 
-        if (!env.GEMINI_API_KEY || !env.GEMINI_API_KEY.trim()) {
+        const providerApiKey = env.GEMINI_API_KEY;
+        const missingProviderKey = "GEMINI_API_KEY";
+
+        if (!providerApiKey || !providerApiKey.trim()) {
           return new Response(
-            JSON.stringify({ ok: false, status: "error", error: "GEMINI_API_KEY missing" }),
+            JSON.stringify({ ok: false, status: "error", error: `${missingProviderKey} missing` }),
             { status: 503, headers: responseHeaders }
           );
         }
@@ -573,10 +576,11 @@ export default {
         try {
           const model = resolvePrimaryModel(env);
           const result = await ProviderAdapter.generate({
-            apiKey: env.GEMINI_API_KEY,
+            apiKey: providerApiKey,
             model,
             contents: "ping",
             pathname: "/api/provider/preflight",
+            env,
           });
 
           if (!result.text) {

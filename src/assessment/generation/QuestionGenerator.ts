@@ -8,7 +8,7 @@ import { GeminiProvider } from "../../server/ai/GeminiProvider.ts";
 
 export class QuestionGenerator {
   /**
-   * Generates a single high-quality question for a specific curriculum concept using Gemini.
+   * Generates a single high-quality question for a specific curriculum concept using AI provider.
    * Enforces licensing guards and subjects the output to validation before approval.
    */
   public static async generateQuestionForConcept(
@@ -17,14 +17,16 @@ export class QuestionGenerator {
     conceptNameKu: string,
     difficulty: DifficultyLevel,
     type: QuestionType,
-    apiKey?: string
+    apiKey?: string,
+    env?: unknown
   ): Promise<AssessmentQuestion> {
+    // 1. هەڵبژاردنی کلیل بەپێی پرۆڤایدەر
     const key = apiKey || (typeof process !== "undefined" ? process.env?.GEMINI_API_KEY : undefined);
     if (!key) {
       throw new Error("GEMINI_API_KEY exists only on the server, but is currently missing.");
     }
 
-    // 1. License Verification Guard
+    // 2. License Verification Guard
     const registry = CurriculumRegistry.getInstance();
     const lesson = registry.getLesson(lessonId);
     if (lesson) {
@@ -34,7 +36,7 @@ export class QuestionGenerator {
       }
     }
 
-    const model = getPrimaryModel();
+    const model = getPrimaryModel(env as Record<string, unknown> | undefined);
 
     const prompt = `
 Generate an original assessment question for Grade 9 Math in Kurdistan.
@@ -96,6 +98,7 @@ Ensure the output conforms exactly to the required JSON structure.
       required: ["promptKu", "explanationKu", "correctAnswer"]
     };
 
+    // 3. بەکارهێنانی ProviderAdapter لە جیاتی GeminiProvider
     const response = await GeminiProvider.generate({
       apiKey: key,
       model,
@@ -116,7 +119,7 @@ Ensure the output conforms exactly to the required JSON structure.
 
     const payload = JSON.parse(text);
 
-    // 2. Automated Validation and Quality Control (Review Phase)
+    // 4. Automated Validation and Quality Control (Review Phase)
     const errors: string[] = [];
     if (!payload.promptKu || payload.promptKu.trim().length < 5) {
       errors.push("Prompt is too short or missing.");
@@ -165,6 +168,7 @@ Ensure the output conforms exactly to the required JSON structure.
     return newQuestion;
   }
 }
+
 export class DistractorGenerator {
   /**
    * Generates plausible mathematical distractors based on common mistakes (e.g. sign flips)

@@ -29,3 +29,37 @@ if (!process.env.VITE_FIREBASE_STORAGE_BUCKET) {
 if (!process.env.VITE_FIREBASE_MESSAGING_SENDER_ID) {
   process.env.VITE_FIREBASE_MESSAGING_SENDER_ID = "958839183835";
 }
+
+// ============================================================
+// AI Provider Test Keys
+// ============================================================
+// Gemini API Key (بۆ تێستی Gemini Provider)
+if (!process.env.GEMINI_API_KEY) {
+  process.env.GEMINI_API_KEY = "test-gemini-key-for-test-environment-only";
+}
+
+// ============================================================
+// Model Configuration for Tests
+// ============================================================
+// ⚠️ گرنگ: ئەم بەهایانە دەبێت لەگەڵ AI_CONFIG.primaryModel و AI_CONFIG.visionModel بگونجێن
+if (!process.env.GEMINI_PRIMARY_MODEL) {
+  process.env.GEMINI_PRIMARY_MODEL = "gemini-3.7-flash";
+}
+if (!process.env.GEMINI_VISION_MODEL) {
+  process.env.GEMINI_VISION_MODEL = "gemini-3.7-flash";
+}
+
+// ============================================================
+// Admin & Security Keys for Tests
+// ============================================================
+if (!process.env.ADMIN_TELEMETRY_SECRET) {
+  process.env.ADMIN_TELEMETRY_SECRET = "test-admin-telemetry-secret-for-testing";
+}
+if (!process.env.PROVIDER_PREFLIGHT_TOKEN) {
+  process.env.PROVIDER_PREFLIGHT_TOKEN = "test-provider-preflight-token";
+}
+
+// Firebase Project ID (بۆ تێستی AI)
+if (!process.env.FIREBASE_PROJECT_ID) {
+  process.env.FIREBASE_PROJECT_ID = "gen-lang-client-0009572581";
+}
