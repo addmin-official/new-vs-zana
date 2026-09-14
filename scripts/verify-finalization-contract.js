@@ -34,7 +34,7 @@ try {
 }
 
 // Production architecture contract.
-requireMatch(wrangler, /"name"\s*:\s*"zana-api-worker"/, 'Cloudflare Worker name changed from zana-api-worker.');
+requireMatch(wrangler, /"name"\s*:\s*"new-vs-zana"/, 'Cloudflare Worker name changed from new-vs-zana.');
 requireMatch(wrangler, /"main"\s*:\s*"src\/worker\/index\.ts"/, 'Cloudflare Worker entrypoint must remain src/worker/index.ts.');
 requireMatch(wrangler, /"directory"\s*:\s*"\.\/dist\/client"/, 'Static Assets must remain bound to ./dist/client.');
 requireMatch(wrangler, /https:\/\/zana\.krd/, 'Canonical frontend origin https://zana.krd is missing from Wrangler configuration.');

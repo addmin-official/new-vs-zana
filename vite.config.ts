@@ -13,6 +13,15 @@ export default defineConfig(() => {
     },
     build: {
       outDir: 'dist/client',
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'react-vendor': ['react', 'react-dom'],
+            'firebase-vendor': ['firebase/app', 'firebase/auth', 'firebase/firestore'],
+            'markdown-vendor': ['react-markdown'],
+          },
+        },
+      },
     },
     define: {
       'import.meta.env.VITE_FIREBASE_PROJECT_ID': JSON.stringify(process.env.VITE_FIREBASE_PROJECT_ID || ''),

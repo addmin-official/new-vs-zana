@@ -47,7 +47,7 @@ import { applySecurityHeaders } from "../server/middleware/security.ts";
 import { validateProductionEnv } from "../server/config/envValidator.ts";
 
 export interface Env {
-  GEMINI_API_KEY?: string;
+  GEMINI_API_KEY: string;
   ALLOWED_ORIGINS: string;
   FIREBASE_PROJECT_ID: string;
   GEMINI_PRIMARY_MODEL?: string;
