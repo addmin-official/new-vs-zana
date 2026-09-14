@@ -13,6 +13,13 @@ export interface ProviderGenerateParams {
 }
 
 export class GeminiProvider {
+  /**
+   * Main entrypoint for generating content with Gemini models.
+   * Supports:
+   *  1. "AQ." keys (Google AI Studio format from June 2026 onwards) -> GoogleGenAI SDK with x-goog-api-key header
+   *  2. "AIza" keys (classic Google API keys) -> Vertex AI if Project ID is available, otherwise GoogleGenAI SDK
+   * Includes exponential backoff retries, Vertex AI fallback on 403/404, and timeout handling.
+   */
   static async generate(params: ProviderGenerateParams): Promise<{ text: string }> {
     const effectiveKey = params.apiKey !== undefined ? params.apiKey.trim() : (process.env.GEMINI_API_KEY?.trim() || "");
     if (!effectiveKey) {
@@ -21,6 +28,36 @@ export class GeminiProvider {
 
     const maxRetries = AI_CONFIG.retryPolicy.maxRetries;
     const timeoutMs = AI_CONFIG.timeoutMs;
+
+    // Resolve Google Cloud / Firebase Project ID if available
+    const envObj = (params.env || {}) as Record<string, unknown>;
+    const rawProjectId =
+      params.projectId ||
+      (typeof envObj.FIREBASE_PROJECT_ID === "string" ? envObj.FIREBASE_PROJECT_ID : undefined) ||
+      (typeof envObj.PROJECT_ID === "string" ? envObj.PROJECT_ID : undefined) ||
+      (typeof process !== "undefined" ? process.env?.FIREBASE_PROJECT_ID || process.env?.PROJECT_ID : undefined);
+
+    const hasRealProjectId = Boolean(rawProjectId && rawProjectId.trim().length > 0);
+
+    // Routing Logic:
+    // - "AQ." keys: Google AI Studio format -> use GoogleGenAI SDK with x-goog-api-key
+    // - "AIza" keys: classic Google keys -> use Vertex AI if Project ID is present, else GoogleGenAI SDK
+    // (Also support keys with "vertex" in name for test environments)
+    const isAqKey = effectiveKey.startsWith("AQ.");
+    const isLegacyKey = effectiveKey.startsWith("AIza");
+    const isVertexTestingKey = effectiveKey.toLowerCase().includes("vertex");
+    const shouldUseVertex = (isLegacyKey || isVertexTestingKey) && hasRealProjectId;
+
+    // Determine normalized model
+    const normalizedModel = normalizeModel(params.model);
+
+    // Normalize contents for Gemini API: { role, parts: [{ text }] }
+    let normalizedContents: unknown = params.contents;
+    if (typeof normalizedContents === "string") {
+      normalizedContents = [{ role: "user", parts: [{ text: normalizedContents }] }];
+    } else if (Array.isArray(normalizedContents) && normalizedContents.length > 0 && typeof normalizedContents[0] === "string") {
+      normalizedContents = [{ role: "user", parts: (normalizedContents as unknown as string[]).map((t) => ({ text: t })) }];
+    }
 
     let attempt = 0;
     let lastError: unknown = null;
@@ -31,19 +68,9 @@ export class GeminiProvider {
       try {
         let fetchPromise: Promise<{ text?: string } | { text: string }>;
 
-        const envObj = (params.env || {}) as Record<string, unknown>;
-        const rawProjectId =
-          params.projectId ||
-          (typeof envObj.FIREBASE_PROJECT_ID === "string" ? envObj.FIREBASE_PROJECT_ID : undefined) ||
-          (typeof envObj.PROJECT_ID === "string" ? envObj.PROJECT_ID : undefined) ||
-          (typeof process !== "undefined" ? process.env?.FIREBASE_PROJECT_ID || process.env?.PROJECT_ID : undefined);
-
-        const hasRealProjectId = Boolean(rawProjectId && rawProjectId.trim().length > 0);
-        const shouldUseVertex = effectiveKey.startsWith("AQ.") && hasRealProjectId;
-
         if (shouldUseVertex) {
+          // --- Branch 1: Vertex AI (AIza keys with Project ID) ---
           const projectId = rawProjectId!;
-          const normalizedModel = normalizeModel(params.model);
           const endpoint = getVertexAiEndpoint(projectId, normalizedModel);
           const vertexUrl = `${endpoint}?key=${effectiveKey}`;
 
@@ -53,21 +80,14 @@ export class GeminiProvider {
             "User-Agent": "aistudio-build",
           };
 
-          let normalizedContents: unknown = params.contents;
-          if (typeof normalizedContents === "string") {
-            normalizedContents = [{ role: "user", parts: [{ text: normalizedContents }] }];
-          } else if (Array.isArray(normalizedContents) && normalizedContents.length > 0 && typeof normalizedContents[0] === "string") {
-            normalizedContents = [{ role: "user", parts: (normalizedContents as unknown as string[]).map((t) => ({ text: t })) }];
-          }
-
-          const body: Record<string, unknown> = {
+          const vertexBody: Record<string, unknown> = {
             contents: normalizedContents,
           };
 
           if (params.config && typeof params.config === "object") {
             const cfg = params.config as Record<string, unknown>;
             if (cfg.systemInstruction) {
-              body.systemInstruction =
+              vertexBody.systemInstruction =
                 typeof cfg.systemInstruction === "string"
                   ? { parts: [{ text: cfg.systemInstruction }] }
                   : cfg.systemInstruction;
@@ -78,7 +98,7 @@ export class GeminiProvider {
             if (typeof cfg.responseMimeType === "string") generationConfig.responseMimeType = cfg.responseMimeType;
             if (cfg.responseSchema) generationConfig.responseSchema = cfg.responseSchema;
             if (Object.keys(generationConfig).length > 0) {
-              body.generationConfig = generationConfig;
+              vertexBody.generationConfig = generationConfig;
             }
           }
 
@@ -86,7 +106,7 @@ export class GeminiProvider {
             const vertexRes = await fetch(vertexUrl, {
               method: "POST",
               headers: vertexHeaders,
-              body: JSON.stringify(body),
+              body: JSON.stringify(vertexBody),
             });
 
             if (!vertexRes.ok) {
@@ -99,21 +119,22 @@ export class GeminiProvider {
                 ((parsedErr?.error as Record<string, unknown>)?.message as string) ||
                 `HTTP ${vertexRes.status} Vertex AI error: ${errBody}`;
 
-              // If Vertex AI returns permission denied (e.g. disabled API) or model not found, fallback to GoogleGenAI
+              // Fallback from Vertex AI to GoogleGenAI if 403 (Permission Denied) or 404 (Not Found)
               if (vertexRes.status === 403 || vertexRes.status === 404) {
-                console.warn(`[Vertex AI Fallback] HTTP ${vertexRes.status}: Falling back to GoogleGenAI.`);
+                console.warn(`[Vertex AI Fallback] HTTP ${vertexRes.status}: Falling back to GoogleGenAI SDK.`);
                 const fallbackAi = new GoogleGenAI({
                   apiKey: effectiveKey,
                   httpOptions: {
                     headers: {
+                      "x-goog-api-key": effectiveKey,
                       "User-Agent": "aistudio-build",
                     },
                   },
                 });
 
                 const fallbackRes = await fallbackAi.models.generateContent({
-                  model: normalizeModel(params.model),
-                  contents: params.contents as Parameters<typeof fallbackAi.models.generateContent>[0]["contents"],
+                  model: normalizedModel,
+                  contents: normalizedContents as Parameters<typeof fallbackAi.models.generateContent>[0]["contents"],
                   config: params.config as Parameters<typeof fallbackAi.models.generateContent>[0]["config"],
                 });
 
@@ -146,22 +167,23 @@ export class GeminiProvider {
             return { text: aggregatedText };
           })();
         } else {
+          // --- Branch 2: GoogleGenAI SDK (AQ. keys & AIza keys without Project ID) ---
           const ai = new GoogleGenAI({
             apiKey: effectiveKey,
             httpOptions: {
               headers: {
+                "x-goog-api-key": effectiveKey,
                 "User-Agent": "aistudio-build",
               },
             },
           });
 
           fetchPromise = ai.models.generateContent({
-            model: normalizeModel(params.model),
-            contents: params.contents as Parameters<typeof ai.models.generateContent>[0]["contents"],
+            model: normalizedModel,
+            contents: normalizedContents as Parameters<typeof ai.models.generateContent>[0]["contents"],
             config: params.config as Parameters<typeof ai.models.generateContent>[0]["config"],
           });
         }
-
 
         const timeoutPromise = new Promise<never>((_, reject) => {
           timeoutId = setTimeout(() => {
@@ -193,6 +215,15 @@ export class GeminiProvider {
           }
         }
 
+        // Map status codes for diagnostic logging and error handling
+        if (providerStatusCode === 401) {
+          console.warn("[GeminiProvider] 401 UNAUTHENTICATED: Invalid API key.");
+        } else if (providerStatusCode === 403) {
+          console.warn("[GeminiProvider] 403 PERMISSION_DENIED: Access denied or insufficient permission.");
+        } else if (providerStatusCode === 429) {
+          console.warn("[GeminiProvider] 429 RATE_LIMITED: Rate limit or quota exceeded.");
+        }
+
         const isRetryable =
           (AI_CONFIG.retryPolicy.retryableStatusCodes as readonly number[]).includes(providerStatusCode) ||
           category === "timeout" ||
@@ -204,8 +235,9 @@ export class GeminiProvider {
           pathname: params.pathname || "unknown",
           category,
           providerStatusCode,
-          selectedModel: params.model,
+          selectedModel: normalizedModel,
           hasApiKey: Boolean(params.apiKey),
+          isAqKey,
           retryCount: attempt,
         });
 
