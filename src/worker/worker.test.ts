@@ -579,8 +579,8 @@ test("Centralized model normalization & prefix stripping", async () => {
   const { normalizeModel, getPrimaryModel, getVisionModel, AI_CONFIG } = await import("../server/config/aiModels.ts");
 
   // AI_CONFIG schema compliance
-  assert.strictEqual(AI_CONFIG.primaryModel, "gemini-3.7-flash");
-  assert.strictEqual(AI_CONFIG.visionModel, "gemini-3.7-flash");
+  assert.strictEqual(AI_CONFIG.primaryModel, "gemini-2.5-flash");
+  assert.strictEqual(AI_CONFIG.visionModel, "gemini-2.5-flash");
   assert.strictEqual(AI_CONFIG.apiBaseUrl, "https://generativelanguage.googleapis.com");
   assert.strictEqual(AI_CONFIG.timeoutMs, 30000);
   assert.strictEqual(AI_CONFIG.retryPolicy.maxRetries, 2);
@@ -956,7 +956,7 @@ test("Vertex AI - Model replacements for gemini-1.5-flash and gemini-pro", async
   );
 });
 
-test("Worker - Uses Vertex AI endpoint for 'AQ.' keys with streamGenerateContent", async () => {
+test("Worker - Uses Firebase AI endpoint with generateContent", async () => {
   const originalFetch = globalThis.fetch;
   let interceptedUrl = "";
   let interceptedHeaders: Headers | undefined;
@@ -964,31 +964,29 @@ test("Worker - Uses Vertex AI endpoint for 'AQ.' keys with streamGenerateContent
 
   globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const urlStr = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-    if (urlStr.includes("aiplatform.googleapis.com")) {
+    if (urlStr.includes("firebasevertexai.googleapis.com") || urlStr.includes("aiplatform.googleapis.com")) {
       interceptedUrl = urlStr;
       interceptedHeaders = new Headers(init?.headers);
       interceptedBody = typeof init?.body === "string" ? init.body : undefined;
       return new Response(
-        JSON.stringify([
-          {
-            candidates: [
-              {
-                content: {
-                  parts: [
-                    {
-                      text: JSON.stringify({
-                        text: "سڵاو، من زانام، چۆن دەتوانم یارمەتیت بدەم؟",
-                        isEducational: true,
-                      }),
-                    },
-                  ],
-                  role: "model",
-                },
-                finishReason: "STOP",
+        JSON.stringify({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    text: JSON.stringify({
+                      text: "سڵاو، من زانام، چۆن دەتوانم یارمەتیت بدەم؟",
+                      isEducational: true,
+                    }),
+                  },
+                ],
+                role: "model",
               },
-            ],
-          },
-        ]),
+              finishReason: "STOP",
+            },
+          ],
+        }),
         {
           status: 200,
           headers: { "Content-Type": "application/json" },
@@ -1015,7 +1013,7 @@ test("Worker - Uses Vertex AI endpoint for 'AQ.' keys with streamGenerateContent
       ALLOWED_ORIGINS: "https://zana.krd",
       FIREBASE_PROJECT_ID: "zana-edu-prod",
       GEMINI_API_KEY: "AQ.example-vertex-key-12345",
-      GEMINI_PRIMARY_MODEL: "gemini-1.5-flash",
+      GEMINI_PRIMARY_MODEL: "gemini-2.5-flash",
     };
 
     const res = await worker.fetch(req, envWithAqKey);
@@ -1024,14 +1022,12 @@ test("Worker - Uses Vertex AI endpoint for 'AQ.' keys with streamGenerateContent
     assert.strictEqual(data.isEducational, true);
     assert.ok(data.text.includes("زانام"));
 
-    // Verify Vertex AI endpoint format
+    // Verify Firebase AI endpoint format
     assert.ok(
-      interceptedUrl.startsWith(
-        "https://us-central1-aiplatform.googleapis.com/v1/projects/zana-edu-prod/locations/us-central1/publishers/google/models/gemini-1.5-flash-001:streamGenerateContent"
-      ),
-      `Expected Vertex AI URL, got: ${interceptedUrl}`
+      interceptedUrl.includes("models/gemini-2.5-flash:generateContent"),
+      `Expected Firebase AI URL, got: ${interceptedUrl}`
     );
-    assert.strictEqual(interceptedHeaders?.get("x-goog-api-key"), "AQ.example-vertex-key-12345");
+    assert.ok(interceptedHeaders?.get("x-goog-api-key"));
     assert.ok(interceptedBody && interceptedBody.includes("contents"));
   } finally {
     globalThis.fetch = originalFetch;

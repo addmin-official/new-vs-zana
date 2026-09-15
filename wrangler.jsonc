@@ -29,12 +29,23 @@
 
   "vars": {
     "ALLOWED_ORIGINS": "https://zana.krd,https://new-vs-zana.zana-platform.workers.dev",
-    "GEMINI_PRIMARY_MODEL": "gemini-3.7-flash",
-    "GEMINI_VISION_MODEL": "gemini-3.7-flash",
-    "FIREBASE_PROJECT_ID": "gen-lang-client-0009572581"
+    "GEMINI_PRIMARY_MODEL": "gemini-2.5-flash",
+    "GEMINI_VISION_MODEL": "gemini-2.5-flash",
+    "FIREBASE_PROJECT_ID": "gen-lang-client-0009572581",
+    "VITE_FIREBASE_API_KEY": "AIzaSyFakeKeyForTestEnvironmentOnly12345",
+    "VITE_FIREBASE_AUTH_DOMAIN": "gen-lang-client-0009572581.firebaseapp.com",
+    "VITE_FIREBASE_PROJECT_ID": "gen-lang-client-0009572581",
+    "VITE_FIREBASE_STORAGE_BUCKET": "gen-lang-client-0009572581.firebasestorage.app",
+    "VITE_FIREBASE_MESSAGING_SENDER_ID": "958839183835",
+    "VITE_FIREBASE_APP_ID": "1:958839183835:web:80cec81bbb0227f7b82ffe"
   },
 
   "kv_namespaces": [
+    {
+      "binding": "RATE_LIMIT_KV",
+      "id": "45a7824a49234edfa6c4efe4089b02eb",
+      "preview_id": "c8f0dd5ea2034e439b83a98731fb2a41"
+    },
     {
       "binding": "LEARNING_RECORDS_KV",
       "id": "9ff7b6464e6c458b996c5ad1110ed4df",

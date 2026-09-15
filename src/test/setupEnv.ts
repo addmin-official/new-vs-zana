@@ -43,10 +43,10 @@ if (!process.env.GEMINI_API_KEY) {
 // ============================================================
 // ⚠️ گرنگ: ئەم بەهایانە دەبێت لەگەڵ AI_CONFIG.primaryModel و AI_CONFIG.visionModel بگونجێن
 if (!process.env.GEMINI_PRIMARY_MODEL) {
-  process.env.GEMINI_PRIMARY_MODEL = "gemini-3.7-flash";
+  process.env.GEMINI_PRIMARY_MODEL = "gemini-2.5-flash";
 }
 if (!process.env.GEMINI_VISION_MODEL) {
-  process.env.GEMINI_VISION_MODEL = "gemini-3.7-flash";
+  process.env.GEMINI_VISION_MODEL = "gemini-2.5-flash";
 }
 
 // ============================================================

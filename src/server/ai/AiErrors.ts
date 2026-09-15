@@ -73,6 +73,8 @@ export function classifyError(error: unknown): SafeErrorCategory {
     lowerMsg.includes("503") ||
     lowerMsg.includes("504") ||
     lowerMsg.includes("googlegenai") ||
+    lowerMsg.includes("firebase") ||
+    lowerMsg.includes("aierror") ||
     lowerMsg.includes("provider") ||
     lowerMsg.includes("unavailable") ||
     lowerMsg.includes("fetcherror") ||

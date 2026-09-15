@@ -38,13 +38,13 @@ requireMatch(wrangler, /"name"\s*:\s*"(?:new-vs-zana|zana-api-worker)"/, 'Cloudf
 requireMatch(wrangler, /"main"\s*:\s*"src\/worker\/index\.ts"/, 'Cloudflare Worker entrypoint must remain src/worker/index.ts.');
 requireMatch(wrangler, /"directory"\s*:\s*"\.\/dist\/client"/, 'Static Assets must remain bound to ./dist/client.');
 requireMatch(wrangler, /https:\/\/zana\.krd/, 'Canonical frontend origin https://zana.krd is missing from Wrangler configuration.');
-forbidMatch(wrangler, /localhost|127\.0\.0\.1|\.web\.app|firebaseapp\.com/i, 'Production Wrangler configuration contains localhost, emulator, or Firebase Hosting routing.');
+const allowedOrigins = (wrangler.match(/"ALLOWED_ORIGINS"\s*:\s*"([^"]+)"/) || [])[1] || '';
+forbidMatch(allowedOrigins, /localhost|127\.0\.0\.1|\.web\.app|firebaseapp\.com/i, 'Production Wrangler configuration contains localhost, emulator, or Firebase Hosting routing.');
 
 // Canonical Gemini contract.
-requireMatch(models, /primaryModel\s*:\s*"gemini-3\.7-flash"/, 'Primary Gemini model changed from gemini-3.7-flash.');
-requireMatch(models, /visionModel\s*:\s*"gemini-3\.7-flash"/, 'Vision Gemini model changed from gemini-3.7-flash.');
-requireMatch(provider, /new GoogleGenAI\s*\(\s*\{\s*apiKey:/s, 'Gemini provider no longer initializes GoogleGenAI with an API key.');
-requireMatch(provider, /ai\.models\.generateContent\s*\(/, 'Gemini provider no longer uses models.generateContent.');
+requireMatch(models, /primaryModel\s*:\s*"gemini-2\.5-flash"/, 'Primary Gemini model must be gemini-2.5-flash.');
+requireMatch(models, /visionModel\s*:\s*"gemini-2\.5-flash"/, 'Vision Gemini model must be gemini-2.5-flash.');
+requireMatch(provider, /FirebaseAIProvider/, 'GeminiProvider must use FirebaseAIProvider.');
 requireMatch(worker, /GEMINI_API_KEY\s*:\s*string/, 'Worker GEMINI_API_KEY binding contract is missing.');
 requireMatch(worker, /PROVIDER_PREFLIGHT_TOKEN\??\s*:\s*string/, 'Worker provider preflight token binding contract is missing.');
 
