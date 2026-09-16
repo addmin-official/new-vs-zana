@@ -1,5 +1,6 @@
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import { getAI, getGenerativeModel, GoogleAIBackend } from "firebase/ai";
+import { getAuth, signInAnonymously, Auth } from "firebase/auth";
 
 export interface FirebaseAIGenerateParams {
   model: string;
