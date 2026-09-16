@@ -32,6 +32,15 @@
             event.stopImmediatePropagation();
           }
         }, true);
+
+        var origError = console.error;
+        console.error = function() {
+          var first = arguments[0];
+          if (first && isViteWsError(first)) {
+            return;
+          }
+          return origError.apply(console, arguments);
+        };
       })();
     </script>
   </head>
