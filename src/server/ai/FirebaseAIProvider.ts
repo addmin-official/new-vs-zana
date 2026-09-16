@@ -1,12 +1,13 @@
-import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
+import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
 import { getAI, getGenerativeModel, GoogleAIBackend } from "firebase/ai";
-import { getAuth, signInAnonymously, type Auth } from "firebase/auth";
+import { getAuth, signInAnonymously, signInWithCustomToken, type Auth } from "firebase/auth";
 
 export interface FirebaseAIGenerateParams {
   model: string;
   contents: unknown;
   config?: unknown;
   env?: unknown;
+  authToken?: string;
 }
 
 function resolveEnvVar(key: string, env?: unknown): string | undefined {
@@ -26,16 +27,9 @@ export class FirebaseAIProvider {
   private static auth: Auth | null = null;
 
   private static getOrCreateApp(env?: unknown): FirebaseApp {
-    if (env && typeof env === "object" && "GEMINI_API_KEY" in env) {
-      const gKey = (env as Record<string, unknown>).GEMINI_API_KEY;
-      if (typeof gKey === "string" && gKey.trim() === "") {
-        throw new Error("GEMINI_API_KEY is required");
-      }
-    }
-
     const existingApps = getApps();
     if (existingApps.length > 0) {
-      const existingApp = existingApps[0];
+      const existingApp = existingApps[0] || getApp();
       if (!this.auth) {
         this.auth = getAuth(existingApp);
       }
@@ -49,17 +43,32 @@ export class FirebaseAIProvider {
       return this.app;
     }
 
+    const isTest =
+      resolveEnvVar("NODE_ENV", env) === "test" ||
+      resolveEnvVar("ZANA_ENV", env) === "test" ||
+      (typeof process !== "undefined" &&
+        (process.env?.NODE_ENV === "test" || process.env?.ZANA_ENV === "test"));
+
+    let apiKey = resolveEnvVar("VITE_FIREBASE_API_KEY", env);
+    if (apiKey === "AIzaSyFakeKeyForTestEnvironmentOnly12345" && !isTest) {
+      apiKey = undefined;
+    }
+    if (!apiKey) {
+      apiKey = resolveEnvVar("FIREBASE_API_KEY", env) || resolveEnvVar("GEMINI_API_KEY", env);
+    }
+    if (!apiKey) {
+      if (isTest) {
+        apiKey = "AIzaSyFakeKeyForTestEnvironmentOnly12345";
+      } else {
+        throw new Error("Missing Firebase API key: VITE_FIREBASE_API_KEY or GEMINI_API_KEY is required in production");
+      }
+    }
+
     const projectId =
       resolveEnvVar("VITE_FIREBASE_PROJECT_ID", env) ||
       resolveEnvVar("FIREBASE_PROJECT_ID", env) ||
       resolveEnvVar("PROJECT_ID", env) ||
       "gen-lang-client-0009572581";
-
-    const apiKey =
-      resolveEnvVar("VITE_FIREBASE_API_KEY", env) ||
-      resolveEnvVar("FIREBASE_API_KEY", env) ||
-      resolveEnvVar("GEMINI_API_KEY", env) ||
-      "AIzaSyFakeKeyForTestEnvironmentOnly12345";
 
     const authDomain =
       resolveEnvVar("VITE_FIREBASE_AUTH_DOMAIN", env) ||
@@ -94,11 +103,19 @@ export class FirebaseAIProvider {
   static async generate(params: FirebaseAIGenerateParams): Promise<{ text: string }> {
     const app = this.getOrCreateApp(params.env);
 
-    if (this.auth && !this.auth.currentUser) {
-      try {
-        await signInAnonymously(this.auth);
-      } catch (authError) {
-        console.warn("[FirebaseAIProvider] Anonymous auth failed:", authError);
+    if (this.auth) {
+      if (params.authToken) {
+        try {
+          await signInWithCustomToken(this.auth, params.authToken);
+        } catch (authError) {
+          console.warn("[FirebaseAIProvider] Custom token auth failed:", authError);
+        }
+      } else if (!this.auth.currentUser) {
+        try {
+          await signInAnonymously(this.auth);
+        } catch (authError) {
+          console.warn("[FirebaseAIProvider] Anonymous auth failed:", authError);
+        }
       }
     }
 
