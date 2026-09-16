@@ -3,7 +3,37 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>زانا | ZANA - هاوڕێی زیرەکی فێربوونی تۆ</title>
+    <title>ZANA / زانا</title>
+    <meta name="description" content="هاوڕێی زیرەکی فێربوونی تۆ - Kurdish Sorani AI Tutor for Grades 9-12" />
+    <meta property="og:title" content="ZANA / زانا" />
+    <meta property="og:description" content="هاوڕێی زیرەکی فێربوونی تۆ - Kurdish Sorani AI Tutor for Grades 9-12" />
+    <script>
+      (function() {
+        function isViteWsError(reason) {
+          if (!reason) return false;
+          var msg = typeof reason === 'string' ? reason : (reason.message || reason.stack || String(reason));
+          return (
+            msg.indexOf('WebSocket') !== -1 ||
+            msg.indexOf('websocket') !== -1 ||
+            msg.indexOf('failed to connect to websocket') !== -1
+          );
+        }
+
+        window.addEventListener('unhandledrejection', function(event) {
+          if (isViteWsError(event.reason)) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+          }
+        }, true);
+
+        window.addEventListener('error', function(event) {
+          if (isViteWsError(event.error || event.message)) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+          }
+        }, true);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
