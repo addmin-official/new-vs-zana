@@ -1,6 +1,7 @@
 import { FirebaseAIProvider } from "./FirebaseAIProvider.ts";
 import { AI_CONFIG, normalizeModel } from "../config/aiModels.ts";
 import { classifyError } from "./AiErrors.ts";
+import { GoogleGenAI } from "@google/genai";
 
 export interface ProviderGenerateParams {
   apiKey?: string;
@@ -25,23 +26,111 @@ export class GeminiProvider {
       let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
       try {
-        const generatePromise = FirebaseAIProvider.generate({
-          model: normalizedModel,
-          contents: params.contents,
-          config: params.config,
-          env: params.env,
-        });
+        let firebaseErr: unknown = null;
 
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          timeoutId = setTimeout(() => {
-            reject(new Error("Request timeout"));
-          }, timeoutMs);
-        });
+        try {
+          const generatePromise = FirebaseAIProvider.generate({
+            model: normalizedModel,
+            contents: params.contents,
+            config: params.config,
+            env: params.env,
+          });
 
-        const result = await Promise.race([generatePromise, timeoutPromise]);
-        if (timeoutId !== null) clearTimeout(timeoutId);
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            timeoutId = setTimeout(() => {
+              reject(new Error("Request timeout"));
+            }, timeoutMs);
+          });
 
-        return result;
+          const result = await Promise.race([generatePromise, timeoutPromise]);
+          if (timeoutId !== null) clearTimeout(timeoutId);
+
+          return result;
+        } catch (fErr: unknown) {
+          if (timeoutId !== null) clearTimeout(timeoutId);
+          firebaseErr = fErr;
+        }
+
+        // If FirebaseAIProvider failed (e.g. firebasevertexai.googleapis.com not enabled),
+        // seamlessly fall back to GoogleGenAI SDK using the provided GEMINI_API_KEY.
+        const envKey =
+          params.env && typeof params.env === "object"
+            ? (params.env as Record<string, unknown>).GEMINI_API_KEY
+            : undefined;
+
+        let apiKey: string | undefined = undefined;
+        if (typeof params.apiKey === "string") {
+          apiKey = params.apiKey;
+        } else if (typeof envKey === "string") {
+          apiKey = envKey;
+        } else if (typeof process !== "undefined" && process.env?.GEMINI_API_KEY) {
+          apiKey = process.env.GEMINI_API_KEY;
+        }
+
+        if (apiKey && apiKey.trim().length > 0) {
+          const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
+          const candidates: string[] = [];
+          if (normalizedModel === "gemini-2.5-flash" || normalizedModel.includes("2.5") || normalizedModel.includes("1.5")) {
+            candidates.push("gemini-flash-latest", "gemini-3.6-flash", "gemini-3.8-flash", normalizedModel);
+          } else {
+            candidates.push(normalizedModel, "gemini-flash-latest", "gemini-3.6-flash", "gemini-3.8-flash");
+          }
+
+          let lastGenAiErr: unknown = null;
+          for (const candidateModel of candidates) {
+            try {
+              let genTimeoutId: ReturnType<typeof setTimeout> | null = null;
+              const genPromise = ai.models.generateContent({
+                model: candidateModel,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                contents: params.contents as any,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                config: params.config as any,
+              });
+
+              const timeoutPromise = new Promise<never>((_, reject) => {
+                genTimeoutId = setTimeout(() => {
+                  reject(new Error("Request timeout"));
+                }, timeoutMs);
+              });
+
+              const genAiRes = await Promise.race([genPromise, timeoutPromise]);
+              if (genTimeoutId !== null) clearTimeout(genTimeoutId);
+
+              const text = genAiRes.text || "";
+              if (text.trim().length > 0) {
+                return { text: text.trim() };
+              }
+            } catch (gErr: unknown) {
+              lastGenAiErr = gErr;
+              const gMsg =
+                gErr && typeof gErr === "object" && "message" in gErr ? String((gErr as Record<string, unknown>).message) : "";
+              if (
+                gMsg.includes("not found") ||
+                gMsg.includes("no longer available") ||
+                gMsg.includes("404") ||
+                gMsg.includes("503") ||
+                gMsg.includes("UNAVAILABLE")
+              ) {
+                continue;
+              }
+              break;
+            }
+          }
+
+          if (lastGenAiErr) {
+            throw lastGenAiErr;
+          }
+        }
+
+        if (firebaseErr) {
+          if (!apiKey || !apiKey.trim()) {
+            throw new Error("GEMINI_API_KEY is missing");
+          }
+          throw firebaseErr;
+        }
+
+        throw new Error("GEMINI_API_KEY is missing");
       } catch (err: unknown) {
         if (timeoutId !== null) clearTimeout(timeoutId);
         lastError = err;
