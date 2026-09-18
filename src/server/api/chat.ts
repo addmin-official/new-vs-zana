@@ -3,7 +3,7 @@ import { buildTutorSystemPrompt } from '../ai/promptBuilder.ts';
 import { verifyAuthToken } from '../auth/firebase.ts';
 import { enforceAiRateLimit } from '../middleware/rateLimiter.ts';
 import { GradeLevel, SubjectId } from '../../lib/curriculum/types.ts';
-import { normalizeModel, getVertexAiEndpoint } from '../config/aiModels.ts';
+import { normalizeModel } from '../config/aiModels.ts';
 
 export interface ChatRequestPayload {
   grade: GradeLevel;
@@ -77,43 +77,24 @@ export async function handleChatRoute(request: Request, env: Record<string, unkn
   // 4. Construct grounded system prompt
   const systemInstruction = buildTutorSystemPrompt(context, payload.topicId);
 
-  // 5. Call Gemini Provider (Using Vertex AI API endpoint for 'AQ.' keys)
+  // 5. Call Gemini Provider
   try {
     const apiKey = (env.GEMINI_API_KEY as string) || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '') || '';
-    const rawModel = (env.GEMINI_PRIMARY_MODEL as string) || (typeof process !== 'undefined' ? process.env.GEMINI_PRIMARY_MODEL : 'gemini-1.5-flash-001') || 'gemini-1.5-flash-001';
+    const rawModel = (env.GEMINI_PRIMARY_MODEL as string) || (typeof process !== 'undefined' ? process.env.GEMINI_PRIMARY_MODEL : 'gemini-3.1-flash-lite') || 'gemini-3.1-flash-lite';
     const model = normalizeModel(rawModel);
 
-    const rawProjectId = (env.FIREBASE_PROJECT_ID as string) || (typeof process !== 'undefined' ? process.env.FIREBASE_PROJECT_ID : '') || '';
-    const isAqKey = typeof apiKey === 'string' && apiKey.startsWith('AQ.');
-    const shouldUseVertex = Boolean(isAqKey && rawProjectId);
-    const projectId = rawProjectId || 'gen-lang-client-0009572581';
-
-    let geminiUrl = shouldUseVertex
-      ? `${getVertexAiEndpoint(projectId, model)}?key=${apiKey}`
-      : `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (shouldUseVertex) {
-      headers['x-goog-api-key'] = apiKey;
-    }
 
-    const geminiBody = shouldUseVertex
-      ? {
-          contents: payload.messages,
-          systemInstruction: { parts: [{ text: systemInstruction }] },
-          generationConfig: {
-            temperature: 0.4, // Lower temperature for factual educator grounding
-            maxOutputTokens: 1024,
-          },
-        }
-      : {
-          system_instruction: { parts: { text: systemInstruction } },
-          contents: payload.messages,
-          generationConfig: {
-            temperature: 0.4, // Lower temperature for factual educator grounding
-            maxOutputTokens: 1024,
-          },
-        };
+    const geminiBody = {
+      system_instruction: { parts: { text: systemInstruction } },
+      contents: payload.messages,
+      generationConfig: {
+        temperature: 0.4, // Lower temperature for factual educator grounding
+        maxOutputTokens: 1024,
+      },
+    };
 
     let geminiResponse = await fetch(geminiUrl, {
       method: 'POST',
@@ -121,20 +102,14 @@ export async function handleChatRoute(request: Request, env: Record<string, unkn
       body: JSON.stringify(geminiBody),
     });
 
-    if (!geminiResponse.ok && shouldUseVertex && (geminiResponse.status === 403 || geminiResponse.status === 404)) {
-      console.warn(`[Chat API Vertex Fallback] HTTP ${geminiResponse.status}: Falling back to generativelanguage.`);
-      geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-      geminiResponse = await fetch(geminiUrl, {
+    if (!geminiResponse.ok) {
+      // Try fallback model if first model had high demand or error
+      const fallbackModel = 'gemini-flash-latest';
+      const fallbackUrl = `https://generativelanguage.googleapis.com/v1beta/models/${fallbackModel}:generateContent?key=${apiKey}`;
+      geminiResponse = await fetch(fallbackUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          system_instruction: { parts: { text: systemInstruction } },
-          contents: payload.messages,
-          generationConfig: {
-            temperature: 0.4,
-            maxOutputTokens: 1024,
-          },
-        }),
+        headers,
+        body: JSON.stringify(geminiBody),
       });
     }
 

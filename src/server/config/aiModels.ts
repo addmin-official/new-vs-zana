@@ -1,7 +1,8 @@
 export const AI_CONFIG = {
   apiBaseUrl: "https://generativelanguage.googleapis.com",
-  primaryModel: "gemini-2.5-flash",
-  visionModel: "gemini-2.5-flash",
+  primaryModel: "gemini-3.1-flash-lite",
+  visionModel: "gemini-3.1-flash-lite",
+  fallbackModels: ["gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-flash-latest"] as const,
   timeoutMs: 30000,
   retryPolicy: {
     maxRetries: 2,
@@ -50,11 +51,17 @@ export function normalizeModel(
     cleaned = cleaned.substring(7).trim();
   }
 
-  // Replace 'gemini-1.5-flash' with 'gemini-1.5-flash-001' and 'gemini-pro' with 'gemini-1.5-pro-001' as required by Vertex AI formatting
-  if (cleaned === "gemini-1.5-flash") {
-    cleaned = "gemini-1.5-flash-001";
-  } else if (cleaned === "gemini-pro") {
-    cleaned = "gemini-1.5-pro-001";
+  // Normalize deprecated or legacy model names to active Gemini models
+  if (
+    cleaned === "gemini-1.5-flash" ||
+    cleaned === "gemini-1.5-flash-001" ||
+    cleaned === "gemini-2.5-flash" ||
+    cleaned === "gemini-2.0-flash" ||
+    cleaned === "gemini-pro" ||
+    cleaned === "gemini-1.5-pro" ||
+    cleaned === "gemini-1.5-pro-001"
+  ) {
+    cleaned = AI_CONFIG.primaryModel;
   }
 
   // Check for invalid format (URL, slashes, spaces, path traversal, control chars)

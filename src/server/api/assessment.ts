@@ -3,7 +3,7 @@ import { globalCurriculumRegistry } from '../../lib/curriculum/CurriculumRegistr
 import { buildEvaluationPrompt } from '../ai/assessmentBuilder.ts';
 import { updateStudentMastery, MasteryEnv } from '../learning/masteryService.ts';
 import { GradeLevel, SubjectId } from '../../lib/curriculum/types.ts';
-import { normalizeModel, getVertexAiEndpoint } from '../config/aiModels.ts';
+import { normalizeModel } from '../config/aiModels.ts';
 
 export interface AssessmentRequestPayload {
   grade: GradeLevel;
@@ -63,24 +63,14 @@ export async function handleAssessmentRoute(request: Request, env: AssessmentRou
   const prompt = buildEvaluationPrompt(payload.question, payload.studentAnswer, topicContext);
 
   try {
-    // 5. Evaluate via Gemini / Vertex AI (Forcing JSON structure)
+    // 5. Evaluate via Gemini (Forcing JSON structure)
     const apiKey = (env.GEMINI_API_KEY as string) || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '') || '';
-    const rawModel = (env.GEMINI_PRIMARY_MODEL as string) || (typeof process !== 'undefined' ? process.env.GEMINI_PRIMARY_MODEL : 'gemini-1.5-flash-001') || 'gemini-1.5-flash-001';
+    const rawModel = (env.GEMINI_PRIMARY_MODEL as string) || (typeof process !== 'undefined' ? process.env.GEMINI_PRIMARY_MODEL : 'gemini-3.1-flash-lite') || 'gemini-3.1-flash-lite';
     const model = normalizeModel(rawModel);
 
-    const rawProjectId = (env.FIREBASE_PROJECT_ID as string) || (typeof process !== 'undefined' ? process.env.FIREBASE_PROJECT_ID : '') || '';
-    const isAqKey = typeof apiKey === 'string' && apiKey.startsWith('AQ.');
-    const shouldUseVertex = Boolean(isAqKey && rawProjectId);
-    const projectId = rawProjectId || 'gen-lang-client-0009572581';
-
-    let geminiUrl = shouldUseVertex
-      ? `${getVertexAiEndpoint(projectId, model)}?key=${apiKey}`
-      : `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (shouldUseVertex) {
-      headers['x-goog-api-key'] = apiKey;
-    }
 
     const geminiBody = {
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
@@ -96,12 +86,12 @@ export async function handleAssessmentRoute(request: Request, env: AssessmentRou
       body: JSON.stringify(geminiBody),
     });
 
-    if (!geminiResponse.ok && shouldUseVertex && (geminiResponse.status === 403 || geminiResponse.status === 404)) {
-      console.warn(`[Assessment API Vertex Fallback] HTTP ${geminiResponse.status}: Falling back to generativelanguage.`);
-      geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-      geminiResponse = await fetch(geminiUrl, {
+    if (!geminiResponse.ok) {
+      const fallbackModel = 'gemini-flash-latest';
+      const fallbackUrl = `https://generativelanguage.googleapis.com/v1beta/models/${fallbackModel}:generateContent?key=${apiKey}`;
+      geminiResponse = await fetch(fallbackUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(geminiBody),
       });
     }
