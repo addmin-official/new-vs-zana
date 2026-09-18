@@ -42,9 +42,16 @@ import { handleStudentProfileRoute } from "../server/api/student/profile.ts";
 import { handleFeedbackRoute } from "../server/api/feedback.ts";
 import { handleTelemetryExportRoute } from "../server/api/internal/telemetryExport.ts";
 import { handleHealthRoute, handleCurriculumHealthRoute } from "../server/api/health.ts";
+import { handleStudyRoomsRoute } from "../server/api/studyRooms.ts";
 import { enforceAiRateLimit } from "../server/middleware/rateLimiter.ts";
 import { applySecurityHeaders } from "../server/middleware/security.ts";
 import { validateProductionEnv } from "../server/config/envValidator.ts";
+
+export type KVNamespace = AssessmentKVStore;
+
+export interface Fetcher {
+  fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
+}
 
 export interface Env {
   GEMINI_API_KEY: string;
@@ -55,14 +62,21 @@ export interface Env {
   ADMIN_TELEMETRY_SECRET?: string;
   PROVIDER_PREFLIGHT_TOKEN?: string;
   ZANA_REVISION?: string;
+  VITE_FIREBASE_API_KEY?: string;
+  VITE_FIREBASE_AUTH_DOMAIN?: string;
+  VITE_FIREBASE_PROJECT_ID?: string;
+  VITE_FIREBASE_STORAGE_BUCKET?: string;
+  VITE_FIREBASE_MESSAGING_SENDER_ID?: string;
+  VITE_FIREBASE_APP_ID?: string;
+  LEARNING_RECORDS_KV?: KVNamespace;
+  RATE_LIMIT_KV?: KVNamespace;
+  ASSETS?: Fetcher;
   ZANA_CURRICULUM_DOCUMENT_IDS?: string;
   ZANA_CURRICULUM_DOCUMENT_URI?: string;
   ZANA_CURRICULUM_DOCUMENT_ID?: string;
   ZANA_CURRICULUM_FILE_PATH?: string;
   ZANA_CURRICULUM_FILE_NAME?: string;
   ZANA_LEARNING_KV?: AssessmentKVStore;
-  LEARNING_RECORDS_KV?: AssessmentKVStore;
-  ASSETS?: { fetch: (req: Request) => Promise<Response> };
   [key: string]: unknown;
 }
 
@@ -1508,6 +1522,22 @@ export default {
       // GET /api/internal/telemetry
       if (pathname === "/api/internal/telemetry" && request.method === "GET") {
         return handleTelemetryExportRoute(request, env as never);
+      }
+
+      // /api/study-rooms*
+      if (pathname.startsWith("/api/study-rooms")) {
+        const roomsRes = await handleStudyRoomsRoute(request);
+        // Ensure CORS headers applied
+        const mergedHeaders = new Headers(roomsRes.headers);
+        for (const [k, v] of responseHeaders.entries()) {
+          if (!mergedHeaders.has(k)) {
+            mergedHeaders.set(k, v);
+          }
+        }
+        return new Response(roomsRes.body, {
+          status: roomsRes.status,
+          headers: mergedHeaders,
+        });
       }
 
       // Fallback 404

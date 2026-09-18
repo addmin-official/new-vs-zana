@@ -8,10 +8,12 @@ import { AssessmentScreen } from "./screens/AssessmentScreen.tsx";
 import { ParentReportScreen } from "./screens/ParentReportScreen.tsx";
 import { ProfileScreen } from "./screens/ProfileScreen.tsx";
 import { PracticeScreen } from "./screens/PracticeScreen.tsx";
+import { StudyRoomScreen } from "./screens/StudyRoomScreen.tsx";
 import { StudentStudyPathDashboard } from "./features/student/planning/StudentStudyPathDashboard.tsx";
 import { useStudentProfile } from "./features/student/useStudentProfile.ts";
 import { SubjectKey } from "./features/student/studentTypes.ts";
 import { NavTab } from "./components/BottomNavigation.tsx";
+import { ThemeProvider } from "./context/ThemeContext.tsx";
 
 export default function App() {
   const { profile, updateProfile, completeOnboarding, resetProfile, isOfflineFallback, authError } = useStudentProfile();
@@ -36,9 +38,11 @@ export default function App() {
   // If student has not gone through onboarding
   if (!profile.onboardingCompleted) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col justify-center px-4">
-        <OnboardingScreen onComplete={completeOnboarding} />
-      </div>
+      <ThemeProvider>
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col justify-center px-4 transition-colors">
+          <OnboardingScreen onComplete={completeOnboarding} />
+        </div>
+      </ThemeProvider>
     );
   }
 
@@ -81,6 +85,23 @@ export default function App() {
             }}
           />
         );
+      case "rooms":
+        return (
+          <StudyRoomScreen
+            profile={profile}
+            onNavigateToPractice={(subjKey) => {
+              if (subjKey) {
+                updateProfile({ activeSubject: subjKey as SubjectKey });
+              }
+              setIsAssessmentMode(false);
+              setActiveTab("practice");
+            }}
+            onNavigateToChat={() => {
+              setIsAssessmentMode(false);
+              setActiveTab("chat");
+            }}
+          />
+        );
       case "plan":
         return (
           <StudentStudyPathDashboard
@@ -116,17 +137,20 @@ export default function App() {
   };
 
   return (
-    <AppShell
-      profile={profile}
-      activeTab={isAssessmentMode ? ("daily" as NavTab) : activeTab} // Keep highlight appropriate
-      onTabChange={(tab) => {
-        setIsAssessmentMode(false);
-        setActiveTab(tab);
-      }}
-      isOfflineFallback={isOfflineFallback}
-      authError={authError}
-    >
-      {renderScreen()}
-    </AppShell>
+    <ThemeProvider>
+      <AppShell
+        profile={profile}
+        activeTab={isAssessmentMode ? ("daily" as NavTab) : activeTab} // Keep highlight appropriate
+        onTabChange={(tab) => {
+          setIsAssessmentMode(false);
+          setActiveTab(tab);
+        }}
+        isOfflineFallback={isOfflineFallback}
+        authError={authError}
+      >
+        {renderScreen()}
+      </AppShell>
+    </ThemeProvider>
   );
 }
+

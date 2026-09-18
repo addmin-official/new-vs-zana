@@ -16,13 +16,13 @@ export function ZanaCard({
   className = "",
   ...props
 }: ZanaCardProps) {
-  const baseStyle = "bg-white border border-slate-100 rounded-2xl shadow-xs overflow-hidden";
-  const hoverStyle = hoverable ? "hover:border-slate-200 hover:shadow-md transition-all duration-200" : "";
+  const baseStyle = "bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden transition-colors";
+  const hoverStyle = hoverable ? "hover:border-slate-200 dark:hover:border-slate-700 hover:shadow-md transition-all duration-200" : "";
 
   return (
     <div className={`${baseStyle} ${hoverStyle} ${className}`} {...props}>
       {header && (
-        <div className="border-b border-slate-100 px-6 py-4 bg-slate-50/50">
+        <div className="border-b border-slate-100 dark:border-slate-800 px-6 py-4 bg-slate-50/50 dark:bg-slate-800/40">
           {header}
         </div>
       )}
@@ -30,7 +30,7 @@ export function ZanaCard({
         {children}
       </div>
       {footer && (
-        <div className="border-t border-slate-100 px-6 py-4 bg-slate-50/30">
+        <div className="border-t border-slate-100 dark:border-slate-800 px-6 py-4 bg-slate-50/30 dark:bg-slate-800/20">
           {footer}
         </div>
       )}

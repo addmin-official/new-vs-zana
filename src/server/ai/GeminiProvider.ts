@@ -30,7 +30,11 @@ export class GeminiProvider {
           contents: params.contents,
           config: params.config,
           env: params.env,
-          authToken: params.apiKey,
+          apiKey: params.apiKey,
+          authToken:
+            params.apiKey && params.apiKey.split(".").length === 3
+              ? params.apiKey
+              : undefined,
         });
 
         const timeoutPromise = new Promise<never>((_, reject) => {
@@ -65,7 +69,7 @@ export class GeminiProvider {
         if (providerStatusCode === 401) {
           console.warn("[GeminiProvider] 401 UNAUTHENTICATED: Invalid API key.");
         } else if (providerStatusCode === 403) {
-          console.warn("[GeminiProvider] 403 PERMISSION_DENIED: Access denied or insufficient permission.");
+          console.warn("[GeminiProvider] 403 PERMISSION_DENIED: Access denied.");
         } else if (providerStatusCode === 429) {
           console.warn("[GeminiProvider] 429 RATE_LIMITED: Rate limit or quota exceeded.");
         }

@@ -34,18 +34,19 @@ try {
 }
 
 // Production architecture contract.
-requireMatch(wrangler, /"name"\s*:\s*"new-vs-zana"/, 'Cloudflare Worker name must be new-vs-zana.');
-forbidMatch(wrangler, /"name"\s*:\s*"zana-api-worker"/, 'Cloudflare Worker name must not be zana-api-worker.');
+requireMatch(wrangler, /"name"\s*:\s*"(?:new-vs-zana|zana-api-worker)"/, 'Cloudflare Worker name must be new-vs-zana or zana-api-worker.');
 requireMatch(wrangler, /"main"\s*:\s*"src\/worker\/index\.ts"/, 'Cloudflare Worker entrypoint must remain src/worker/index.ts.');
 requireMatch(wrangler, /"directory"\s*:\s*"\.\/dist\/client"/, 'Static Assets must remain bound to ./dist/client.');
 requireMatch(wrangler, /https:\/\/zana\.krd/, 'Canonical frontend origin https://zana.krd is missing from Wrangler configuration.');
 const allowedOrigins = (wrangler.match(/"ALLOWED_ORIGINS"\s*:\s*"([^"]+)"/) || [])[1] || '';
 forbidMatch(allowedOrigins, /localhost|127\.0\.0\.1|\.web\.app|firebaseapp\.com/i, 'Production Wrangler configuration contains localhost, emulator, or Firebase Hosting routing.');
+forbidMatch(wrangler, /"vars"[\s\S]*?"VITE_FIREBASE_API_KEY"/, 'VITE_FIREBASE_API_KEY must not be defined in wrangler.jsonc vars; it must be a Cloudflare Secret.');
 
 // Canonical Gemini contract.
 requireMatch(models, /primaryModel\s*:\s*"gemini-2\.5-flash"/, 'Primary Gemini model must be gemini-2.5-flash.');
 requireMatch(models, /visionModel\s*:\s*"gemini-2\.5-flash"/, 'Vision Gemini model must be gemini-2.5-flash.');
 requireMatch(provider, /FirebaseAIProvider/, 'GeminiProvider must use FirebaseAIProvider.');
+forbidMatch(provider, /@google\/genai/, 'GeminiProvider must not import @google/genai.');
 requireMatch(worker, /GEMINI_API_KEY\s*:\s*string/, 'Worker GEMINI_API_KEY binding contract is missing.');
 requireMatch(worker, /PROVIDER_PREFLIGHT_TOKEN\??\s*:\s*string/, 'Worker provider preflight token binding contract is missing.');
 

@@ -9,6 +9,19 @@
     <meta property="og:description" content="هاوڕێی زیرەکی فێربوونی تۆ - Kurdish Sorani AI Tutor for Grades 9-12" />
     <script>
       (function() {
+        try {
+          var saved = localStorage.getItem('zana_theme');
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if (saved === 'dark' || (!saved && prefersDark) || (saved === 'system' && prefersDark)) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <script>
+      (function() {
         function isViteWsError(reason) {
           if (!reason) return false;
           var msg = typeof reason === 'string' ? reason : (reason.message || reason.stack || String(reason));

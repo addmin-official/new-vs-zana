@@ -4,9 +4,10 @@ import { SubjectKey } from "../features/student/studentTypes.ts";
 import { ZanaCard } from "../components/ZanaCard.tsx";
 import { ZanaButton } from "../components/ZanaButton.tsx";
 import { GRADES_LIST, SUBJECTS_DATA, LEVELS_LIST } from "../data/subjects.ts";
-import { Settings, Trash2, AlertTriangle, CheckCircle2, Award, Brain, Target, AlertCircle } from "lucide-react";
+import { Settings, Trash2, AlertTriangle, CheckCircle2, Award, Brain, Target, AlertCircle, Sun, Moon, Laptop, Palette } from "lucide-react";
 import { ConceptMasteryState } from "../learning/domain/MasteryTypes.ts";
 import { useStudentMastery } from "../learning/hooks/useStudentMastery.ts";
+import { useTheme } from "../context/ThemeContext.tsx";
 
 interface ProfileScreenProps {
   profile: StudentProfile;
@@ -15,6 +16,7 @@ interface ProfileScreenProps {
 }
 
 export function ProfileScreen({ profile, onUpdateProfile, onResetAll }: ProfileScreenProps) {
+  const { theme, setTheme } = useTheme();
   const [name, setName] = useState(profile.name);
   const [grade, setGrade] = useState(profile.grade);
   const [subject, setSubject] = useState(profile.activeSubject);
@@ -264,6 +266,62 @@ export function ProfileScreen({ profile, onUpdateProfile, onResetAll }: ProfileS
             <span>پاشەکەوتکردنی زانیارییەکان</span>
           </ZanaButton>
         </form>
+      </ZanaCard>
+
+      {/* Theme Settings Card */}
+      <ZanaCard>
+        <div className="space-y-3 text-right" style={{ direction: "rtl" }}>
+          <div className="flex items-center gap-2 justify-start border-b border-slate-100 dark:border-slate-800 pb-2 mb-1">
+            <Palette className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            <h3 className="font-sans font-bold text-sm text-slate-800 dark:text-slate-200">
+              ڕووکاری بەرنامە (Theme & Mode)
+            </h3>
+          </div>
+          <p className="font-sans text-xs text-slate-500 dark:text-slate-400">
+            شێوازی بینینی ڕووناک، تاریک یان خۆکار لەسەر بنەمای سیستەم هەڵبژێرە:
+          </p>
+
+          <div className="grid grid-cols-3 gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => setTheme("light")}
+              className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all cursor-pointer ${
+                theme === "light"
+                  ? "bg-blue-50 dark:bg-blue-950/60 border-blue-500 text-blue-700 dark:text-blue-300 font-bold shadow-xs"
+                  : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-300"
+              }`}
+            >
+              <Sun className="w-5 h-5 text-amber-500" />
+              <span className="font-sans text-xs">ڕووناک</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTheme("dark")}
+              className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all cursor-pointer ${
+                theme === "dark"
+                  ? "bg-blue-50 dark:bg-blue-950/60 border-blue-500 text-blue-700 dark:text-blue-300 font-bold shadow-xs"
+                  : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-300"
+              }`}
+            >
+              <Moon className="w-5 h-5 text-blue-400" />
+              <span className="font-sans text-xs">تاریک</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTheme("system")}
+              className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all cursor-pointer ${
+                theme === "system"
+                  ? "bg-blue-50 dark:bg-blue-950/60 border-blue-500 text-blue-700 dark:text-blue-300 font-bold shadow-xs"
+                  : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-300"
+              }`}
+            >
+              <Laptop className="w-5 h-5 text-slate-500" />
+              <span className="font-sans text-xs">سیستەم</span>
+            </button>
+          </div>
+        </div>
       </ZanaCard>
 
       {/* Danger Zone Actions */}

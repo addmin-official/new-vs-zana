@@ -27,6 +27,7 @@ import { handleStudentProfileRoute } from "./api/student/profile.ts";
 import { handleFeedbackRoute } from "./api/feedback.ts";
 import { handleTelemetryExportRoute } from "./api/internal/telemetryExport.ts";
 import { handleHealthRoute, handleCurriculumHealthRoute } from "./api/health.ts";
+import { handleStudyRoomsRoute } from "./api/studyRooms.ts";
 
 dotenv.config();
 
@@ -940,6 +941,30 @@ app.get("/api/internal/telemetry", async (req: Request, res: Response) => {
     const webRes = await handleTelemetryExportRoute(webReq, {
       ADMIN_TELEMETRY_SECRET: process.env.ADMIN_TELEMETRY_SECRET,
     });
+    const data = await webRes.json();
+    res.status(webRes.status).json(data);
+  } catch (err: unknown) {
+    res.status(500).json({ error: (err as Error)?.message || "Internal Server Error" });
+  }
+});
+
+app.all("/api/study-rooms*", async (req: Request, res: Response) => {
+  try {
+    const fullUrl = `${req.protocol}://${req.get("host") || "localhost"}${req.originalUrl}`;
+    const headers = new Headers();
+    for (const [k, v] of Object.entries(req.headers)) {
+      if (typeof v === "string") headers.set(k, v);
+      else if (Array.isArray(v)) headers.set(k, v.join(", "));
+    }
+    const init: RequestInit = {
+      method: req.method,
+      headers,
+    };
+    if (req.method !== "GET" && req.method !== "HEAD") {
+      init.body = JSON.stringify(req.body);
+    }
+    const webReq = new Request(fullUrl, init);
+    const webRes = await handleStudyRoomsRoute(webReq);
     const data = await webRes.json();
     res.status(webRes.status).json(data);
   } catch (err: unknown) {

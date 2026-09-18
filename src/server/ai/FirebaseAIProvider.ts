@@ -8,6 +8,7 @@ export interface FirebaseAIGenerateParams {
   config?: unknown;
   env?: unknown;
   authToken?: string;
+  apiKey?: string;
 }
 
 function resolveEnvVar(key: string, env?: unknown): string | undefined {
@@ -26,42 +27,40 @@ export class FirebaseAIProvider {
   private static app: FirebaseApp | null = null;
   private static auth: Auth | null = null;
 
-  private static getOrCreateApp(env?: unknown): FirebaseApp {
+  private static getOrCreateApp(env?: unknown, providedApiKey?: string): { app: FirebaseApp; apiKey: string } {
+    const isTest =
+      typeof process !== "undefined" &&
+      (process.env?.NODE_ENV === "test" || process.env?.ZANA_ENV === "test");
+
+    const apiKey =
+      (providedApiKey && typeof providedApiKey === "string" && providedApiKey.trim().length > 0
+        ? providedApiKey.trim()
+        : undefined) ||
+      resolveEnvVar("VITE_FIREBASE_API_KEY", env) ||
+      resolveEnvVar("FIREBASE_API_KEY", env) ||
+      resolveEnvVar("GEMINI_API_KEY", env) ||
+      (isTest ? "AIzaSyFakeKeyForTestEnvironmentOnly12345" : undefined);
+
+    if (!apiKey) {
+      throw new Error(
+        "No Firebase API key available. Set VITE_FIREBASE_API_KEY as a Cloudflare Secret."
+      );
+    }
+
     const existingApps = getApps();
     if (existingApps.length > 0) {
       const existingApp = existingApps[0] || getApp();
       if (!this.auth) {
         this.auth = getAuth(existingApp);
       }
-      return existingApp;
+      return { app: existingApp, apiKey };
     }
 
     if (this.app) {
       if (!this.auth) {
         this.auth = getAuth(this.app);
       }
-      return this.app;
-    }
-
-    const isTest =
-      resolveEnvVar("NODE_ENV", env) === "test" ||
-      resolveEnvVar("ZANA_ENV", env) === "test" ||
-      (typeof process !== "undefined" &&
-        (process.env?.NODE_ENV === "test" || process.env?.ZANA_ENV === "test"));
-
-    let apiKey = resolveEnvVar("VITE_FIREBASE_API_KEY", env);
-    if (apiKey === "AIzaSyFakeKeyForTestEnvironmentOnly12345" && !isTest) {
-      apiKey = undefined;
-    }
-    if (!apiKey) {
-      apiKey = resolveEnvVar("FIREBASE_API_KEY", env) || resolveEnvVar("GEMINI_API_KEY", env);
-    }
-    if (!apiKey) {
-      if (isTest) {
-        apiKey = "AIzaSyFakeKeyForTestEnvironmentOnly12345";
-      } else {
-        throw new Error("Missing Firebase API key: VITE_FIREBASE_API_KEY or GEMINI_API_KEY is required in production");
-      }
+      return { app: this.app, apiKey };
     }
 
     const projectId =
@@ -97,24 +96,107 @@ export class FirebaseAIProvider {
 
     this.auth = getAuth(this.app);
 
-    return this.app;
+    return { app: this.app, apiKey };
+  }
+
+  private static async fallbackDirectGemini(
+    modelName: string,
+    payload: unknown,
+    config: Record<string, unknown>,
+    apiKey: string
+  ): Promise<string> {
+    const candidateModels = [modelName, "gemini-3.6-flash", "gemini-flash-latest"];
+    let lastErr: unknown = null;
+
+    for (const m of candidateModels) {
+      try {
+        const cleanModel = m.replace(/^models\//, "");
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+        const bodyPayload: Record<string, unknown> = {};
+        if (payload && typeof payload === "object" && "contents" in (payload as Record<string, unknown>)) {
+          bodyPayload.contents = (payload as Record<string, unknown>).contents;
+        } else if (Array.isArray(payload)) {
+          bodyPayload.contents = payload;
+        } else {
+          bodyPayload.contents = [{ role: "user", parts: [{ text: String(payload) }] }];
+        }
+
+        if (config.systemInstruction) {
+          bodyPayload.systemInstruction =
+            typeof config.systemInstruction === "string"
+              ? { parts: [{ text: config.systemInstruction }] }
+              : config.systemInstruction;
+        }
+
+        const genConfig: Record<string, unknown> = {};
+        if (typeof config.temperature === "number") genConfig.temperature = config.temperature;
+        if (typeof config.maxOutputTokens === "number") genConfig.maxOutputTokens = config.maxOutputTokens;
+        if (typeof config.responseMimeType === "string") genConfig.responseMimeType = config.responseMimeType;
+        if (config.responseSchema) genConfig.responseSchema = config.responseSchema;
+
+        if (Object.keys(genConfig).length > 0) {
+          bodyPayload.generationConfig = genConfig;
+        }
+
+        const res = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(bodyPayload),
+        });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          const err = new Error(`Direct Gemini API failed with HTTP ${res.status}: ${errText}`);
+          (err as unknown as Record<string, unknown>).status = res.status;
+          throw err;
+        }
+
+        const data = (await res.json()) as {
+          candidates?: Array<{
+            content?: {
+              parts?: Array<{ text?: string }>;
+            };
+          }>;
+        };
+
+        const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (typeof replyText === "string" && replyText.trim().length > 0) {
+          return replyText.trim();
+        }
+      } catch (err: unknown) {
+        lastErr = err;
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("404") || msg.includes("no longer available") || msg.includes("NOT_FOUND")) {
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    throw lastErr || new Error("Direct Gemini fallback failed for all candidate models");
   }
 
   static async generate(params: FirebaseAIGenerateParams): Promise<{ text: string }> {
-    const app = this.getOrCreateApp(params.env);
+    const { app, apiKey } = this.getOrCreateApp(params.env, params.apiKey);
 
     if (this.auth) {
-      if (params.authToken) {
+      if (params.authToken && params.authToken.split(".").length === 3) {
         try {
           await signInWithCustomToken(this.auth, params.authToken);
-        } catch (authError) {
-          console.warn("[FirebaseAIProvider] Custom token auth failed:", authError);
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          console.warn(`[FirebaseAIProvider] Auth fallback failed: ${message}`);
         }
-      } else if (!this.auth.currentUser) {
+      }
+      if (!this.auth.currentUser) {
         try {
           await signInAnonymously(this.auth);
-        } catch (authError) {
-          console.warn("[FirebaseAIProvider] Anonymous auth failed:", authError);
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          console.warn(`[FirebaseAIProvider] Auth fallback failed: ${message}`);
         }
       }
     }
@@ -176,9 +258,16 @@ export class FirebaseAIProvider {
       requestPayload = params.contents;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await model.generateContent(requestPayload as any);
-    const text = result.response.text();
+    let text = "";
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await model.generateContent(requestPayload as any);
+      text = result.response.text();
+    } catch (firebaseErr: unknown) {
+      const errMsg = firebaseErr instanceof Error ? firebaseErr.message : String(firebaseErr);
+      console.warn(`[FirebaseAIProvider] Firebase AI call failed (${errMsg}), falling back to direct Gemini endpoint...`);
+      text = await this.fallbackDirectGemini(params.model, requestPayload, cfg, apiKey);
+    }
 
     if (typeof text !== "string" || text.trim().length === 0) {
       throw new Error("Invalid provider response: empty response text");
