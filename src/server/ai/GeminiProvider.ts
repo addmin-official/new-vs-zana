@@ -8,6 +8,7 @@ export interface ProviderGenerateParams {
   contents: unknown;
   config?: unknown;
   pathname?: string;
+  projectId?: string;
   env?: unknown;
 }
 

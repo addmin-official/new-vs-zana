@@ -57,7 +57,7 @@ export interface Env {
   CF_ACCOUNT_ID?: string;
   CF_GATEWAY_ID?: string;
   CF_AIG_TOKEN?: string;
-  GEMINI_API_KEY?: string;
+  GEMINI_API_KEY: string;
   ALLOWED_ORIGINS: string;
   FIREBASE_PROJECT_ID: string;
   GEMINI_PRIMARY_MODEL?: string;
