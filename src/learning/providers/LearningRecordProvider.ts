@@ -7,6 +7,10 @@ import {
   LearningSession,
   ExerciseAttempt
 } from "../domain/MasteryTypes.ts";
+import {
+  calculateUpdatedStreak,
+  evaluateAchievements
+} from "../engine/StreakAndBadgeEngine.ts";
 
 export interface CloudflareKVBinding {
   get(key: string): Promise<string | null>;
@@ -27,6 +31,7 @@ export interface LearningRecordProvider {
   saveRecommendation(recommendation: AdaptiveRecommendation): Promise<void>;
   listRecommendations(studentId: string, status?: string): Promise<AdaptiveRecommendation[]>;
   saveStudentMasteryProfile(studentId: string, profile: StudentMasteryProfile): Promise<void>;
+  recordTaskCompletion?(studentId: string, taskDate?: string): Promise<StudentMasteryProfile>;
 }
 
 interface LocalFs {
@@ -58,7 +63,15 @@ export class InMemoryLearningRecordProvider implements LearningRecordProvider {
         overallMasteryScore: 0.0,
         conceptMasteries: {},
         activeMisconceptions: [],
-        recentRecommendedActions: []
+        recentRecommendedActions: [],
+        streak: {
+          currentStreak: 0,
+          longestStreak: 0,
+          lastCompletedDate: null,
+          streakHistory: [],
+          totalTasksCompleted: 0,
+        },
+        unlockedAchievements: [],
       };
       this.profiles.set(studentId, profile);
     }
@@ -90,7 +103,33 @@ export class InMemoryLearningRecordProvider implements LearningRecordProvider {
       profile.overallMasteryScore = Number((sum / masteries.length).toFixed(3));
     }
 
+    const { updatedStreak } = calculateUpdatedStreak(profile.streak);
+    profile.streak = updatedStreak;
+
+    const { newlyUnlockedIds } = evaluateAchievements(profile);
+    if (newlyUnlockedIds.length > 0) {
+      profile.unlockedAchievements = Array.from(
+        new Set([...(profile.unlockedAchievements || []), ...newlyUnlockedIds])
+      );
+    }
+
     this.profiles.set(studentId, profile);
+  }
+
+  public async recordTaskCompletion(studentId: string, taskDate?: string): Promise<StudentMasteryProfile> {
+    const profile = await this.getStudentMasteryProfile(studentId);
+    const { updatedStreak } = calculateUpdatedStreak(profile.streak, taskDate);
+    profile.streak = updatedStreak;
+
+    const { newlyUnlockedIds } = evaluateAchievements(profile);
+    if (newlyUnlockedIds.length > 0) {
+      profile.unlockedAchievements = Array.from(
+        new Set([...(profile.unlockedAchievements || []), ...newlyUnlockedIds])
+      );
+    }
+
+    this.profiles.set(studentId, profile);
+    return { ...profile };
   }
 
   public async appendLearningEvent(studentId: string, event: LearningEvent): Promise<void> {
@@ -194,13 +233,34 @@ export class LocalStorageLearningRecordProvider implements LearningRecordProvide
 
   public async getStudentMasteryProfile(studentId: string): Promise<StudentMasteryProfile> {
     const key = this.getProfileKey(studentId);
-    return this.safeGet<StudentMasteryProfile>(key, {
+    const profile = this.safeGet<StudentMasteryProfile>(key, {
       studentId,
       overallMasteryScore: 0.0,
       conceptMasteries: {},
       activeMisconceptions: [],
-      recentRecommendedActions: []
+      recentRecommendedActions: [],
+      streak: {
+        currentStreak: 0,
+        longestStreak: 0,
+        lastCompletedDate: null,
+        streakHistory: [],
+        totalTasksCompleted: 0,
+      },
+      unlockedAchievements: [],
     });
+    if (!profile.streak) {
+      profile.streak = {
+        currentStreak: 0,
+        longestStreak: 0,
+        lastCompletedDate: null,
+        streakHistory: [],
+        totalTasksCompleted: 0,
+      };
+    }
+    if (!profile.unlockedAchievements) {
+      profile.unlockedAchievements = [];
+    }
+    return profile;
   }
 
   public async saveStudentMasteryProfile(studentId: string, profile: StudentMasteryProfile): Promise<void> {
@@ -227,7 +287,33 @@ export class LocalStorageLearningRecordProvider implements LearningRecordProvide
       profile.overallMasteryScore = Number((sum / masteries.length).toFixed(3));
     }
 
+    const { updatedStreak } = calculateUpdatedStreak(profile.streak);
+    profile.streak = updatedStreak;
+
+    const { newlyUnlockedIds } = evaluateAchievements(profile);
+    if (newlyUnlockedIds.length > 0) {
+      profile.unlockedAchievements = Array.from(
+        new Set([...(profile.unlockedAchievements || []), ...newlyUnlockedIds])
+      );
+    }
+
     this.safeSet(this.getProfileKey(studentId), profile);
+  }
+
+  public async recordTaskCompletion(studentId: string, taskDate?: string): Promise<StudentMasteryProfile> {
+    const profile = await this.getStudentMasteryProfile(studentId);
+    const { updatedStreak } = calculateUpdatedStreak(profile.streak, taskDate);
+    profile.streak = updatedStreak;
+
+    const { newlyUnlockedIds } = evaluateAchievements(profile);
+    if (newlyUnlockedIds.length > 0) {
+      profile.unlockedAchievements = Array.from(
+        new Set([...(profile.unlockedAchievements || []), ...newlyUnlockedIds])
+      );
+    }
+
+    this.safeSet(this.getProfileKey(studentId), profile);
+    return profile;
   }
 
   public async appendLearningEvent(studentId: string, event: LearningEvent): Promise<void> {
@@ -431,6 +517,18 @@ export class PersistentLearningRecordProvider implements LearningRecordProvider 
         profile.studentId = studentId;
         profile.schemaVersion = profile.schemaVersion || 1;
         profile.updatedAt = profile.updatedAt || new Date().toISOString();
+        if (!profile.streak) {
+          profile.streak = {
+            currentStreak: 0,
+            longestStreak: 0,
+            lastCompletedDate: null,
+            streakHistory: [],
+            totalTasksCompleted: 0,
+          };
+        }
+        if (!profile.unlockedAchievements) {
+          profile.unlockedAchievements = [];
+        }
         return profile;
       }
       return {
@@ -438,7 +536,15 @@ export class PersistentLearningRecordProvider implements LearningRecordProvider 
         overallMasteryScore: 0.0,
         conceptMasteries: {},
         activeMisconceptions: [],
-        recentRecommendedActions: []
+        recentRecommendedActions: [],
+        streak: {
+          currentStreak: 0,
+          longestStreak: 0,
+          lastCompletedDate: null,
+          streakHistory: [],
+          totalTasksCompleted: 0,
+        },
+        unlockedAchievements: [],
       };
     }
 
@@ -487,6 +593,16 @@ export class PersistentLearningRecordProvider implements LearningRecordProvider 
         const sum = masteries.reduce((acc, m) => acc + m.masteryScore, 0);
         profile.overallMasteryScore = Number((sum / masteries.length).toFixed(3));
       }
+
+      const { updatedStreak } = calculateUpdatedStreak(profile.streak);
+      profile.streak = updatedStreak;
+
+      const { newlyUnlockedIds } = evaluateAchievements(profile);
+      if (newlyUnlockedIds.length > 0) {
+        profile.unlockedAchievements = Array.from(
+          new Set([...(profile.unlockedAchievements || []), ...newlyUnlockedIds])
+        );
+      }
       
       profile.updatedAt = new Date().toISOString();
       profile.schemaVersion = 1;
@@ -504,6 +620,30 @@ export class PersistentLearningRecordProvider implements LearningRecordProvider 
     if (this.mode === "development") {
       this.saveToLocalFile();
     }
+  }
+
+  public async recordTaskCompletion(studentId: string, taskDate?: string): Promise<StudentMasteryProfile> {
+    if (this.cloudflareKv) {
+      const profile = await this.getStudentMasteryProfile(studentId);
+      const { updatedStreak } = calculateUpdatedStreak(profile.streak, taskDate);
+      profile.streak = updatedStreak;
+
+      const { newlyUnlockedIds } = evaluateAchievements(profile);
+      if (newlyUnlockedIds.length > 0) {
+        profile.unlockedAchievements = Array.from(
+          new Set([...(profile.unlockedAchievements || []), ...newlyUnlockedIds])
+        );
+      }
+
+      await this.saveStudentMasteryProfile(studentId, profile);
+      return profile;
+    }
+
+    const updated = await this.memoryStore.recordTaskCompletion(studentId, taskDate);
+    if (this.mode === "development") {
+      this.saveToLocalFile();
+    }
+    return updated;
   }
 
   public async appendLearningEvent(studentId: string, event: LearningEvent): Promise<void> {

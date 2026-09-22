@@ -8,6 +8,7 @@ import { Settings, Trash2, AlertTriangle, CheckCircle2, Award, Brain, Target, Al
 import { ConceptMasteryState } from "../learning/domain/MasteryTypes.ts";
 import { useStudentMastery } from "../learning/hooks/useStudentMastery.ts";
 import { useTheme } from "../context/ThemeContext.tsx";
+import { StudentStreakAndBadges } from "../components/StudentStreakAndBadges.tsx";
 
 interface ProfileScreenProps {
   profile: StudentProfile;
@@ -22,7 +23,14 @@ export function ProfileScreen({ profile, onUpdateProfile, onResetAll }: ProfileS
   const [subject, setSubject] = useState(profile.activeSubject);
   const [level, setLevel] = useState(profile.level);
   const [showSuccess, setShowSuccess] = useState(false);
-  const { profile: masteryProfile, recommendations: recs, loading } = useStudentMastery(profile.id);
+  const {
+    profile: masteryProfile,
+    recommendations: recs,
+    loading,
+    completeLearningTask,
+    streakStatus,
+    badges
+  } = useStudentMastery(profile.id);
   const misconceptions = masteryProfile?.activeMisconceptions || [];
 
   // Destruction confirmations
@@ -178,6 +186,19 @@ export function ProfileScreen({ profile, onUpdateProfile, onResetAll }: ProfileS
           )}
         </div>
       </ZanaCard>
+
+      {/* DAILY STREAK & ACHIEVEMENT BADGES */}
+      <StudentStreakAndBadges
+        currentStreak={streakStatus.activeStreak}
+        longestStreak={streakStatus.longestStreak}
+        totalTasksCompleted={masteryProfile?.streak?.totalTasksCompleted || 0}
+        isCompletedToday={streakStatus.isCompletedToday}
+        isAtRisk={streakStatus.isAtRisk}
+        streakHistory={masteryProfile?.streak?.streakHistory}
+        badges={badges}
+        onCompleteTask={() => completeLearningTask()}
+        isLoading={loading}
+      />
 
       {/* Edit Form Card */}
       <ZanaCard>

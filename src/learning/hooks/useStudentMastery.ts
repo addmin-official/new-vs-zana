@@ -1,12 +1,17 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   StudentMasteryProfile,
   AdaptiveRecommendation,
   DifficultyLevel,
-  MisconceptionStatus
+  MisconceptionStatus,
+  AchievementBadge
 } from "../domain/MasteryTypes.ts";
 import { LocalStorageLearningRecordProvider } from "../providers/LearningRecordProvider.ts";
 import { AdaptiveLearningEngine as StudentMasteryAdaptiveEngine } from "../engine/AdaptiveLearningEngine.ts";
+import {
+  evaluateAchievements,
+  getEffectiveStreak
+} from "../engine/StreakAndBadgeEngine.ts";
 import { AuthService } from "../../services/authService.ts";
 import { parseResponseJson } from "../../lib/apiClient.ts";
 
@@ -102,9 +107,7 @@ export function useStudentMastery(studentId: string, onAuthFailure?: () => void)
             setProfile(serverP);
           }
           // Save server state to local cache
-          for (const [cId, state] of Object.entries(serverP.conceptMasteries || {})) {
-            await localProvider.saveMasteryChange(effectiveId, cId, state);
-          }
+          await localProvider.saveStudentMasteryProfile(effectiveId, serverP);
         }
 
         const recsRes = await fetchWithAuth(`/api/learning/recommendations?studentId=${encodeURIComponent(effectiveId)}&status=ACTIVE`);
@@ -315,11 +318,49 @@ export function useStudentMastery(studentId: string, onAuthFailure?: () => void)
     }
   }, [activeSessionId, studentId, fetchWithAuth]);
 
+  // Complete a learning task to increment/maintain daily streak and award badges
+  const completeLearningTask = useCallback(async (taskDate?: string) => {
+    const effectiveId = studentId || "default-guest";
+    try {
+      const updated = await localProvider.recordTaskCompletion(effectiveId, taskDate);
+      if (isMountedRef.current) {
+        setProfile({ ...updated });
+      }
+
+      if (effectiveId !== "default-guest") {
+        void fetchWithAuth("/api/learning/streak/complete-task", {
+          method: "POST",
+          body: JSON.stringify({ taskDate })
+        });
+      }
+
+      return updated;
+    } catch (err) {
+      console.warn("Could not record task completion:", err);
+      return null;
+    }
+  }, [studentId, fetchWithAuth]);
+
+  const streakStatus = useMemo(() => {
+    return getEffectiveStreak(profile?.streak);
+  }, [profile?.streak]);
+
+  const { badges, newlyUnlockedIds } = useMemo(() => {
+    if (!profile) {
+      return { badges: [] as AchievementBadge[], newlyUnlockedIds: [] as string[] };
+    }
+    return evaluateAchievements(profile);
+  }, [profile]);
+
   return {
     profile,
     recommendations,
     loading,
     recordAttempt,
+    completeLearningTask,
+    streakStatus,
+    badges,
+    newlyUnlockedIds,
     startSession,
     endSession,
     activeSessionId,

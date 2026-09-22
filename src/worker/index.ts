@@ -935,6 +935,28 @@ export default {
         return new Response(JSON.stringify({ success: true, eventId: event.id, profile }), { status: 200, headers: responseHeaders });
       }
 
+      // POST /api/learning/streak/complete-task
+      if (pathname === "/api/learning/streak/complete-task" && request.method === "POST") {
+        let studentId: string;
+        try {
+          studentId = await getWorkerAuthenticatedStudentId(request, env);
+        } catch {
+          return new Response(JSON.stringify({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." }), { status: 401, headers: responseHeaders });
+        }
+
+        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, "production");
+        let taskDate: string | undefined;
+        try {
+          const body = (await request.json()) as { taskDate?: string };
+          taskDate = body?.taskDate;
+        } catch {
+          // Optional body
+        }
+
+        const profile = await lp.recordTaskCompletion(studentId, taskDate);
+        return new Response(JSON.stringify({ success: true, profile }), { status: 200, headers: responseHeaders });
+      }
+
       // POST /api/learning/attempts
       if (pathname === "/api/learning/attempts" && request.method === "POST") {
         let studentId: string;

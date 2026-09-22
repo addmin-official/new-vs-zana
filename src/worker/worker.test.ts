@@ -964,7 +964,12 @@ test("Worker - Uses Firebase AI endpoint with generateContent", async () => {
 
   globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const urlStr = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-    if (urlStr.includes("firebasevertexai.googleapis.com") || urlStr.includes("aiplatform.googleapis.com")) {
+    if (
+      urlStr.includes("firebasevertexai.googleapis.com") ||
+      urlStr.includes("aiplatform.googleapis.com") ||
+      urlStr.includes("generativelanguage.googleapis.com") ||
+      urlStr.includes("gateway.ai.cloudflare.com")
+    ) {
       interceptedUrl = urlStr;
       interceptedHeaders = new Headers(init?.headers);
       interceptedBody = typeof init?.body === "string" ? init.body : undefined;

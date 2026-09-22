@@ -86,25 +86,23 @@ export class FirebaseAIProvider {
     const cfAigToken = resolveEnvVar("CF_AIG_TOKEN", params.env);
     const apiKey = resolveEnvVar("GEMINI_API_KEY", params.env);
 
-    if (!cfAigToken) {
-      throw new Error("CF_AIG_TOKEN is required for Cloudflare AI Gateway.");
-    }
     if (!apiKey) {
       throw new Error("GEMINI_API_KEY is required.");
     }
 
-    const baseUrl = `https://gateway.ai.cloudflare.com/v1/${accountId}/${gatewayId}/google-ai-studio`;
-    const configKey = `${accountId}:${gatewayId}:${cfAigToken}:${apiKey}`;
+    const configKey = `${accountId}:${gatewayId}:${cfAigToken || "direct"}:${apiKey}`;
 
     if (!this.aiClient || this.cachedConfigKey !== configKey) {
+      const httpOptions: { baseUrl?: string; headers?: Record<string, string> } = {};
+      if (cfAigToken) {
+        httpOptions.baseUrl = `https://gateway.ai.cloudflare.com/v1/${accountId}/${gatewayId}/google-ai-studio`;
+        httpOptions.headers = {
+          "cf-aig-authorization": `Bearer ${cfAigToken}`,
+        };
+      }
       this.aiClient = new GoogleGenAI({
         apiKey,
-        httpOptions: {
-          baseUrl,
-          headers: {
-            "cf-aig-authorization": `Bearer ${cfAigToken}`,
-          },
-        },
+        ...(Object.keys(httpOptions).length > 0 ? { httpOptions } : {}),
       });
       this.cachedConfigKey = configKey;
     }

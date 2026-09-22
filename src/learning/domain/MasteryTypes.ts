@@ -47,12 +47,43 @@ export interface MisconceptionState {
   interventionKu: string;
 }
 
+export interface StudentStreakData {
+  currentStreak: number;
+  longestStreak: number;
+  lastCompletedDate: string | null; // Format "YYYY-MM-DD"
+  streakHistory: string[]; // List of unique YYYY-MM-DD completion dates
+  totalTasksCompleted: number;
+}
+
+export type BadgeTier = "bronze" | "silver" | "gold" | "platinum";
+export type BadgeCategory = "subject" | "mastery" | "streak" | "milestone";
+
+export interface AchievementBadge {
+  id: string;
+  titleKu: string;
+  titleEn: string;
+  descriptionKu: string;
+  descriptionEn: string;
+  icon: string;
+  category: BadgeCategory;
+  tier: BadgeTier;
+  isUnlocked: boolean;
+  unlockedAt: string | null;
+  progress: {
+    current: number;
+    target: number;
+    labelKu: string;
+  };
+}
+
 export interface StudentMasteryProfile {
   studentId: string;
   overallMasteryScore: number; // 0.0 to 1.0
   conceptMasteries: Record<string, ConceptMasteryState>;
   activeMisconceptions: MisconceptionState[];
   recentRecommendedActions: string[];
+  streak?: StudentStreakData;
+  unlockedAchievements?: string[]; // IDs of unlocked milestone badges
   updatedAt?: string;
   schemaVersion?: number;
 }
