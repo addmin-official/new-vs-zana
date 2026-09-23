@@ -345,7 +345,7 @@ jobs:
           let log = '';
           try { log = fs.readFileSync('wrangler-deploy.log', 'utf8'); } catch(e) {}
           const nameMatch = log.match(/Uploaded\s+([a-zA-Z0-9-]+)/i) || log.match(/Published\s+([a-zA-Z0-9-]+)/i);
-          const worker_name = nameMatch ? nameMatch[1] : 'zana-api-worker';
+          const worker_name = nameMatch ? nameMatch[1] : 'new-vs-zana';
           const idMatch = log.match(/Deployment ID:\s*([a-zA-Z0-9-]+)/i) || log.match(/Version:\s*([0-9]+)/i);
           const worker_deployment_id = idMatch ? idMatch[1] : null;
           fs.mkdirSync('metadata-worker', { recursive: true });
@@ -493,8 +493,8 @@ jobs:
             exit 1
           fi
 
-          if [ "$SERVICE" != "zana-api-worker" ]; then
-            echo "::error::Invalid service name: '$SERVICE' (expected 'zana-api-worker')"
+          if [ "$SERVICE" != "new-vs-zana" ]; then
+            echo "::error::Invalid service name: '$SERVICE' (expected 'new-vs-zana')"
             exit 1
           fi
 

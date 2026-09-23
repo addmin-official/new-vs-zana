@@ -98,6 +98,7 @@ export class FirebaseAIProvider {
         httpOptions.baseUrl = `https://gateway.ai.cloudflare.com/v1/${accountId}/${gatewayId}/google-ai-studio`;
         httpOptions.headers = {
           "cf-aig-authorization": `Bearer ${cfAigToken}`,
+          "cf-aig-byok-alias": "zana-gemini-prod",
         };
       }
       this.aiClient = new GoogleGenAI({
