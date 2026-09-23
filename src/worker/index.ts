@@ -515,6 +515,25 @@ export default {
       }
     }
 
+    // Security: Block access to sensitive files (must be BEFORE SPA fallback)
+    const BLOCKED_PATHS = [
+      "/package.json",
+      "/package-lock.json",
+      "/.env",
+      "/.dev.vars",
+      "/.git",
+      "/wrangler.jsonc",
+      "/wrangler.toml",
+      "/tsconfig.json",
+    ];
+    const lowerPath = pathname.toLowerCase();
+    const isBlocked = BLOCKED_PATHS.some(
+      (p) => lowerPath === p || lowerPath.startsWith(p + "/") || lowerPath.startsWith(p + ".")
+    );
+    if (isBlocked) {
+      return new Response(JSON.stringify({ error: "Not Found" }), { status: 404, headers: responseHeaders });
+    }
+
     // Static assets & SPA fallback (Strictly excluded for /api routes)
     const isApiRoute = pathname === "/api" || pathname.startsWith("/api/");
     if (!isApiRoute) {
