@@ -196,7 +196,9 @@ export function ProfileScreen({ profile, onUpdateProfile, onResetAll }: ProfileS
         isAtRisk={streakStatus.isAtRisk}
         streakHistory={masteryProfile?.streak?.streakHistory}
         badges={badges}
-        onCompleteTask={() => completeLearningTask()}
+        onCompleteTask={async () => {
+          await completeLearningTask();
+        }}
         isLoading={loading}
       />
 
