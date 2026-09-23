@@ -43,8 +43,8 @@ forbidMatch(allowedOrigins, /localhost|127\.0\.0\.1|\.web\.app|firebaseapp\.com/
 forbidMatch(wrangler, /"vars"[\s\S]*?"VITE_FIREBASE_API_KEY"/, 'VITE_FIREBASE_API_KEY must not be defined in wrangler.jsonc vars; it must be a Cloudflare Secret.');
 
 // Canonical Gemini contract.
-requireMatch(models, /primaryModel\s*:\s*"gemini-2\.5-flash"/, 'Primary Gemini model must be gemini-2.5-flash.');
-requireMatch(models, /visionModel\s*:\s*"gemini-2\.5-flash"/, 'Vision Gemini model must be gemini-2.5-flash.');
+requireMatch(models, /primaryModel\s*:\s*"gemini-3\.6-flash"/, 'Primary Gemini model must be gemini-3.6-flash.');
+requireMatch(models, /visionModel\s*:\s*"gemini-3\.6-flash"/, 'Vision Gemini model must be gemini-3.6-flash.');
 requireMatch(provider, /FirebaseAIProvider/, 'GeminiProvider must use FirebaseAIProvider.');
 forbidMatch(provider, /@google\/genai/, 'GeminiProvider must not import @google/genai.');
 requireMatch(worker, /GEMINI_API_KEY\s*:\s*string/, 'Worker GEMINI_API_KEY binding contract is missing.');

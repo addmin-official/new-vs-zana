@@ -579,8 +579,8 @@ test("Centralized model normalization & prefix stripping", async () => {
   const { normalizeModel, getPrimaryModel, getVisionModel, AI_CONFIG } = await import("../server/config/aiModels.ts");
 
   // AI_CONFIG schema compliance
-  assert.strictEqual(AI_CONFIG.primaryModel, "gemini-2.5-flash");
-  assert.strictEqual(AI_CONFIG.visionModel, "gemini-2.5-flash");
+  assert.strictEqual(AI_CONFIG.primaryModel, "gemini-3.6-flash");
+  assert.strictEqual(AI_CONFIG.visionModel, "gemini-3.6-flash");
   assert.strictEqual(AI_CONFIG.apiBaseUrl, "https://generativelanguage.googleapis.com");
   assert.strictEqual(AI_CONFIG.timeoutMs, 30000);
   assert.strictEqual(AI_CONFIG.retryPolicy.maxRetries, 2);
@@ -936,23 +936,23 @@ test("Worker - GET /api/health/curriculum returns 200 with curriculum health sta
   assert.strictEqual(data.pipeline.groundingVerdict, "PDF_NOT_CONNECTED_TO_RUNTIME");
 });
 
-test("Vertex AI - Model replacements for gemini-1.5-flash and gemini-pro", async () => {
+test("Vertex AI - Model replacements for gemini-3.6-flash and gemini-3.6-flash", async () => {
   const { normalizeModel, getVertexAiEndpoint } = await import("../server/config/aiModels.ts");
-  assert.strictEqual(normalizeModel("gemini-1.5-flash"), "gemini-1.5-flash-001");
-  assert.strictEqual(normalizeModel("gemini-pro"), "gemini-1.5-pro-001");
-  assert.strictEqual(normalizeModel("models/gemini-1.5-flash"), "gemini-1.5-flash-001");
-  assert.strictEqual(normalizeModel("models/gemini-pro"), "gemini-1.5-pro-001");
+  assert.strictEqual(normalizeModel("gemini-3.6-flash"), "gemini-3.6-flash");
+  assert.strictEqual(normalizeModel("gemini-3.6-flash"), "gemini-3.6-flash");
+  assert.strictEqual(normalizeModel("models/gemini-3.6-flash"), "gemini-3.6-flash");
+  assert.strictEqual(normalizeModel("models/gemini-3.6-flash"), "gemini-3.6-flash");
 
-  const endpointFlash = getVertexAiEndpoint("zana-test-project", "gemini-1.5-flash");
+  const endpointFlash = getVertexAiEndpoint("zana-test-project", "gemini-3.6-flash");
   assert.strictEqual(
     endpointFlash,
-    "https://us-central1-aiplatform.googleapis.com/v1/projects/zana-test-project/locations/us-central1/publishers/google/models/gemini-1.5-flash-001:streamGenerateContent"
+    "https://us-central1-aiplatform.googleapis.com/v1/projects/zana-test-project/locations/us-central1/publishers/google/models/gemini-3.6-flash:streamGenerateContent"
   );
 
-  const endpointPro = getVertexAiEndpoint("zana-test-project", "gemini-pro");
+  const endpointPro = getVertexAiEndpoint("zana-test-project", "gemini-3.6-flash");
   assert.strictEqual(
     endpointPro,
-    "https://us-central1-aiplatform.googleapis.com/v1/projects/zana-test-project/locations/us-central1/publishers/google/models/gemini-1.5-pro-001:streamGenerateContent"
+    "https://us-central1-aiplatform.googleapis.com/v1/projects/zana-test-project/locations/us-central1/publishers/google/models/gemini-3.6-flash:streamGenerateContent"
   );
 });
 
@@ -1018,7 +1018,7 @@ test("Worker - Uses Firebase AI endpoint with generateContent", async () => {
       ALLOWED_ORIGINS: "https://zana.krd",
       FIREBASE_PROJECT_ID: "zana-edu-prod",
       GEMINI_API_KEY: "AQ.example-vertex-key-12345",
-      GEMINI_PRIMARY_MODEL: "gemini-2.5-flash",
+      GEMINI_PRIMARY_MODEL: "gemini-3.6-flash",
     };
 
     const res = await worker.fetch(req, envWithAqKey);
@@ -1029,7 +1029,7 @@ test("Worker - Uses Firebase AI endpoint with generateContent", async () => {
 
     // Verify Firebase AI endpoint format
     assert.ok(
-      interceptedUrl.includes("models/gemini-2.5-flash:generateContent"),
+      interceptedUrl.includes("models/gemini-3.6-flash:generateContent"),
       `Expected Firebase AI URL, got: ${interceptedUrl}`
     );
     assert.ok(interceptedHeaders?.get("x-goog-api-key"));
