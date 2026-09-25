@@ -519,17 +519,48 @@ export default {
     const BLOCKED_PATHS = [
       "/package.json",
       "/package-lock.json",
+      "/bun.lock",
+      "/pnpm-lock.yaml",
+      "/pnpm-workspace.yaml",
       "/.env",
+      "/.env.local",
+      "/.env.production",
+      "/.env.development",
       "/.dev.vars",
       "/.git",
+      "/.gitignore",
       "/wrangler.jsonc",
       "/wrangler.toml",
+      "/wrangler.production.json",
+      "/wrangler.production.jsonc",
       "/tsconfig.json",
+      "/vite.config.ts",
+      "/vite.config.js",
+      "/firebase.json",
+      "/firestore.rules",
+      "/.firebaserc",
+    ];
+    const BLOCKED_PREFIXES = [
+      "/src/",
+      "/scripts/",
+      "/.github/",
+      "/coverage/",
+      "/dist/server/",
+    ];
+    const BLOCKED_SUFFIXES = [
+      ".map",
+      ".ts",
+      ".tsx",
+      ".cjs",
+      ".mjs",
     ];
     const lowerPath = pathname.toLowerCase();
-    const isBlocked = BLOCKED_PATHS.some(
-      (p) => lowerPath === p || lowerPath.startsWith(p + "/") || lowerPath.startsWith(p + ".")
-    );
+    const isBlocked =
+      BLOCKED_PREFIXES.some((p) => lowerPath.startsWith(p)) ||
+      BLOCKED_SUFFIXES.some((s) => lowerPath.endsWith(s)) ||
+      BLOCKED_PATHS.some(
+        (p) => lowerPath === p || lowerPath.startsWith(p + "/") || lowerPath.startsWith(p + ".")
+      );
     if (isBlocked) {
       return new Response(JSON.stringify({ error: "Not Found" }), { status: 404, headers: responseHeaders });
     }
@@ -688,6 +719,10 @@ export default {
           throw rlError;
         }
 
+        if (!env.GEMINI_API_KEY || !env.GEMINI_API_KEY.trim()) {
+          throw new Error("GEMINI_API_KEY is required.");
+        }
+
         const chatResult = await ProviderAdapter.chat(env.GEMINI_API_KEY, chatReq, env);
 
         return new Response(
@@ -710,6 +745,10 @@ export default {
             status: 400,
             headers: responseHeaders,
           });
+        }
+
+        if (!env.GEMINI_API_KEY || !env.GEMINI_API_KEY.trim()) {
+          throw new Error("GEMINI_API_KEY is required.");
         }
 
         const assessmentResult = await ProviderAdapter.assessment(env.GEMINI_API_KEY, assessReq, env);
@@ -749,6 +788,10 @@ export default {
           });
         }
 
+        if (!env.GEMINI_API_KEY || !env.GEMINI_API_KEY.trim()) {
+          throw new Error("GEMINI_API_KEY is required.");
+        }
+
         const reportResult = await ProviderAdapter.report(env.GEMINI_API_KEY, reportReq, env);
 
         return new Response(
@@ -770,6 +813,10 @@ export default {
             status: 400,
             headers: responseHeaders,
           });
+        }
+
+        if (!env.GEMINI_API_KEY || !env.GEMINI_API_KEY.trim()) {
+          throw new Error("GEMINI_API_KEY is required.");
         }
 
         const askResult = await ProviderAdapter.ask(env.GEMINI_API_KEY, askReq, env);
@@ -843,6 +890,10 @@ export default {
             status: 400,
             headers: responseHeaders,
           });
+        }
+
+        if (!env.GEMINI_API_KEY || !env.GEMINI_API_KEY.trim()) {
+          throw new Error("GEMINI_API_KEY is required.");
         }
 
         const visionResult = await ProviderAdapter.vision(env.GEMINI_API_KEY, visionReq, env);
