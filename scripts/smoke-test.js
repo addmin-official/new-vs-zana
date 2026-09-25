@@ -111,7 +111,7 @@ async function main() {
     } else {
       try {
         const data = JSON.parse(healthTest.body);
-        if (data.status !== 'ok' || data.service !== 'zana-api-worker') {
+        if (data.status !== 'ok' || data.service !== 'new-vs-zana') {
           console.error(`::error::FAIL: GET /api/health response body was invalid: ${healthTest.body}`);
           allPassed = false;
         }
