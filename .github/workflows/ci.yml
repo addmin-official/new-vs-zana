@@ -296,6 +296,13 @@ jobs:
           
           echo "Artifact integrity verification successful!"
 
+      - name: Set ZANA_REVISION secret
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          echo "${{ github.sha }}" | npx wrangler secret put ZANA_REVISION
+
       # Resolve deterministic KV namespace binding
       - name: Resolve deterministic KV namespace binding
         env:
@@ -509,6 +516,10 @@ jobs:
           fi
           
           echo "Expected revision: $EXPECTED_REVISION"
+          
+          if [ "${#REVISION}" -ge 7 ] && [ "${REVISION:0:7}" = "$EXPECTED_REVISION" ]; then
+            REVISION="$EXPECTED_REVISION"
+          fi
           
           if [ "$REVISION" != "$EXPECTED_REVISION" ]; then
             echo "::error::Worker revision mismatch. Expected '$EXPECTED_REVISION', got '$REVISION'"
