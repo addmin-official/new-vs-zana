@@ -8,7 +8,7 @@ export const AI_CONFIG = {
     maxRetries: 2,
     baseBackoffMs: 300,
     maxBackoffMs: 1000,
-    retryableStatusCodes: [429, 500, 502, 503, 504],
+    retryableStatusCodes: [500, 502, 503, 504],
   },
 } as const;
 
