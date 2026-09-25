@@ -220,7 +220,7 @@ async function main() {
 
     // 10. POST /api/study/vision (Valid payload: complete decodable 1x1 PNG image)
     const validPng = Buffer.from(
-      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2ZQAAAABJRU5ErkJggg==',
+      'iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFUlEQVR42mP8z8BQz0AEYBxVSF+FAP5FDvcfRYWgAAAAAElFTkSuQmCC',
       'base64'
     );
     const validBlob = new Blob([validPng], { type: 'image/png' });
