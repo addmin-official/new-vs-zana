@@ -584,7 +584,7 @@ test("Centralized model normalization & prefix stripping", async () => {
   assert.strictEqual(AI_CONFIG.apiBaseUrl, "https://generativelanguage.googleapis.com");
   assert.strictEqual(AI_CONFIG.timeoutMs, 30000);
   assert.strictEqual(AI_CONFIG.retryPolicy.maxRetries, 2);
-  assert.deepStrictEqual(AI_CONFIG.retryPolicy.retryableStatusCodes, [500, 502, 503, 504]);
+  assert.deepStrictEqual(AI_CONFIG.retryPolicy.retryableStatusCodes, [429, 500, 502, 503, 504]);
 
   // Model normalization
   const canonicalModel = AI_CONFIG.primaryModel;
