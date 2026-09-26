@@ -11,6 +11,27 @@ if (!API_BASE_URL) {
 console.log(`Running Production Smoke Tests against: ${API_BASE_URL}`);
 console.log(`Using canonical frontend origin for tests: ${FRONTEND_ORIGIN}`);
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchWithRetry(url, options, maxRetries = 2, delayMs = 2000) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(url, options);
+      if (res.status === 429 && attempt < maxRetries) {
+        console.log(`[Retry ${attempt + 1}/${maxRetries}] Got 429, retrying in ${delayMs}ms...`);
+        await sleep(delayMs);
+        continue;
+      }
+      return res;
+    } catch (err) {
+      if (attempt >= maxRetries) throw err;
+      await sleep(delayMs);
+    }
+  }
+}
+
 async function runSmokeAndCorsTest(name, path, options = {}, expectedStatus) {
   const url = `${API_BASE_URL.replace(/\/$/, '')}${path}`;
   console.log(`\n--- Test: ${name} (${options.method || 'GET'} ${path}) ---`);
@@ -21,6 +42,7 @@ async function runSmokeAndCorsTest(name, path, options = {}, expectedStatus) {
   // 1. Authorized Request
   const authHeaders = {
     'Origin': FRONTEND_ORIGIN,
+    'X-CI-Test': 'true',
     ...(options.headers || {})
   };
   if (!(bodyValue instanceof FormData) && !authHeaders['Content-Type'] && options.method === 'POST') {
@@ -31,7 +53,7 @@ async function runSmokeAndCorsTest(name, path, options = {}, expectedStatus) {
   let responseText = "";
 
   try {
-    const res = await fetch(url, {
+    const res = await fetchWithRetry(url, {
       ...options,
       headers: authHeaders,
       body: bodyValue
@@ -68,6 +90,7 @@ async function runSmokeAndCorsTest(name, path, options = {}, expectedStatus) {
   // 2. Unauthorized Request (to verify it is not accepted as an allowed origin)
   const unauthHeaders = {
     'Origin': 'https://unauthorized.example',
+    'X-CI-Test': 'true',
     ...(options.headers || {})
   };
   if (!(bodyValue instanceof FormData) && !unauthHeaders['Content-Type'] && options.method === 'POST') {
@@ -75,7 +98,7 @@ async function runSmokeAndCorsTest(name, path, options = {}, expectedStatus) {
   }
 
   try {
-    const res = await fetch(url, {
+    const res = await fetchWithRetry(url, {
       ...options,
       headers: unauthHeaders,
       body: bodyValue
@@ -120,6 +143,7 @@ async function main() {
         allPassed = false;
       }
     }
+    await sleep(500);
 
     // 2. POST /api/chat (Valid payload)
     const chatOk = await runSmokeAndCorsTest("POST /api/chat (Valid payload)", "/api/chat", {
@@ -136,6 +160,7 @@ async function main() {
       })
     }, 200);
     if (!chatOk.ok) allPassed = false;
+    await sleep(1500);
 
     // 3. POST /api/chat (Missing payload)
     const chatBad = await runSmokeAndCorsTest("POST /api/chat (Missing payload)", "/api/chat", {
@@ -143,6 +168,7 @@ async function main() {
       body: JSON.stringify({})
     }, 400);
     if (!chatBad.ok) allPassed = false;
+    await sleep(2000);
 
     // 4. POST /api/assessment (Valid payload)
     const assessmentOk = await runSmokeAndCorsTest("POST /api/assessment (Valid payload)", "/api/assessment", {
@@ -162,6 +188,7 @@ async function main() {
       })
     }, 200);
     if (!assessmentOk.ok) allPassed = false;
+    await sleep(1500);
 
     // 5. POST /api/assessment (Missing payload)
     const assessmentBad = await runSmokeAndCorsTest("POST /api/assessment (Missing payload)", "/api/assessment", {
@@ -169,6 +196,7 @@ async function main() {
       body: JSON.stringify({})
     }, 400);
     if (!assessmentBad.ok) allPassed = false;
+    await sleep(2000);
 
     // 6. POST /api/report (Valid payload)
     const reportOk = await runSmokeAndCorsTest("POST /api/report (Valid payload)", "/api/report", {
@@ -187,6 +215,7 @@ async function main() {
       })
     }, 200);
     if (!reportOk.ok) allPassed = false;
+    await sleep(1500);
 
     // 7. POST /api/report (Missing payload)
     const reportBad = await runSmokeAndCorsTest("POST /api/report (Missing payload)", "/api/report", {
@@ -194,6 +223,7 @@ async function main() {
       body: JSON.stringify({})
     }, 400);
     if (!reportBad.ok) allPassed = false;
+    await sleep(2000);
 
     // 8. POST /api/study/ask (Valid payload)
     const askOk = await runSmokeAndCorsTest("POST /api/study/ask (Valid payload)", "/api/study/ask", {
@@ -210,6 +240,7 @@ async function main() {
       })
     }, 200);
     if (!askOk.ok) allPassed = false;
+    await sleep(1500);
 
     // 9. POST /api/study/ask (Missing payload)
     const askBad = await runSmokeAndCorsTest("POST /api/study/ask (Missing payload)", "/api/study/ask", {
@@ -217,12 +248,17 @@ async function main() {
       body: JSON.stringify({})
     }, 400);
     if (!askBad.ok) allPassed = false;
+    await sleep(2000);
 
     // 10. POST /api/study/vision (Valid payload: complete decodable 1x1 PNG image)
     const validPng = Buffer.from(
-      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2ZQAAAABJRU5ErkJggg==',
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
       'base64'
     );
+    if (validPng[0] !== 0x89 || validPng[1] !== 0x50 || validPng[2] !== 0x4E || validPng[3] !== 0x47) {
+      console.error("::error::Test PNG is not a valid PNG file");
+      process.exit(1);
+    }
     const validBlob = new Blob([validPng], { type: 'image/png' });
     const validFormData = new FormData();
     validFormData.append('image', validBlob, 'test.png');
@@ -242,6 +278,7 @@ async function main() {
       body: validFormData
     }, 200);
     if (!visionOk.ok) allPassed = false;
+    await sleep(500);
 
     // 11. POST /api/study/vision (Missing image payload)
     const visionMissingImageFormData = new FormData();
@@ -251,6 +288,7 @@ async function main() {
       body: visionMissingImageFormData
     }, 400);
     if (!visionMissingImage.ok) allPassed = false;
+    await sleep(500);
 
     // 12. POST /api/study/vision (Oversized image payload: > 5MB)
     const hugeBuffer = new Uint8Array(6 * 1024 * 1024); // 6MB
@@ -272,6 +310,7 @@ async function main() {
       body: visionOversizedFormData
     }, 413);
     if (!visionOversized.ok) allPassed = false;
+    await sleep(500);
 
     // 13. POST /api/study/vision (Unsupported file signature)
     const invalidSignaturePng = new Uint8Array([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);

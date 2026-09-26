@@ -370,11 +370,11 @@ jobs:
           PROVIDER_PREFLIGHT_TOKEN: ${{ secrets.PROVIDER_PREFLIGHT_TOKEN }}
         run: |
           set -euo pipefail
-          if [ -n "${GEMINI_API_KEY:-}" ]; then
-            echo "$GEMINI_API_KEY" | npx wrangler secret put GEMINI_API_KEY --config wrangler.production.json
-          else
-            echo "::warning::GEMINI_API_KEY secret is not defined in environment"
+          if [ -z "${GEMINI_API_KEY:-}" ]; then
+            echo "::error::GEMINI_API_KEY secret is not defined in environment"
+            exit 1
           fi
+          echo "$GEMINI_API_KEY" | npx wrangler secret put GEMINI_API_KEY --config wrangler.production.json
           if [ -n "${PROVIDER_PREFLIGHT_TOKEN:-}" ]; then
             echo "$PROVIDER_PREFLIGHT_TOKEN" | npx wrangler secret put PROVIDER_PREFLIGHT_TOKEN --config wrangler.production.json
           else
