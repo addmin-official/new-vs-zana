@@ -2,7 +2,7 @@ export const AI_CONFIG = {
   apiBaseUrl: "https://generativelanguage.googleapis.com",
   primaryModel: "gemini-3.6-flash",
   visionModel: "gemini-3.6-flash",
-  fallbackModels: ["gemini-3.6-flash", "gemini-3.8-flash", "gemini-flash-latest"] as const,
+  fallbackModels: ["gemini-3.8-flash", "gemini-flash-latest", "gemini-3.1-flash-lite"] as const,
   timeoutMs: 30000,
   retryPolicy: {
     maxRetries: 2,
