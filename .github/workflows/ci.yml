@@ -344,6 +344,10 @@ jobs:
           CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
           GITHUB_SHA: ${{ github.sha }}
           CI: "true"
+        run: |
+          set -euo pipefail
+          node scripts/resolve-kv.js
+          
           # Verify production config validity
           jq empty wrangler.production.json
           echo "Generated config validation: PASS"
