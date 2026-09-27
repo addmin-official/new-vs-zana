@@ -12,6 +12,7 @@ import { AskPanel } from "../features/study/ask/index.ts";
 import { VisionCapturePanel, VisionQuestionEngine } from "../features/vision/index.ts";
 import { useAdaptiveLearning } from "../features/adaptive/useAdaptiveLearning.ts";
 import { StudyChatScreen } from "./StudyChatScreen.tsx";
+import { Grade12ChemistryBookViewer } from "../components/Grade12ChemistryBookViewer.tsx";
 import {
   ArrowLeft,
   BookOpen,
@@ -418,7 +419,7 @@ export function StudyWorkspaceScreen({ profile, onNavigate }: StudyWorkspaceScre
 
   // States
   const [viewMode, setViewMode] = useState<"tutor" | "workspace">("tutor");
-  const [activeAction, setActiveAction] = useState<"explain" | "practice" | "ask" | "summary" | "formula" | "vision">("explain");
+  const [activeAction, setActiveAction] = useState<"explain" | "practice" | "ask" | "summary" | "formula" | "vision" | "book">("explain");
   // Reset indices on concept shift
   useEffect(() => {
     // Concept shifted
@@ -441,7 +442,10 @@ export function StudyWorkspaceScreen({ profile, onNavigate }: StudyWorkspaceScre
     { id: "ask" as const, label: "پرسیارکردن", icon: HelpCircle },
     { id: "vision" as const, label: "وێنەی پرسیار", icon: Camera },
     { id: "summary" as const, label: "پوختە", icon: FileText },
-    { id: "formula" as const, label: "یاساکان", icon: Brain }
+    { id: "formula" as const, label: "یاساکان", icon: Brain },
+    ...(profile.grade === "12" && profile.activeSubject === "chemistry"
+      ? [{ id: "book" as const, label: "پەڕتووکی ٥ بەش", icon: BookOpen }]
+      : [])
   ];
 
   // Primary action: Progress in Pathway
@@ -696,6 +700,7 @@ export function StudyWorkspaceScreen({ profile, onNavigate }: StudyWorkspaceScre
                 {activeAction === "vision" && "شیکارکردنی پرسیار بە وێنە"}
                 {activeAction === "summary" && "تەوەر و خاڵە سەرەکییەکان"}
                 {activeAction === "formula" && "هاوکێشە و یاسا سەرەکییەکان"}
+                {activeAction === "book" && "پەڕتووکی فەرمیی کیمیا (٥ بەش - ٣٧١ لاپەڕە)"}
               </span>
             </div>
             <span className="font-sans text-[10px] font-bold text-slate-400">مامۆستا زانا</span>
@@ -785,11 +790,21 @@ export function StudyWorkspaceScreen({ profile, onNavigate }: StudyWorkspaceScre
               </p>
             </div>
           )}
+
+          {/* TAB 6: BOOK VIEWER */}
+          {activeAction === "book" && (
+            <Grade12ChemistryBookViewer
+              onSelectTopicForStudy={() => {
+                setViewMode("tutor");
+              }}
+              onNavigateToChat={() => setViewMode("tutor")}
+            />
+          )}
         </div>
       </ZanaCard>
 
       {/* 5. BOTTOM ACTION CARDS */}
-      <div className="grid grid-cols-5 gap-2">
+      <div className={`grid gap-2 ${actionTabs.length > 5 ? "grid-cols-3 sm:grid-cols-6" : "grid-cols-5"}`}>
         {actionTabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeAction === tab.id;

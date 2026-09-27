@@ -3,6 +3,7 @@ import { ZanaButton } from "../components/ZanaButton.tsx";
 import { StudentProfile, SubjectKey } from "../features/student/studentTypes.ts";
 import { SUBJECTS_DATA } from "../data/subjects.ts";
 import { BookOpen, Calculator, Flame, Atom, Languages, ChevronDown, ChevronUp, MessageSquare, FlaskConical } from "lucide-react";
+import { Grade12ChemistryBookViewer } from "../components/Grade12ChemistryBookViewer.tsx";
 
 interface SubjectsScreenProps {
   profile: StudentProfile;
@@ -135,6 +136,19 @@ export function SubjectsScreen({ profile, onSelectSubject, onNavigate }: Subject
                       </p>
                     )}
                   </div>
+
+                  {/* Grade 12 Unified 5-Part Chemistry Textbook Viewer */}
+                  {subjectId === "chemistry" && profile.grade === "12" && (
+                    <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                      <Grade12ChemistryBookViewer
+                        onSelectTopicForStudy={(_title, _pages, _part) => {
+                          onSelectSubject("chemistry");
+                          onNavigate("chat");
+                        }}
+                        onNavigateToChat={() => onNavigate("chat")}
+                      />
+                    </div>
+                  )}
 
                   {/* Actions to Study & Practice */}
                   <div className="grid grid-cols-2 gap-2">

@@ -6,6 +6,7 @@ import {
   RetrievalFilter,
 } from "./CurriculumEvidence";
 import { chemistryGrade12IngestionRecord } from "../ingestion/chemistryGrade12Manifest";
+import { GRADE12_CHEMISTRY_PARTS } from "../providers/CurriculumDocumentProvider.ts";
 
 /**
  * Normalizes Kurdish (Sorani) text for robust keyword matching.
@@ -129,10 +130,16 @@ export class CurriculumIndexService {
       `${section.unitTitleKurdish || ""} ${section.chapterTitleKurdish || ""} ${section.lessonTitleKurdish || ""} ${extraKeywordsText}`
     );
 
+    const partSpec = GRADE12_CHEMISTRY_PARTS.find(
+      (p) => section.pageStart >= p.pageStart && section.pageStart <= p.pageEnd
+    );
+    const sourcePdfPart = section.sourcePdfPart || (partSpec ? partSpec.partName : "Grade12_Chemistry_Kurdish_Part01.pdf");
+
     return {
       chunkId,
       curriculumId,
       documentId,
+      sourcePdfPart,
       sectionId: section.id,
       unitNumber: section.unitNumber,
       unitTitleKurdish: section.unitTitleKurdish,
@@ -244,6 +251,7 @@ export class CurriculumIndexService {
       evidenceId: `ev:${chunk.chunkId}:${idx + 1}`,
       curriculumId: chunk.curriculumId,
       documentId: chunk.documentId,
+      sourcePdfPart: chunk.sourcePdfPart,
       unitNumber: chunk.unitNumber,
       unitTitleKurdish: chunk.unitTitleKurdish,
       chapterNumber: chunk.chapterNumber,

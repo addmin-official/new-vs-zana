@@ -278,6 +278,543 @@ export const CURRICULUM_SEED: CurriculumNode[] = [
     tags: ["ناونان", "IUPAC"]
   },
 
+  // --- UNIT 1: بەشی یەکەم - گیراوەکان و ڕەفتاریان (لاپەڕە ٦ - ١٢٣ | Part01 و Part02) ---
+  {
+    id: "12_sci_chem_ch1_solutions",
+    type: "chapter",
+    title: "بەندی ١: گیراوەکان (لاپەڕە ٨ - ٣٧)",
+    description: "جۆرەکانی تێکەڵ، کردەی تواندنەوە، توانەوەێتی و خەستی گیراوەکان",
+    grade: "12",
+    stream: "scientific",
+    subject: "chemistry",
+    difficulty: "intermediate",
+    parentId: "12_sci_chem_sub",
+    prerequisiteIds: [],
+    estimatedMinutes: 180,
+    learningObjectives: ["تێگەیشتن لە جیاوازی نێوان گیراوە و ملەکات و گیرساوە", "ئەژمارکردنی مۆلاریتی و مۆلالیتی"],
+    tags: ["گیراوەکان", "تێکەڵ", "مۆلاریتی"]
+  },
+  {
+    id: "12_sci_chem_ch1_for_molarity",
+    type: "formula",
+    title: "فۆرمۆڵا: مۆلاریتی (Molarity)",
+    description: "ژمارەی مۆڵەکانی ماددەی تواوە لە یەک لیتر گیراوەدا",
+    grade: "12",
+    stream: "scientific",
+    subject: "chemistry",
+    difficulty: "basic",
+    parentId: "12_sci_chem_ch1_solutions",
+    prerequisiteIds: [],
+    estimatedMinutes: 15,
+    learningObjectives: ["ئەژمارکردنی خەستی مۆلاری بە هاوکێشەی M = mol / L"],
+    tags: ["مۆلاریتی", "خەستی"],
+    formula: "M = n / V",
+    variables: [
+      { symbol: "M", meaning: "مۆلاریتی گیراوە", unit: "mol/L" },
+      { symbol: "n", meaning: "ژمارەی مۆڵی تواوە", unit: "mol" },
+      { symbol: "V", meaning: "قەبارەی گیراوە بە لیتر", unit: "L" }
+    ],
+    usageNotes: ["پێویستە قەبارە هەمیشە بە لیتر بێت؛ ئەگەر بە mL بوو، دابەشی 1000 دەکرێت."]
+  } as FormulaNode,
+  {
+    id: "12_sci_chem_ch1_for_molality",
+    type: "formula",
+    title: "فۆرمۆڵا: مۆلالیتی (Molality)",
+    description: "ژمارەی مۆڵەکانی ماددەی تواوە لە یەک کیلۆگرامی توێنەردا",
+    grade: "12",
+    stream: "scientific",
+    subject: "chemistry",
+    difficulty: "intermediate",
+    parentId: "12_sci_chem_ch1_solutions",
+    prerequisiteIds: [],
+    estimatedMinutes: 15,
+    learningObjectives: ["ئەژمارکردنی مۆلالیتی بۆ لێکۆڵینەوەی ڕەوشە کۆکارییەکان"],
+    tags: ["مۆلالیتی", "توێنەر"],
+    formula: "m = n / kg(solvent)",
+    variables: [
+      { symbol: "m", meaning: "مۆلالیتی", unit: "mol/kg" },
+      { symbol: "n", meaning: "مۆڵی تواوە", unit: "mol" },
+      { symbol: "kg", meaning: "بارستەی توێنەر بە کیلۆگرام", unit: "kg" }
+    ],
+    usageNotes: ["مۆلالیتی بە گۆڕانی پلەی گەرمی ناگۆڕێت چونکە بارستە دەپێوێت نەک قەبارە."]
+  } as FormulaNode,
+  {
+    id: "12_sci_chem_ch1_for_henry",
+    type: "formula",
+    title: "فۆرمۆڵا: یاسای هێنری بۆ توانەوەێتی گازەکان",
+    description: "پەیوەندی ڕاستەوانەی نێوان توانەوەێتی گاز لە شلەدا لەگەڵ پەستانی گاز",
+    grade: "12",
+    stream: "scientific",
+    subject: "chemistry",
+    difficulty: "intermediate",
+    parentId: "12_sci_chem_ch1_solutions",
+    prerequisiteIds: [],
+    estimatedMinutes: 15,
+    learningObjectives: ["پێشبینیکردنی گۆڕانی توانەوەێتی گاز بە گۆڕانی پەستان"],
+    tags: ["هێنری", "گاز", "توانەوەێتی"],
+    formula: "S1 / P1 = S2 / P2",
+    variables: [
+      { symbol: "S", meaning: "توانەوەێتی گاز", unit: "g/L" },
+      { symbol: "P", meaning: "پەستانی گاز", unit: "atm یان kPa" }
+    ],
+    usageNotes: ["ئەم یاسایە تەنها بۆ گازەکانە کە کارلێکی کیمیایی لەگەڵ توێنەرەکە ناکەن."]
+  } as FormulaNode,
+
+  {
+    id: "12_sci_chem_ch2_ions_colligative",
+    type: "chapter",
+    title: "بەندی ٢: ئایۆنەکان لە ئاوەگیراوەکاندا و ڕەوشە کۆکارییەکان (لاپەڕە ٣٨ - ٦٥)",
+    description: "هاوکێشەی ئایۆنی پەتی، نزمبوونەوەی پلەی بەستن، بەرزبوونەوەی پلەی کوڵان و پەستانی دەڵاندن",
+    grade: "12",
+    stream: "scientific",
+    subject: "chemistry",
+    difficulty: "advanced",
+    parentId: "12_sci_chem_sub",
+    prerequisiteIds: ["12_sci_chem_ch1_solutions"],
+    estimatedMinutes: 200,
+    learningObjectives: ["نووسینی هاوکێشەی ئایۆنی پەتی", "ئەژمارکردنی پلەی بەستن و کوڵان"],
+    tags: ["ئایۆن", "ڕەوشە کۆکارییەکان", "پلەی بەستن", "پلەی کوڵان"]
+  },
+  {
+    id: "12_sci_chem_ch2_for_freezing",
+    type: "formula",
+    title: "فۆرمۆڵا: نزمبوونەوەی پلەی بەستن (Freezing Point Depression)",
+    description: "ΔTf = Kf · m بۆ تواوەی نائەلیکترۆلیت و i · Kf · m بۆ ئەلیکترۆلیت",
+    grade: "12",
+    stream: "scientific",
+    subject: "chemistry",
+    difficulty: "intermediate",
+    parentId: "12_sci_chem_ch2_ions_colligative",
+    prerequisiteIds: [],
+    estimatedMinutes: 15,
+    learningObjectives: ["دۆزینەوەی گۆڕانی پلەی بەستن بەهۆی تواوەی نائەفرۆک"],
+    tags: ["پلەی بەستن", "Kf"],
+    formula: "ΔTf = Kf * m",
+    variables: [
+      { symbol: "ΔTf", meaning: "بڕی نزمبوونەوەی پلەی بەستن", unit: "°C" },
+      { symbol: "Kf", meaning: "نەگۆڕی مۆلالی نزمبوونەوەی بەستن (بۆ ئاو -1.86)", unit: "°C/m" },
+      { symbol: "m", meaning: "خەستی مۆلالی", unit: "mol/kg" }
+    ],
+    usageNotes: ["بۆ ئاوKf یەکسانە بە -1.86 °C/m."]
+  } as FormulaNode,
+  {
+    id: "12_sci_chem_ch2_for_boiling",
+    type: "formula",
+    title: "فۆرمۆڵا: بەرزبوونەوەی پلەی کوڵان (Boiling Point Elevation)",
+    description: "ΔTb = Kb · m بۆ تواوەی نائەلیکترۆلیت",
+    grade: "12",
+    stream: "scientific",
+    subject: "chemistry",
+    difficulty: "intermediate",
+    parentId: "12_sci_chem_ch2_ions_colligative",
+    prerequisiteIds: [],
+    estimatedMinutes: 15,
+    learningObjectives: ["دۆزینەوەی بەرزبوونەوەی پلەی کوڵانی گیراوە"],
+    tags: ["پلەی کوڵان", "Kb"],
+    formula: "ΔTb = Kb * m",
+    variables: [
+      { symbol: "ΔTb", meaning: "بڕی بەرزبوونەوەی پلەی کوڵان", unit: "°C" },
+      { symbol: "Kb", meaning: "نەگۆڕی مۆلالی بەرزبوونەوەی کوڵان (بۆ ئاو 0.51)", unit: "°C/m" },
+      { symbol: "m", meaning: "خەستی مۆلالی", unit: "mol/kg" }
+    ],
+    usageNotes: ["پلەی کوڵانی نوێ = 100°C + ΔTb."]
+  } as FormulaNode,
+
+  {
+    id: "12_sci_chem_ch3_acids_bases",
+    type: "chapter",
+    title: "بەندی ٣: ترش و تفتەکان (لاپەڕە ٦٦ - ٩٣)",
+    description: "ڕەوشەکانی ترش و تفت، بیردۆزەکانی ئارینیۆس، برۆنستد-لۆری، لویس و جووتی هاوجوت",
+    grade: "12",
+    stream: "scientific",
+    subject: "chemistry",
+    difficulty: "intermediate",
+    parentId: "12_sci_chem_sub",
+    prerequisiteIds: [],
+    estimatedMinutes: 200,
+    learningObjectives: ["ناسینی ترشە دووانی و ئۆکسجینییەکان", "دەستنیشانکردنی جووتی ترش و تفتی هاوجوت"],
+    tags: ["ترش", "تفت", "برۆنستد-لۆری", "لویس", "هاوجوت"]
+  },
+
+  {
+    id: "12_sci_chem_ch4_ph_titration",
+    type: "chapter",
+    title: "بەندی ٤: پێوانەکاری ترش-تفت و pH (لاپەڕە ٩٤ - ١٢٣)",
+    description: "ئایۆنینی ئاو، پێوەری pH و pOH، ناسرەوەکان، سەنگاندن (تیتراسیۆن) و خاڵی هاوتایی",
+    grade: "12",
+    stream: "scientific",
+    subject: "chemistry",
+    difficulty: "advanced",
+    parentId: "12_sci_chem_sub",
+    prerequisiteIds: ["12_sci_chem_ch3_acids_bases"],
+    estimatedMinutes: 220,
+    learningObjectives: ["ئەژمارکردنی pH و pOH بە هاوکێشەی لۆگاریتم", "شیکارکردنی پرسیارەکانی تیتراسیۆن"],
+    tags: ["pH", "pOH", "Kw", "سەنگاندن", "تیتراسیۆن"]
+  },
+  {
+    id: "12_sci_chem_ch4_for_ph",
+    type: "formula",
+    title: "فۆرمۆڵا: پێوەری هایدرۆجینە ڕەنووس (pH)",
+    description: "pH = -log[H3O+] و پەیوەندی pH + pOH = 14",
+    grade: "12",
+    stream: "scientific",
+    subject: "chemistry",
+    difficulty: "intermediate",
+    parentId: "12_sci_chem_ch4_ph_titration",
+    prerequisiteIds: [],
+    estimatedMinutes: 15,
+    learningObjectives: ["دۆزینەوەی pH لە خەستی هایدرۆنیۆم"],
+    tags: ["pH", "لۆگاریتم"],
+    formula: "pH = -log[H3O+], pOH = -log[OH-], pH + pOH = 14",
+    variables: [
+      { symbol: "pH", meaning: "هایدرۆجینە ڕەنووس", unit: "بێ یەکە (0 تا 14)" },
+      { symbol: "[H3O+]", meaning: "خەستی ئایۆنی هایدرۆنیۆم", unit: "M" },
+      { symbol: "[OH-]", meaning: "خەستی ئایۆنی هایدرۆکسید", unit: "M" }
+    ],
+    usageNotes: ["لە پلەی گەرمی 25°C دا: Kw = [H3O+][OH-] = 1.0 × 10^-14."]
+  } as FormulaNode,
+
+  // --- UNIT 2: بەشی دووەم - کارلێککردنە کیمیاییەکان (لاپەڕە ١٢٤ - ٢٥٥ | Part02 و Part03) ---
+  {
+    id: "12_sci_chem_ch5_reaction_energy",
+    type: "chapter",
+    title: "بەندی ٥: وزەی کارلێکەکان (لاپەڕە ١٢٦ - ١٥١)",
+    description: "کیمیای گەرمی، گەرمی جۆری، ئینتەلپی کارلێک، یاسای هێس، ئینترۆپی و وزەی گیبس",
+    grade: "12",
+    stream: "scientific",
+    subject: "chemistry",
+    difficulty: "advanced",
+    parentId: "12_sci_chem_sub",
+    prerequisiteIds: [],
+    estimatedMinutes: 210,
+    learningObjectives: ["بەکارهێنانی یاسای هێس بۆ دۆزینەوەی ΔH", "دیاریکردنی خۆبەخۆیی بە وزەی گیبس ΔG"],
+    tags: ["ئینتەلپی", "هێس", "گیبس", "ئینترۆپی", "گەرمیدەر"]
+  },
+  {
+    id: "12_sci_chem_ch5_for_hess",
+    type: "formula",
+    title: "فۆرمۆڵا: یاسای هێس بۆ گەرمیی کارلێک",
+    description: "ΔH° = Σ ΔHf°(بەرهەمهاتوو) - Σ ΔHf°(کارلێککردوو)",
+    grade: "12",
+    stream: "scientific",
+    subject: "chemistry",
+    difficulty: "intermediate",
+    parentId: "12_sci_chem_ch5_reaction_energy",
+    prerequisiteIds: [],
+    estimatedMinutes: 15,
+    learningObjectives: ["دۆزینەوەی ئینتەلپی کارلێک لە گەرمیی پێکهاتنەوە"],
+    tags: ["هێس", "ئینتەلپی"],
+    formula: "ΔH° = Σ ΔHf°(products) - Σ ΔHf°(reactants)",
+    variables: [
+      { symbol: "ΔH°", meaning: "گۆڕانی ئینتەلپی پێوانەیی", unit: "kJ/mol" },
+      { symbol: "ΔHf°", meaning: "گەرمیی پێکهاتنی پێوانەیی", unit: "kJ/mol" }
+    ],
+    usageNotes: ["گەرمیی پێکهاتنی توخمی ئازاد لە دۆخی بنەڕەتیدا یەکسانە بە سفر."]
+  } as FormulaNode,
+  {
+    id: "12_sci_chem_ch5_for_gibbs",
+    type: "formula",
+    title: "فۆرمۆڵا: وزەی سەربەستی گیبس (Gibbs Free Energy)",
+    description: "ΔG = ΔH - T·ΔS بۆ دیاریکردنی خۆبەخۆیی کارلێک",
+    grade: "12",
+    stream: "scientific",
+    subject: "chemistry",
+    difficulty: "advanced",
+    parentId: "12_sci_chem_ch5_reaction_energy",
+    prerequisiteIds: [],
+    estimatedMinutes: 15,
+    learningObjectives: ["دیاریکردنی مەرجی کارلێکی خۆبەخۆ کاتێک ΔG نێگەتیڤ بێت"],
+    tags: ["گیبس", "خۆبەخۆ", "ئینترۆپی"],
+    formula: "ΔG = ΔH - T * ΔS",
+    variables: [
+      { symbol: "ΔG", meaning: "گۆڕانی وزەی سەربەست", unit: "kJ/mol" },
+      { symbol: "ΔH", meaning: "گۆڕانی ئینتەلپی", unit: "kJ/mol" },
+      { symbol: "T", meaning: "پلەی گەرمی بە کێلڤن", unit: "K" },
+      { symbol: "ΔS", meaning: "گۆڕانی ئینترۆپی", unit: "kJ/(mol·K)" }
+    ],
+    usageNotes: ["پێویستە یەکەی ΔS بگۆڕدرێت لە J بۆ kJ (دابەشی 1000) پێش بەکارهێنان لە هاوکێشەدا."]
+  } as FormulaNode,
+
+  {
+    id: "12_sci_chem_ch6_reaction_rate",
+    type: "chapter",
+    title: "بەندی ٦: خێرایی کارلێکەکان (لاپەڕە ١٥٢ - ١٧٥)",
+    description: "بیردۆزی پێکدادان، وزەی چالاککردن Ea، ئاڵۆزی چالاککراو، یاسای خێرایی و هاندەرەکان",
+    grade: "12",
+    stream: "scientific",
+    subject: "chemistry",
+    difficulty: "advanced",
+    parentId: "12_sci_chem_sub",
+    prerequisiteIds: [],
+    estimatedMinutes: 200,
+    learningObjectives: ["نووسینی یاسای خێرایی کارلێک", "دەرهێنانی پلەی کارلێک لە زانیاری تاقیکاری"],
+    tags: ["خێرایی کارلێک", "یاسای خێرایی", "پێکدادان", "وزەی چالاککردن", "هاندەر"]
+  },
+  {
+    id: "12_sci_chem_ch6_for_ratelaw",
+    type: "formula",
+    title: "فۆرمۆڵا: یاسای خێرایی کارلێککردن",
+    description: "R = k[A]^m[B]^n کە تێیدا k نەگۆڕی خێراییە و m و n پلەکانی کارلێکن",
+    grade: "12",
+    stream: "scientific",
+    subject: "chemistry",
+    difficulty: "advanced",
+    parentId: "12_sci_chem_ch6_reaction_rate",
+    prerequisiteIds: [],
+    estimatedMinutes: 20,
+    learningObjectives: ["ئەژمارکردنی نەگۆڕی k و پێشبینیکردنی خێرایی بە گۆڕانی خەستی"],
+    tags: ["یاسای خێرایی", "پلەی کارلێک"],
+    formula: "R = k * [A]^m * [B]^n",
+    variables: [
+      { symbol: "R", meaning: "خێرایی کارلێک", unit: "M/s یان mol/(L·s)" },
+      { symbol: "k", meaning: "نەگۆڕی خێرایی دیاریکراو", unit: "بەپێی پلەی گشتی دەگۆڕێت" },
+      { symbol: "[A], [B]", meaning: "خەستی کارلێککردووەکان", unit: "M" }
+    ],
+    usageNotes: ["پلەکانی m و n تەنها لە ڕێگەی تاقیکردنەوەوە دەدۆزرێنەوە نەک لە هاوکۆلکەی هاوکێشەی هاوسەنگ."]
+  } as FormulaNode,
+
+  {
+    id: "12_sci_chem_ch7_equilibrium",
+    type: "chapter",
+    title: "بەندی ٧: هاوسەنگی کیمیایی (لاپەڕە ١٧٦ - ٢١٣)",
+    description: "کارلێکی پێچەوانە، نەگۆڕی هاوسەنگی K، بنەمای لۆشاتێلیە، بافەر و هاوسەنگی تواندنەوە Ksp",
+    grade: "12",
+    stream: "scientific",
+    subject: "chemistry",
+    difficulty: "advanced",
+    parentId: "12_sci_chem_sub",
+    prerequisiteIds: ["12_sci_chem_ch6_reaction_rate"],
+    estimatedMinutes: 250,
+    learningObjectives: ["پێشبینیکردنی لادانی هاوسەنگی بە بنەمای لۆشاتێلیە", "ئەژمارکردنی Ksp و پێشبینیکردنی نیشتوو"],
+    tags: ["هاوسەنگی", "لۆشاتێلیە", "Ksp", "بافەر", "Ka"]
+  },
+  {
+    id: "12_sci_chem_ch7_for_keq",
+    type: "formula",
+    title: "فۆرمۆڵا: دەربڕینی نەگۆڕی هاوسەنگی (K)",
+    description: "K = [C]^c[D]^d / [A]^a[B]^b بۆ کارلێکی aA + bB ⇌ cC + dD",
+    grade: "12",
+    stream: "scientific",
+    subject: "chemistry",
+    difficulty: "intermediate",
+    parentId: "12_sci_chem_ch7_equilibrium",
+    prerequisiteIds: [],
+    estimatedMinutes: 15,
+    learningObjectives: ["نووسینی دەربڕینی K و ئەژمارکردنی بەهاکەی"],
+    tags: ["نەگۆڕی هاوسەنگی", "K"],
+    formula: "K = ([C]^c * [D]^d) / ([A]^a * [B]^b)",
+    variables: [
+      { symbol: "K", meaning: "نەگۆڕی هاوسەنگی لە پلەیەکی گەرمی دیاریکراودا", unit: "بێ یەکە" },
+      { symbol: "[ ]", meaning: "خەستی لە باری هاوسەنگیدا", unit: "M" }
+    ],
+    usageNotes: ["ماددە ڕەقە پاکەکان (s) و شلە پاکەکان (l) لە دەربڕینی K دا نانووسرێن."]
+  } as FormulaNode,
+  {
+    id: "12_sci_chem_ch7_for_ksp",
+    type: "formula",
+    title: "فۆرمۆڵا: نەگۆڕی بەرهەمی تواندنەوە (Ksp)",
+    description: "Ksp = [A+]^a · [B-]^b بۆ خوێیە کەم تواوەکان",
+    grade: "12",
+    stream: "scientific",
+    subject: "chemistry",
+    difficulty: "advanced",
+    parentId: "12_sci_chem_ch7_equilibrium",
+    prerequisiteIds: [],
+    estimatedMinutes: 15,
+    learningObjectives: ["پێشبینیکردنی پەیدابوونی نیشتوو کاتێک Q > Ksp"],
+    tags: ["Ksp", "نیشتوو"],
+    formula: "Ksp = [Cation]^a * [Anion]^b",
+    variables: [
+      { symbol: "Ksp", meaning: "نەگۆڕی بەرهەمی تواندنەوە", unit: "بێ یەکە" },
+      { symbol: "Q", meaning: "بەرهەمی ئایۆنی تاقیکاری", unit: "بێ یەکە" }
+    ],
+    usageNotes: ["ئەگەر Q > Ksp بێت نیشتوو پەیدا دەبێت؛ ئەگەر Q < Ksp نیشتوو پەیدا نابێت."]
+  } as FormulaNode,
+
+  {
+    id: "12_sci_chem_ch8_redox",
+    type: "chapter",
+    title: "بەندی ٨: کارلێکەکانی ئۆکسان و لێککردنەوە (لاپەڕە ٢١٤ - ٢٣٣)",
+    description: "ژمارەی ئۆکسان، هاوسەنگکردنی ڕیدۆکس بە نیوەکارلێک، هۆکاری ئۆکسێن و لێککەرەوە و ناگونجان",
+    grade: "12",
+    stream: "scientific",
+    subject: "chemistry",
+    difficulty: "advanced",
+    parentId: "12_sci_chem_sub",
+    prerequisiteIds: [],
+    estimatedMinutes: 200,
+    learningObjectives: ["دیاریکردنی ژمارەی ئۆکسانی هەموو گەردیلەکان", "هاوسەنگکردنی هاوکێشەی ڕیدۆکس بە نیوەکارلێک"],
+    tags: ["ئۆکسان", "لێککردنەوە", "ڕیدۆکس", "ژمارەی ئۆکسان"]
+  },
+
+  {
+    id: "12_sci_chem_ch9_electrochemistry",
+    type: "chapter",
+    title: "بەندی ٩: کیمیای کارەبایی (لاپەڕە ٢٣٤ - ٢٥٥)",
+    description: "خانە ڤۆڵتاییەکان، خانەی دانیال، پۆتەنشیاڵی پێوانەیی E°cell، پاترییەکان و خانە ئەلیکترۆلیتییەکان",
+    grade: "12",
+    stream: "scientific",
+    subject: "chemistry",
+    difficulty: "advanced",
+    parentId: "12_sci_chem_sub",
+    prerequisiteIds: ["12_sci_chem_ch8_redox"],
+    estimatedMinutes: 220,
+    learningObjectives: ["ئەژمارکردنی پۆتەنشیاڵی خانە بە E°cell = E°c - E°a", "جیاکردنەوەی خانەی ڤۆڵتایی لە ئەلیکترۆلیتی"],
+    tags: ["کارۆکیمیا", "ڤۆڵتایی", "دانیال", "ئەلیکترۆلیتی", "داپۆشینی کارەبایی"]
+  },
+  {
+    id: "12_sci_chem_ch9_for_ecell",
+    type: "formula",
+    title: "فۆرمۆڵا: پۆتەنشیاڵی پێوانەیی خانەی کارۆکیمیایی",
+    description: "E°cell = E°cathode - E°anode",
+    grade: "12",
+    stream: "scientific",
+    subject: "chemistry",
+    difficulty: "intermediate",
+    parentId: "12_sci_chem_ch9_electrochemistry",
+    prerequisiteIds: [],
+    estimatedMinutes: 15,
+    learningObjectives: ["دۆزینەوەی ڤۆڵتیەی خانە و بڕیاردان لەسەر خۆبەخۆیی کارلێکەکە"],
+    tags: ["E°cell", "پۆتەنشیاڵ", "ڤۆڵت"],
+    formula: "E°cell = E°cathode - E°anode",
+    variables: [
+      { symbol: "E°cell", meaning: "پۆتەنشیاڵی پێوانەیی خانە", unit: "V (ڤۆڵت)" },
+      { symbol: "E°cathode", meaning: "پۆتەنشیاڵی کەمکردنەوەی کاسۆد", unit: "V" },
+      { symbol: "E°anode", meaning: "پۆتەنشیاڵی کەمکردنەوەی ئەنۆد", unit: "V" }
+    ],
+    usageNotes: ["ئەگەر E°cell پۆزەتیڤ بێت کارلێکەکە لە خانەدا خۆبەخۆ ڕوودەدات."]
+  } as FormulaNode,
+
+  // --- UNIT 3: بەشی سێیەم - کیمیای ئەندامی و ناوکی (لاپەڕە ٢٥٦ - ٣٧١ | Part03, Part04 و Part05) ---
+  {
+    id: "12_sci_chem_ch10_carbon",
+    type: "chapter",
+    title: "بەندی ١٠: کاربۆن و هایدرۆکاربۆنەکان (لاپەڕە ٢٥٨ - ٢٩٣)",
+    description: "کاربۆن و شێوەکانی، هایدرۆکاربۆنی تێر (ئەلکان)، ناتێر (ئەلکین و ئەلکاین) و ئارۆماتی (بێنزین)",
+    grade: "12",
+    stream: "scientific",
+    subject: "chemistry",
+    difficulty: "intermediate",
+    parentId: "12_sci_chem_sub",
+    prerequisiteIds: [],
+    estimatedMinutes: 220,
+    learningObjectives: ["پێکهاتەی ئەلکان، ئەلکین و ئەلکاین", "ناونانی IUPAC و ناسینی هاوشێوە بینایی و پێکهاتەییەکان"],
+    tags: ["کاربۆن", "هایدرۆکاربۆن", "ئەلکان", "ئەلکین", "ئەلکاین", "بێنزین"]
+  },
+  {
+    id: "12_sci_chem_ch10_for_hydrocarbons",
+    type: "formula",
+    title: "فۆرمۆڵا: یاسای گشتی هایدرۆکاربۆنەکان",
+    description: "ئەلکان: CnH2n+2 | ئەلکین: CnH2n | ئەلکاین: CnH2n-2",
+    grade: "12",
+    stream: "scientific",
+    subject: "chemistry",
+    difficulty: "basic",
+    parentId: "12_sci_chem_ch10_carbon",
+    prerequisiteIds: [],
+    estimatedMinutes: 15,
+    learningObjectives: ["دیاریکردنی جۆری هایدرۆکاربۆن بەپێی ژمارەی گەردیلەکانی کاربۆن و هایدرۆجین"],
+    tags: ["ئەلکان", "ئەلکین", "ئەلکاین", "فۆرمۆڵا"],
+    formula: "Alkane: C_n H_{2n+2} | Alkene: C_n H_{2n} | Alkyne: C_n H_{2n-2}",
+    variables: [
+      { symbol: "n", meaning: "ژمارەی گەردیلەکانی کاربۆن (n >= 1 بۆ ئەلکان، n >= 2 بۆ ئەلکین و ئەلکاین)", unit: "ژمارەی تەواو" }
+    ],
+    usageNotes: ["ئەگەر پەیوەندی نێوان کاربۆن و هایدرۆجین 2n+2 بێت هایدرۆکاربۆنەکە تێرە (ئەلکان)."]
+  } as FormulaNode,
+
+  {
+    id: "12_sci_chem_ch11_organic_other",
+    type: "chapter",
+    title: "بەندی ١١: ئاوێتەی ئەندامی تر (لاپەڕە ٢٩٤ - ٣٢٩)",
+    description: "کەحولەکان، هالیدی ئەلکیل، ئیفەر، ئەلدەهاید، کیتۆن، ترشی کاربۆکسیلی، ئەستەر، ئەمین و پۆلیمەرەکان",
+    grade: "12",
+    stream: "scientific",
+    subject: "chemistry",
+    difficulty: "advanced",
+    parentId: "12_sci_chem_sub",
+    prerequisiteIds: ["12_sci_chem_ch1"],
+    estimatedMinutes: 240,
+    learningObjectives: ["ناسینی کۆمەڵە فرمانییەکان (R-OH, R-CHO, R-COOH, R-COO-R', R-NH2)", "کارلێکە ئەندامییەکان و پۆلیمەرەکان"],
+    tags: ["کەحول", "ئەلدەهاید", "ترشی کاربۆکسیلی", "ئەستەر", "پۆلیمەر"]
+  },
+
+  {
+    id: "12_sci_chem_ch12_nuclear",
+    type: "chapter",
+    title: "بەندی ١٢: کیمیای ناوکی (لاپەڕە ٣٣٠ - ٣٥٤)",
+    description: "پێکهاتەی ناووک، کەمی بارستە، وزەی بەستنەوە، تیشکەکانی ئەلفا، بێتا، گاما، نیوەتەمەن و کەرتبوون و یەکگرتنی ناوکی",
+    grade: "12",
+    stream: "scientific",
+    subject: "chemistry",
+    difficulty: "advanced",
+    parentId: "12_sci_chem_sub",
+    prerequisiteIds: [],
+    estimatedMinutes: 200,
+    learningObjectives: ["ئەژمارکردنی وزەی بەستنەوە بە هاوکێشەی ئەنیشتاین", "شیکارکردنی پرسیارەکانی نیوەتەمەن"],
+    tags: ["کیمیای ناوکی", "ئەلفا", "بێتا", "گاما", "نیوەتەمەن", "کەرتبوون"]
+  },
+  {
+    id: "12_sci_chem_ch12_for_einstein",
+    type: "formula",
+    title: "فۆرمۆڵا: هاوکێشەی ئەنیشتاین بۆ وزەی بەستنەوەی ناووک",
+    description: "E = Δm · c² کە پەیوەندی نێوان کەمی بارستە و وزە دەردەبڕێت",
+    grade: "12",
+    stream: "scientific",
+    subject: "chemistry",
+    difficulty: "intermediate",
+    parentId: "12_sci_chem_ch12_nuclear",
+    prerequisiteIds: [],
+    estimatedMinutes: 15,
+    learningObjectives: ["ئەژمارکردنی وزەی دەردراو بەهۆی کەمی بارستەی ناووک"],
+    tags: ["ئەنیشتاین", "E=mc^2", "کەمی بارستە"],
+    formula: "E = Δm * c^2",
+    variables: [
+      { symbol: "E", meaning: "وزەی بەستنەوەی ناووک", unit: "J (جوول)" },
+      { symbol: "Δm", meaning: "کەمی بارستە (Mass defect)", unit: "kg" },
+      { symbol: "c", meaning: "خێرایی ڕووناکی (3.0 × 10^8 m/s)", unit: "m/s" }
+    ],
+    usageNotes: ["1 amu یەکسانە بە 1.6605 × 10^-27 kg یان نزیکەی 931.5 MeV."]
+  } as FormulaNode,
+  {
+    id: "12_sci_chem_ch12_for_halflife",
+    type: "formula",
+    title: "فۆرمۆڵا: یاسای نیوەتەمەنی تیشکە هەڵوەشان (Half-life)",
+    description: "بڕی ماوە = بڕی دەستپێک × (1/2)^n کاتێک n = t / t1/2",
+    grade: "12",
+    stream: "scientific",
+    subject: "chemistry",
+    difficulty: "intermediate",
+    parentId: "12_sci_chem_ch12_nuclear",
+    prerequisiteIds: [],
+    estimatedMinutes: 15,
+    learningObjectives: ["دۆزینەوەی بڕی ماوەی توخمی تیشکدەر دوای چەند نیوەتەمەنێک"],
+    tags: ["نیوەتەمەن", "تیشکدانەوە"],
+    formula: "Remaining = Initial * (1/2)^(t / t1/2)",
+    variables: [
+      { symbol: "Remaining", meaning: "بڕی ماددەی ماوە", unit: "g یان mg" },
+      { symbol: "Initial", meaning: "بڕی سەرەتایی", unit: "g یان mg" },
+      { symbol: "t", meaning: "کاتی بەسەرچوو", unit: "ڕۆژ، ساڵ، یان چرکە" },
+      { symbol: "t1/2", meaning: "نیوەتەمەنی توخمەکە", unit: "هەمان یەکەی کات" }
+    ],
+    usageNotes: ["پێویستە یەکەی کاتی t و t1/2 هەمان یەکە بن پێش دابەشکردن."]
+  } as FormulaNode,
+
+  {
+    id: "12_sci_chem_ch13_appendix_table",
+    type: "chapter",
+    title: "پاشکۆکان و خشتەی خولی (لاپەڕە ٣٥٥ - ٣٧١ | Part04 و Part05)",
+    description: "خشتەی گەرمیی سووتان، توانەوەی گازەکان، گەرمیی پێکهاتن، زاراوەکان و خشتەی خولی",
+    grade: "12",
+    stream: "scientific",
+    subject: "chemistry",
+    difficulty: "intermediate",
+    parentId: "12_sci_chem_sub",
+    prerequisiteIds: [],
+    estimatedMinutes: 120,
+    learningObjectives: ["بەکارهێنانی خشتە فەرمییەکان بۆ لێکۆڵینەوە لە توخمەکان و نەگۆڕەکان"],
+    tags: ["پاشکۆ", "خشتەی خولی", "زاراوەکان", "توخمەکان"]
+  },
+
   // =========================================================================
   // GRADE 12 SCIENTIFIC - ENGLISH
   // =========================================================================
