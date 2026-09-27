@@ -41,7 +41,14 @@ export const ZanaApiClient = {
       return await parseResponseJson<ChatResponse>(response);
     } catch (error: unknown) {
       console.error("API Error in sendChatMessage", error);
-      throw new Error("ببورە، پەیوەندی بە خزمەتگوزارییەکە سەرکەوتوو نەبوو. تکایە دواتر هەوڵ بدەوە.");
+      const msg =
+        error instanceof Error &&
+        error.message &&
+        !error.message.startsWith("Request failed with HTTP") &&
+        !error.message.startsWith("Expected JSON")
+          ? error.message
+          : "ببورە، پەیوەندی بە خزمەتگوزارییەکە سەرکەوتوو نەبوو. تکایە دواتر هەوڵ بدەوە.";
+      throw new Error(msg);
     }
   },
 
@@ -59,7 +66,14 @@ export const ZanaApiClient = {
       return await parseResponseJson<AssessmentResponse>(response);
     } catch (error: unknown) {
       console.error("API Error in getAssessmentNextQuestion", error);
-      throw new Error("ببورە، پەیوەندی بە خزمەتگوزارییەکە سەرکەوتوو نەبوو. تکایە دواتر هەوڵ بدەوە.");
+      const msg =
+        error instanceof Error &&
+        error.message &&
+        !error.message.startsWith("Request failed with HTTP") &&
+        !error.message.startsWith("Expected JSON")
+          ? error.message
+          : "ببورە، پەیوەندی بە خزمەتگوزارییەکە سەرکەوتوو نەبوو. تکایە دواتر هەوڵ بدەوە.";
+      throw new Error(msg);
     }
   },
 
@@ -77,7 +91,14 @@ export const ZanaApiClient = {
       return await parseResponseJson<ReportResponse>(response);
     } catch (error: unknown) {
       console.error("API Error in getParentReport", error);
-      throw new Error("ببورە، پەیوەندی بە خزمەتگوزارییەکە سەرکەوتوو نەبوو. تکایە دواتر هەوڵ بدەوە.");
+      const msg =
+        error instanceof Error &&
+        error.message &&
+        !error.message.startsWith("Request failed with HTTP") &&
+        !error.message.startsWith("Expected JSON")
+          ? error.message
+          : "ببورە، پەیوەندی بە خزمەتگوزارییەکە سەرکەوتوو نەبوو. تکایە دواتر هەوڵ بدەوە.";
+      throw new Error(msg);
     }
   }
 };
