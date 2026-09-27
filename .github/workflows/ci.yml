@@ -344,8 +344,6 @@ jobs:
           CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
           GITHUB_SHA: ${{ github.sha }}
           CI: "true"
-          GITHUB_SHA: ${{ github.sha }}
-          CI: "true"
         run: |
           set -euo pipefail
           node scripts/resolve-kv.js
