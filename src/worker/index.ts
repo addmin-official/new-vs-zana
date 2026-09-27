@@ -60,18 +60,23 @@ export interface R2Object {
   key: string;
   size: number;
   etag: string;
-  httpE  httpE  httpE  httpE  httpE  httbody?: ReadableStream;
+  httpEtag: string;
+  uploaded: Date;
   arrayBuffer(): Promise<ArrayBuffer>;
   text(): Promise<string>;
 }
 
-export interface export interface expoR2Object {
+export interface R2ObjectBody extends R2Object {
   body: ReadableStream;
 }
 
 export interface R2Objects {
   objects: R2Object[];
-  truncated: b  truncated: b  truncated: b  truncated: rface Fetcher {
+  truncated: boolean;
+  cursor?: string;
+}
+
+export interface Fetcher {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
 }
 
