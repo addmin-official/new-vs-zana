@@ -39,6 +39,43 @@ export const chemistryGrade12IngestionRecord: DocumentIngestionRecord = {
     ocrRequiredPagesCount: 0,
     version: "1.0.0",
     createdAt: "2026-08-30T01:00:00.000Z",
+    parts: [
+      {
+        partIndex: 1,
+        partName: "Grade12_Chemistry_Kurdish_Part01.pdf",
+        pageStart: 1,
+        pageEnd: 89,
+        titleKurdish: "بەشی یەکەم (لاپەڕە ١ تا ٨٩) - گیراوەکان، ئایۆنەکان، ترش و تفت"
+      },
+      {
+        partIndex: 2,
+        partName: "Grade12_Chemistry_Kurdish_Part02.pdf",
+        pageStart: 90,
+        pageEnd: 183,
+        titleKurdish: "بەشی دووەم (لاپەڕە ٩٠ تا ١٨٣) - پێوانەکاری، وزەی کارلێک، خێرایی کارلێک، هاوسەنگی کیمیایی"
+      },
+      {
+        partIndex: 3,
+        partName: "Grade12_Chemistry_Kurdish_Part03.pdf",
+        pageStart: 184,
+        pageEnd: 275,
+        titleKurdish: "بەشی سێیەم (لاپەڕە ١٨٤ تا ٢٧٥) - هاوسەنگی، ئۆکسان و لێککردنەوە، کیمیای کارەبایی، کاربۆن و هایدرۆکاربۆن"
+      },
+      {
+        partIndex: 4,
+        partName: "Grade12_Chemistry_Kurdish_Part04.pdf",
+        pageStart: 276,
+        pageEnd: 367,
+        titleKurdish: "بەشی چوارەم (لاپەڕە ٢٧٦ تا ٣٦٧) - هایدرۆکاربۆنە ناتێرەکان، ئاوێتەی ئەندامی تر، کیمیای ناوکی، پاشکۆ و زاراوەکان"
+      },
+      {
+        partIndex: 5,
+        partName: "Grade12_Chemistry_Kurdish_Part05.pdf",
+        pageStart: 368,
+        pageEnd: 371,
+        titleKurdish: "بەشی پێنجەم (لاپەڕە ٣٦٨ تا ٣٧١) - کۆتایی زاراوەکان و خشتەی خولیی تەواوی توخمەکان"
+      }
+    ],
     sourceAttribution: {
       publisher: "حکومەتی هەرێمی کوردستان - وەزارەتی پەروەردە",
       titleKurdish: "زانست بۆ هەمووان - کیمیا - پۆلی دوازدەهەمی زانستی",
@@ -652,6 +689,59 @@ export const chemistryGrade12IngestionRecord: DocumentIngestionRecord = {
       keyConcepts: ["ناووکە کەرتبوون", "کارلێکی زنجیرەیی", "بارستەی شڵۆق", "کورەی ناوکی", "ناووکە یەکگرتن", "وزەی خۆر"],
       keywords: ["کەرتبوون", "یەکگرتن", "یۆرانیۆم-235", "کورەی ناوکی", "nuclear fission", "nuclear fusion", "chain reaction", "critical mass", "reactor"],
       formulas: ["235_92U + 1_0n -> 141_56Ba + 92_36Kr + 3 1_0n + Energy", "4 1_1H -> 4_2He + 2 0_+1e + Energy"],
+      sourcePdfPart: "Grade12_Chemistry_Kurdish_Part04.pdf",
+    },
+    // --- پاشکۆکان و خشتەی خولی (لە فایلەکانی Part04 و Part05) ---
+    {
+      id: "sec-appendix-constants",
+      unitNumber: 3,
+      unitTitleKurdish: "پاشکۆکان و خشتە نەگۆڕاوەکان",
+      chapterNumber: 13,
+      chapterTitleKurdish: "پاشکۆی (أ): خشتەی نەگۆڕاوەکانی کیمیا",
+      lessonNumber: "پاشکۆ",
+      lessonTitleKurdish: "خشتەی نەگۆڕاوە کیمیاییەکان",
+      pageStart: 355,
+      pageEnd: 358,
+      isConfidenceLow: false,
+      summaryText: "پاشکۆی (أ) لە پەڕتووکی فەرمی: خشتەی ١-أ: گەرمیی سووتانی پێوانەیی (ΔHc) بۆ ئاوێتە هایدرۆکاربۆنییەکان، ئەلکان، ئەلکین، ئەلکاین و کەحولەکان لە 25°C. خشتەی ٢-أ: توانەوەێتی گازەکان لە ئاودا لە 0°C تا 60°C. خشتەی ٣-أ: توانەوەێتی خوێیەکان لە ئاودا بەپێی ئایۆنەکان. خشتەی ٤-أ: توانەوەێتی ماددەکان بە گرام لە 100g ئاودا. خشتەی ٥-أ: گەرمیی پێکهاتنی پێوانەیی (ΔHf°) بۆ ئاوێتە کیمیاییەکان لە 25°C و 1 atm.",
+      keyConcepts: ["گەرمیی سووتان", "توانەوەێتی گازەکان", "توانەوەێتی خوێیەکان", "گەرمیی پێکهاتن ΔHf°"],
+      keywords: ["پاشکۆ", "گەرمیی سووتان", "توانەوەێتی گازەکان", "گەرمیی پێکهاتن", "constants", "heat of combustion", "heat of formation", "solubility table"],
+      formulas: ["ΔH° = Σ ΔHf°(products) - Σ ΔHf°(reactants)"],
+      sourcePdfPart: "Grade12_Chemistry_Kurdish_Part04.pdf",
+    },
+    {
+      id: "sec-glossary-terms",
+      unitNumber: 3,
+      unitTitleKurdish: "فەرهەنگی چەمک و زاراوەکان",
+      chapterNumber: 13,
+      chapterTitleKurdish: "فەرهەنگی چەمک و زاراوە زانستییەکان",
+      lessonNumber: "زاراوەکان",
+      lessonTitleKurdish: "چەمک و زاراوەکانی کیمیای پۆلی ١٢",
+      pageStart: 359,
+      pageEnd: 368,
+      isConfidenceLow: false,
+      summaryText: "فەرهەنگی گشتگیری چەمک و زاراوە زانستییەکانی کیمیای پۆلی ١٢ لە لاپەڕە ٣٥٩ تا ٣٦٨: پێناسەی وردی زاراوەکان بە کوردی سۆرانی لەگەڵ هاوتا ئینگلیزییەکەی: ئەلیکترۆلیت (electrolyte)، هاوسەنگی کیمیایی (chemical equilibrium)، ئۆکسان (oxidation)، لێککردنەوە (reduction)، یاسای هێس (Hess's law)، وزەی چالاککردن (activation energy)، نیوەتەمەن (half-life)، مۆلاریتی (molarity)، مۆلالیتی (molality)، ئەلکان (alkane)، ئەلکین (alkene)، ئەلکاین (alkyne)، پۆلیمەر (polymer)، و کەمی بارستە (mass defect).",
+      keyConcepts: ["زاراوەکانی کیمیا", "پێناسەی زاراوەکان", "فەرهەنگی کیمیا", "glossary"],
+      keywords: ["فەرهەنگ", "زاراوە", "چەمک", "glossary", "terminology", "definitions"],
+      formulas: ["English & Kurdish Terminology Reference"],
+      sourcePdfPart: "Grade12_Chemistry_Kurdish_Part04.pdf",
+    },
+    {
+      id: "sec-periodic-table",
+      unitNumber: 3,
+      unitTitleKurdish: "خشتەی خولیی توخمەکان",
+      chapterNumber: 13,
+      chapterTitleKurdish: "خشتەی خولیی نوێی توخمە کیمیاییەکان",
+      lessonNumber: "خشتەی خولی",
+      lessonTitleKurdish: "خشتەی خولیی سەردەمیانەی توخمەکان",
+      pageStart: 369,
+      pageEnd: 371,
+      isConfidenceLow: false,
+      summaryText: "خشتەی خولیی فەرمی توخمە کیمیاییەکان (لاپەڕە ٣٦٩ تا ٣٧١ لە فایلی پێنجەم Grade12_Chemistry_Kurdish_Part05.pdf): ڕێکخستنی ١١٨ توخمی کیمیایی بەپێی ژمارەی گەردیلەیی (Atomic Number Z)، بارستەی گەردیلەیی تەواو (Atomic Mass)، ناوی توخمەکە بە کوردی و ئینگلیزی، هێمای توخم، و ڕیزبوونی ئەلیکترۆنی لە خولگەکانی وزەدا [He], [Ne], [Ar], [Kr], [Xe], [Rn]. پێکهاتووە لە کۆمەڵەکانی ١ تا ١٨ و خولەکانی ١ تا ٧، لەگەڵ لانتانایدەکان و ئەکتینایدەکان.",
+      keyConcepts: ["خشتەی خولی", "ژمارەی گەردیلەیی", "بارستەی گەردیلەیی", "ڕیزبوونی ئەلیکترۆنی", "کۆمەڵە و خولەکان"],
+      keywords: ["خشتەی خولی", "توخمەکان", "گەردیلە", "periodic table", "atomic number", "elements"],
+      formulas: ["Z = Atomic Number", "A = Mass Number", "[Noble Gas] ns^x (n-1)d^y np^z"],
+      sourcePdfPart: "Grade12_Chemistry_Kurdish_Part05.pdf",
     },
   ],
 };

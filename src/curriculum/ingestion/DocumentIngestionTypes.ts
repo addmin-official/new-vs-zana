@@ -11,6 +11,16 @@ export type PageExtractionStatus =
   | "poor_quality"
   | "ocr_required";
 
+export interface DocumentManifestPart {
+  partIndex: number;
+  partName: string;
+  pageStart: number;
+  pageEnd: number;
+  fileSizeBytes?: number;
+  sha256?: string;
+  titleKurdish?: string;
+}
+
 export interface DocumentManifest {
   curriculumId: string;
   documentId: string;
@@ -25,6 +35,7 @@ export interface DocumentManifest {
   ocrRequiredPagesCount: number;
   version: string;
   createdAt: string;
+  parts?: DocumentManifestPart[];
   sourceAttribution: {
     publisher: string;
     titleKurdish: string;
@@ -48,6 +59,7 @@ export interface ExtractedPage {
 
 export interface DetectedSection {
   id: string;
+  sourcePdfPart?: string;
   unitNumber?: number;
   unitTitleKurdish?: string;
   chapterNumber?: number;

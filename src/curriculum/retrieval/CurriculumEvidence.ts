@@ -16,6 +16,7 @@ export interface CurriculumChunk {
   chunkId: string; // Deterministic: chk:<docId>:<sectionId>:<pageStart>_<pageEnd>
   curriculumId: string;
   documentId: string;
+  sourcePdfPart?: string;
   sectionId: string;
   unitNumber?: number;
   unitTitleKurdish?: string;
@@ -35,6 +36,7 @@ export interface CurriculumEvidence {
   evidenceId: string;
   curriculumId: string;
   documentId: string;
+  sourcePdfPart?: string;
   unitNumber?: number;
   unitTitleKurdish?: string;
   chapterNumber?: number;
