@@ -160,7 +160,7 @@ async function main() {
       })
     }, 200);
     if (!chatOk.ok) allPassed = false;
-    await sleep(1500);
+    await sleep(4000);
 
     // 3. POST /api/chat (Missing payload)
     const chatBad = await runSmokeAndCorsTest("POST /api/chat (Missing payload)", "/api/chat", {
@@ -188,7 +188,7 @@ async function main() {
       })
     }, 200);
     if (!assessmentOk.ok) allPassed = false;
-    await sleep(1500);
+    await sleep(4000);
 
     // 5. POST /api/assessment (Missing payload)
     const assessmentBad = await runSmokeAndCorsTest("POST /api/assessment (Missing payload)", "/api/assessment", {
@@ -215,7 +215,7 @@ async function main() {
       })
     }, 200);
     if (!reportOk.ok) allPassed = false;
-    await sleep(1500);
+    await sleep(4000);
 
     // 7. POST /api/report (Missing payload)
     const reportBad = await runSmokeAndCorsTest("POST /api/report (Missing payload)", "/api/report", {
@@ -240,7 +240,7 @@ async function main() {
       })
     }, 200);
     if (!askOk.ok) allPassed = false;
-    await sleep(1500);
+    await sleep(4000);
 
     // 9. POST /api/study/ask (Missing payload)
     const askBad = await runSmokeAndCorsTest("POST /api/study/ask (Missing payload)", "/api/study/ask", {
