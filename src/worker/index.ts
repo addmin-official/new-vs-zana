@@ -49,7 +49,29 @@ import { validateProductionEnv } from "../server/config/envValidator.ts";
 
 export type KVNamespace = AssessmentKVStore;
 
-export interface Fetcher {
+export interface R2Bucket {
+  get(key: string): Promise<R2ObjectBody | null>;
+  put(key: string, value: ArrayBuffer | ReadableStream | string | Blob): Promise<R2Object>;
+  delete(key: string): Promise<void>;
+  list(options?: { prefix?: string; limit?: number; cursor?: string }): Promise<R2Objects>;
+}
+
+export interface R2Object {
+  key: string;
+  size: number;
+  etag: string;
+  httpE  httpE  httpE  httpE  httpE  httbody?: ReadableStream;
+  arrayBuffer(): Promise<ArrayBuffer>;
+  text(): Promise<string>;
+}
+
+export interface export interface expoR2Object {
+  body: ReadableStream;
+}
+
+export interface R2Objects {
+  objects: R2Object[];
+  truncated: b  truncated: b  truncated: b  truncated: rface Fetcher {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
 }
 
@@ -73,6 +95,7 @@ export interface Env {
   VITE_FIREBASE_APP_ID?: string;
   LEARNING_RECORDS_KV?: KVNamespace;
   RATE_LIMIT_KV?: KVNamespace;
+  ZANA_CURRICULUM_BUCKET?: R2Bucket;
   ASSETS?: Fetcher;
   ZANA_CURRICULUM_DOCUMENT_IDS?: string;
   ZANA_CURRICULUM_DOCUMENT_URI?: string;
