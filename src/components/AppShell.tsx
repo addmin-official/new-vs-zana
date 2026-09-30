@@ -11,15 +11,26 @@ interface AppShellProps {
   onTabChange: (tab: NavTab) => void;
   isOfflineFallback?: boolean;
   authError?: string | null;
+  onOpenBrain?: () => void;
+  isBrainActive?: boolean;
 }
 
-export function AppShell({ children, profile, activeTab, onTabChange, isOfflineFallback, authError }: AppShellProps) {
-  const showNav = profile.onboardingCompleted;
+export function AppShell({
+  children,
+  profile,
+  activeTab,
+  onTabChange,
+  isOfflineFallback,
+  authError,
+  onOpenBrain,
+  isBrainActive,
+}: AppShellProps) {
+  const showNav = profile.onboardingCompleted && !isBrainActive;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col antialiased transition-colors">
       {/* Top Header */}
-      <ZanaHeader profile={profile} />
+      <ZanaHeader profile={profile} onOpenBrain={onOpenBrain} isBrainActive={isBrainActive} />
 
       {/* Offline Fallback Banner */}
       {isOfflineFallback && (
@@ -42,7 +53,15 @@ export function AppShell({ children, profile, activeTab, onTabChange, isOfflineF
       )}
 
       {/* Main Container */}
-      <main className={`flex-1 w-full ${activeTab === "practice" || activeTab === "rooms" ? "max-w-xl" : "max-w-md"} mx-auto px-4 pt-4 ${showNav ? "pb-24" : "pb-6"} flex flex-col`}>
+      <main
+        className={`flex-1 w-full ${
+          isBrainActive
+            ? "max-w-6xl p-0"
+            : activeTab === "practice" || activeTab === "rooms"
+            ? "max-w-xl mx-auto px-4 pt-4"
+            : "max-w-md mx-auto px-4 pt-4"
+        } ${showNav ? "pb-24" : "pb-6"} flex flex-col`}
+      >
         {children}
       </main>
 

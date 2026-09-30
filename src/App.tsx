@@ -10,6 +10,7 @@ import { ProfileScreen } from "./screens/ProfileScreen.tsx";
 import { PracticeScreen } from "./screens/PracticeScreen.tsx";
 import { StudyRoomScreen } from "./screens/StudyRoomScreen.tsx";
 import { StudentStudyPathDashboard } from "./features/student/planning/StudentStudyPathDashboard.tsx";
+import { BrainAdminDashboard } from "./features/brain/BrainAdminDashboard.tsx";
 import { useStudentProfile } from "./features/student/useStudentProfile.ts";
 import { SubjectKey } from "./features/student/studentTypes.ts";
 import { NavTab } from "./components/BottomNavigation.tsx";
@@ -18,15 +19,17 @@ import { ThemeProvider } from "./context/ThemeContext.tsx";
 export default function App() {
   const { profile, updateProfile, completeOnboarding, resetProfile, isOfflineFallback, authError } = useStudentProfile();
   
-  // Manage active tab, plus optional "assessment" mode
+  // Manage active tab, plus optional "assessment" and "brain" modes
   const [activeTab, setActiveTab] = useState<NavTab>("daily");
   const [isAssessmentMode, setIsAssessmentMode] = useState(false);
+  const [isBrainActive, setIsBrainActive] = useState(false);
 
   const handleSelectSubject = (subjectId: SubjectKey) => {
     updateProfile({ activeSubject: subjectId });
   };
 
   const handleStartAssessment = () => {
+    setIsBrainActive(false);
     setIsAssessmentMode(true);
   };
 
@@ -48,6 +51,10 @@ export default function App() {
 
   // Render proper view screen
   const renderScreen = () => {
+    if (isBrainActive) {
+      return <BrainAdminDashboard onBackToApp={() => setIsBrainActive(false)} />;
+    }
+
     if (isAssessmentMode) {
       return (
         <AssessmentScreen
@@ -142,11 +149,14 @@ export default function App() {
         profile={profile}
         activeTab={isAssessmentMode ? ("daily" as NavTab) : activeTab} // Keep highlight appropriate
         onTabChange={(tab) => {
+          setIsBrainActive(false);
           setIsAssessmentMode(false);
           setActiveTab(tab);
         }}
         isOfflineFallback={isOfflineFallback}
         authError={authError}
+        onOpenBrain={() => setIsBrainActive(!isBrainActive)}
+        isBrainActive={isBrainActive}
       >
         {renderScreen()}
       </AppShell>
