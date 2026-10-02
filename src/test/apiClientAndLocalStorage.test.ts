@@ -168,3 +168,37 @@ test("Storage Layer - Profile loading handles missing/partial required fields gr
   // Should return null instead of crashing or returning incomplete profile
   assert.strictEqual(loaded, null);
 });
+
+test("Sound Effects - toggle and tone execution is safe and persistent", async () => {
+  const {
+    isSoundEnabled,
+    setSoundEnabled,
+    toggleSound,
+    playSuccessTone,
+    playErrorTone,
+    playInteractionTone,
+    playTutorResponseTone,
+    playCompletionTone,
+  } = await import("../services/soundEffects.ts");
+
+  // Reset sound storage
+  delete mockLocalStorage["zana_sound_enabled"];
+  assert.strictEqual(isSoundEnabled(), true);
+
+  // Toggle off
+  const next = toggleSound();
+  assert.strictEqual(next, false);
+  assert.strictEqual(isSoundEnabled(), false);
+
+  // Set enabled
+  setSoundEnabled(true);
+  assert.strictEqual(isSoundEnabled(), true);
+
+  // Tone methods do not throw even in Node/headless environment
+  assert.doesNotThrow(() => playSuccessTone());
+  assert.doesNotThrow(() => playErrorTone());
+  assert.doesNotThrow(() => playInteractionTone());
+  assert.doesNotThrow(() => playTutorResponseTone());
+  assert.doesNotThrow(() => playCompletionTone());
+});
+

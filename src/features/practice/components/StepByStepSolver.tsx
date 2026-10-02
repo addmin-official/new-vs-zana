@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { StepSolverPayload } from "../practiceTypes.ts";
 import { CheckCircle2, XCircle, Lightbulb, ArrowLeft, RotateCcw, Award, Sparkles, BookOpen } from "lucide-react";
+import { useSoundEffects } from "../../../hooks/useSoundEffects.ts";
 
 interface StepByStepSolverProps {
   data: StepSolverPayload;
@@ -8,6 +9,7 @@ interface StepByStepSolverProps {
 }
 
 export const StepByStepSolver: React.FC<StepByStepSolverProps> = ({ data, onComplete }) => {
+  const { playSuccess, playError, playInteraction, playCompletion } = useSoundEffects();
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [isAnswerSubmitted, setIsAnswerSubmitted] = useState(false);
@@ -20,6 +22,7 @@ export const StepByStepSolver: React.FC<StepByStepSolverProps> = ({ data, onComp
 
   const handleSelectOption = (optionId: string) => {
     if (isAnswerSubmitted) return;
+    playInteraction();
     setSelectedOptionId(optionId);
   };
 
@@ -27,7 +30,10 @@ export const StepByStepSolver: React.FC<StepByStepSolverProps> = ({ data, onComp
     if (!selectedOptionId || isAnswerSubmitted) return;
     setIsAnswerSubmitted(true);
     if (selectedOption?.isCorrect) {
+      playSuccess();
       setCorrectStepsCount((prev) => prev + 1);
+    } else {
+      playError();
     }
   };
 
@@ -38,6 +44,7 @@ export const StepByStepSolver: React.FC<StepByStepSolverProps> = ({ data, onComp
       setIsAnswerSubmitted(false);
       setShowHint(false);
     } else {
+      playCompletion();
       setIsFinished(true);
       const finalScore = selectedOption?.isCorrect ? correctStepsCount + 1 : correctStepsCount;
       onComplete(finalScore, data.steps.length);

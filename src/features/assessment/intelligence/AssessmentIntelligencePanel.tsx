@@ -5,6 +5,7 @@ import { AssessmentMode } from "./assessmentTypes.ts";
 import { ZanaButton } from "../../../components/ZanaButton.tsx";
 import { ZanaCard } from "../../../components/ZanaCard.tsx";
 import { AnswerSubmission } from "../../../assessment/domain/AssessmentTypes.ts";
+import { useSoundEffects } from "../../../hooks/useSoundEffects.ts";
 import {
   Award,
   BookOpen,
@@ -45,6 +46,8 @@ export function AssessmentIntelligencePanel({
     error,
     isLoading,
   } = useAssessmentIntelligence(studentProfile, onProfileUpdate);
+
+  const { playSuccess, playError, playInteraction, playCompletion } = useSoundEffects();
 
   const [typedAnswer, setTypedAnswer] = useState("");
   const [selectedChoice, setSelectedChoice] = useState<string | null>(null);
@@ -157,8 +160,14 @@ export function AssessmentIntelligencePanel({
         isCorrect: result.isCorrect,
         text: result.feedback,
       });
+      if (result.isCorrect) {
+        playSuccess();
+      } else {
+        playError();
+      }
     } catch (err) {
       console.error("Submission failed:", err);
+      playError();
     } finally {
       setIsEvaluating(false);
     }
@@ -171,6 +180,7 @@ export function AssessmentIntelligencePanel({
     if (snapshot && snapshot.session) {
       const isLast = snapshot.session.answers.length === snapshot.session.totalQuestions;
       if (isLast) {
+        playCompletion();
         await finish();
       } else {
         nextQuestion();
@@ -438,7 +448,10 @@ export function AssessmentIntelligencePanel({
                   key={opt.id}
                   type="button"
                   disabled={!!feedback || isEvaluating || isLoading}
-                  onClick={() => setSelectedChoice(opt.id)}
+                  onClick={() => {
+                    playInteraction();
+                    setSelectedChoice(opt.id);
+                  }}
                   className={`w-full p-4 rounded-xl border font-sans text-sm text-right transition-all cursor-pointer flex items-center justify-between min-h-[50px] ${
                     isSelected
                       ? "border-blue-500 bg-blue-50/50 text-blue-900 font-bold shadow-xs"
@@ -503,7 +516,10 @@ export function AssessmentIntelligencePanel({
             <button
               type="button"
               disabled={!!feedback || isEvaluating || isLoading}
-              onClick={() => setTrueFalseValue(true)}
+              onClick={() => {
+                playInteraction();
+                setTrueFalseValue(true);
+              }}
               className={`p-5 rounded-2xl border font-sans text-sm text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-2 min-h-[100px] ${
                 trueFalseValue === true
                   ? "border-emerald-500 bg-emerald-50/50 text-emerald-900 font-bold"
@@ -516,7 +532,10 @@ export function AssessmentIntelligencePanel({
             <button
               type="button"
               disabled={!!feedback || isEvaluating || isLoading}
-              onClick={() => setTrueFalseValue(false)}
+              onClick={() => {
+                playInteraction();
+                setTrueFalseValue(false);
+              }}
               className={`p-5 rounded-2xl border font-sans text-sm text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-2 min-h-[100px] ${
                 trueFalseValue === false
                   ? "border-rose-500 bg-rose-50/50 text-rose-900 font-bold"

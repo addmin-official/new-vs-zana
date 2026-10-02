@@ -3,6 +3,7 @@ import { StudentProfile } from "../services/storage.ts";
 import { LEVEL_LABELS } from "../features/student/studentDefaults.ts";
 import { StudentLevel } from "../features/student/studentTypes.ts";
 import { ThemeToggle } from "./ThemeToggle.tsx";
+import { SoundToggle } from "./SoundToggle.tsx";
 
 interface ZanaHeaderProps {
   profile: StudentProfile;
@@ -29,7 +30,7 @@ export function ZanaHeader({ profile, onOpenBrain, isBrainActive }: ZanaHeaderPr
           </div>
         </div>
 
-        {/* Right side: Brain Button, Student Mini Badge & Theme Toggle */}
+        {/* Right side: Brain Button, Sound Toggle, Theme Toggle & Student Mini Badge */}
         <div className="flex items-center gap-1.5 sm:gap-2">
           {onOpenBrain && (
             <button
@@ -47,6 +48,7 @@ export function ZanaHeader({ profile, onOpenBrain, isBrainActive }: ZanaHeaderPr
             </button>
           )}
 
+          <SoundToggle />
           <ThemeToggle showMenu={true} />
 
           {profile.onboardingCompleted && (

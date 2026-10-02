@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { GamifiedQuizPayload } from "../practiceTypes.ts";
 import { Trophy, Zap, Timer, CheckCircle2, XCircle, Lightbulb, ArrowLeft, Flame } from "lucide-react";
+import { useSoundEffects } from "../../../hooks/useSoundEffects.ts";
 
 interface GamifiedQuizPlayerProps {
   data: GamifiedQuizPayload;
@@ -8,6 +9,7 @@ interface GamifiedQuizPlayerProps {
 }
 
 export const GamifiedQuizPlayer: React.FC<GamifiedQuizPlayerProps> = ({ data, onComplete }) => {
+  const { playSuccess, playError, playInteraction, playCompletion } = useSoundEffects();
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [isAnswerSubmitted, setIsAnswerSubmitted] = useState(false);
@@ -42,6 +44,7 @@ export const GamifiedQuizPlayer: React.FC<GamifiedQuizPlayerProps> = ({ data, on
 
   const handleSelectOption = (optId: string) => {
     if (isAnswerSubmitted) return;
+    playInteraction();
     setSelectedOptionId(optId);
   };
 
@@ -50,6 +53,7 @@ export const GamifiedQuizPlayer: React.FC<GamifiedQuizPlayerProps> = ({ data, on
     setIsAnswerSubmitted(true);
 
     if (selectedOpt?.isCorrect) {
+      playSuccess();
       const newStreak = streak + 1;
       setStreak(newStreak);
       if (newStreak > maxStreak) setMaxStreak(newStreak);
@@ -59,6 +63,7 @@ export const GamifiedQuizPlayer: React.FC<GamifiedQuizPlayerProps> = ({ data, on
       const pointsEarned = Math.round(data.basePointsPerQuestion * multiplier);
       setScore((prev) => prev + pointsEarned);
     } else {
+      playError();
       setStreak(0);
     }
   };
@@ -70,6 +75,7 @@ export const GamifiedQuizPlayer: React.FC<GamifiedQuizPlayerProps> = ({ data, on
       setIsAnswerSubmitted(false);
       setShowHint(false);
     } else {
+      playCompletion();
       setIsFinished(true);
       onComplete(score, data.questions.length * data.basePointsPerQuestion * 2);
     }

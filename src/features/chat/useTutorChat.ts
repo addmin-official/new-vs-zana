@@ -1,6 +1,11 @@
 import { useState, useEffect } from "react";
 import { ChatMessage, ZanaStorage, StudentProfile } from "../../services/storage.ts";
 import { sendChatMessageToZana } from "./tutorApi.ts";
+import {
+  playInteractionTone,
+  playTutorResponseTone,
+  playErrorTone,
+} from "../../services/soundEffects.ts";
 
 export interface AcademicContextPayload {
   lessonTitle?: string;
@@ -64,6 +69,7 @@ export function useTutorChat(profile: StudentProfile, academicContext?: Academic
   const sendMessage = async (text: string, overrideContext?: AcademicContextPayload) => {
     if (!text.trim()) return;
 
+    playInteractionTone();
     setError(null);
     const userMsg: ChatMessage = {
       id: Math.random().toString(36).substring(7),
@@ -92,10 +98,12 @@ export function useTutorChat(profile: StudentProfile, academicContext?: Academic
         isEducational: response.isEducational
       };
 
+      playTutorResponseTone();
       const finalMessages = [...updatedMessages, zanaMsg];
       setMessages(finalMessages);
       ZanaStorage.saveChatMessages(profile.activeSubject, finalMessages);
     } catch (err: unknown) {
+      playErrorTone();
       const msg = err instanceof Error ? err.message : "کێشەیەک لە پەیوەندیکردن بە سێرڤەر ڕوویدا.";
       setError(msg);
     } finally {

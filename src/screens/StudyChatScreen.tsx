@@ -7,6 +7,7 @@ import { LoadingDots } from "../components/LoadingDots.tsx";
 import { AdaptiveLearningEngine } from "../learning/engine/AdaptiveLearningEngine.ts";
 import { DifficultyLevel, MasteryStatus } from "../learning/domain/MasteryTypes.ts";
 import { XWENDN_PILOT_LESSONS } from "../curriculum/providers/XwendnCurriculumProvider.ts";
+import { playSuccessTone, playErrorTone } from "../services/soundEffects.ts";
 import {
   Trash2,
   BookOpen,
@@ -148,6 +149,11 @@ export function StudyChatScreen({ profile, onNavigate: _onNavigate }: StudyChatS
     setIsGraded(true);
 
     const isCorrect = chosenIndex === activePractice.correctIndex;
+    if (isCorrect) {
+      playSuccessTone();
+    } else {
+      playErrorTone();
+    }
 
     // Calculate updated mastery using AdaptiveLearningEngine
     const prevMastery = {
