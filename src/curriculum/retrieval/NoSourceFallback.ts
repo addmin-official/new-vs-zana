@@ -11,6 +11,7 @@ export class NoSourceFallback {
       matchedLessons: [],
       matchedConcepts: [],
       excerpts: [],
+      evidence: [],
       confidence: 0,
       sourceMetadata: [],
       licenseDecision: null,

@@ -89,18 +89,21 @@ export interface DocumentProviderConfig {
   documentId?: string;
   filePath?: string;
   fileName?: string;
+  serverUrl?: string;
+  statusFetcher?: () => Promise<DocumentStatus>;
 }
 
 /**
  * CurriculumDocumentProvider
  *
- * Authoritative runtime bridge for official Grade 12 Kurdish Chemistry PDF.
- * Supports multiple continuous Gemini File API resources or local PDF files.
- * Fails closed if the physical document is not connected to the runtime.
+ * Browser-safe runtime bridge for the Kurdish Grade 12 Chemistry Curriculum.
+ * Completely free of Node-only modules (such as node:fs, fs, node:path).
+ * In browser or client environments, it fetches curriculum metadata from the server
+ * via fetch() or connects to Gemini File API resources using standard web APIs.
  */
 export class CurriculumDocumentProvider {
   private static instance: CurriculumDocumentProvider | null = null;
-  private config: DocumentProviderConfig;
+  protected config: DocumentProviderConfig;
 
   constructor(config?: DocumentProviderConfig) {
     this.config = config || {};
@@ -113,13 +116,13 @@ export class CurriculumDocumentProvider {
     return CurriculumDocumentProvider.instance;
   }
 
-  private getConfigValue(key: keyof DocumentProviderConfig, envKey: string): string | undefined {
+  protected getConfigValue(key: keyof DocumentProviderConfig, envKey: string): string | undefined {
     if (this.config[key] !== undefined && this.config[key] !== null) {
       const val = this.config[key];
       if (Array.isArray(val)) return val.join(",");
       return String(val);
     }
-    if (typeof process !== "undefined" && process.env && process.env[envKey]) {
+    if (typeof process !== "undefined" && process?.env && process.env[envKey]) {
       return process.env[envKey];
     }
     return undefined;
@@ -127,10 +130,10 @@ export class CurriculumDocumentProvider {
 
   public getDocumentIds(): string[] {
     const explicitIds = this.config.documentIds;
-    if (Array.isArray(explicitIds) && explicitIds.length > 0) {
+    if (Array.isArray(explicitIds)) {
       return explicitIds.map((s) => s.trim()).filter(Boolean);
     }
-    if (typeof explicitIds === "string" && explicitIds.trim()) {
+    if (typeof explicitIds === "string") {
       return explicitIds.split(",").map((s) => s.trim()).filter(Boolean);
     }
 
@@ -146,47 +149,6 @@ export class CurriculumDocumentProvider {
     );
     if (singleExplicit && singleExplicit.trim()) {
       return [singleExplicit.trim()];
-    }
-
-    // Auto-discovery candidate paths in project filesystem
-    if (typeof process !== "undefined" && process.versions && process.versions.node) {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const fs = require("node:fs");
-        const partsFound: string[] = [];
-        const partFiles = [
-          "Grade12_Chemistry_Kurdish_Part01.pdf",
-          "Grade12_Chemistry_Kurdish_Part02.pdf",
-          "Grade12_Chemistry_Kurdish_Part03.pdf",
-          "Grade12_Chemistry_Kurdish_Part04.pdf",
-          "Grade12_Chemistry_Kurdish_Part05.pdf",
-        ];
-        for (const p of partFiles) {
-          if (fs.existsSync(`assets/curriculum/${p}`)) {
-            partsFound.push(`assets/curriculum/${p}`);
-          } else if (fs.existsSync(`assets/${p}`)) {
-            partsFound.push(`assets/${p}`);
-          } else if (fs.existsSync(p)) {
-            partsFound.push(p);
-          }
-        }
-        if (partsFound.length > 0) {
-          return partsFound;
-        }
-
-        const candidatePaths = [
-          "assets/curriculum/Grade12_Chemistry_Kurdish.pdf",
-          "assets/Grade12_Chemistry_Kurdish.pdf",
-          "Grade12_Chemistry_Kurdish.pdf",
-        ];
-        for (const cand of candidatePaths) {
-          if (fs.existsSync(cand)) {
-            return [cand];
-          }
-        }
-      } catch {
-        // Ignore in non-node environments
-      }
     }
 
     return [];
@@ -215,7 +177,7 @@ export class CurriculumDocumentProvider {
   }
 
   /**
-   * Check if a real physical PDF or Gemini File URI is connected and accessible in the runtime.
+   * Check if a real physical PDF or Gemini File URI is connected and accessible.
    */
   public async isDocumentAvailable(): Promise<boolean> {
     const status = await this.getStatus();
@@ -223,14 +185,46 @@ export class CurriculumDocumentProvider {
   }
 
   /**
-   * Comprehensive diagnostic status of the document connection.
+   * Resolves the server curriculum health endpoint URL.
+   */
+  protected getServerEndpoint(): string {
+    if (this.config.serverUrl) {
+      return `${this.config.serverUrl.replace(/\/$/, "")}/api/health/curriculum`;
+    }
+    if (typeof window !== "undefined" && window.location) {
+      return "/api/health/curriculum";
+    }
+    const baseUrl = (typeof process !== "undefined" && process?.env?.APP_URL)
+      ? process.env.APP_URL
+      : "http://localhost:3000";
+    return `${baseUrl.replace(/\/$/, "")}/api/health/curriculum`;
+  }
+
+  /**
+   * Diagnostic status of the document connection.
+   * Browser-safe implementation:
+   * - Uses custom statusFetcher if supplied
+   * - Verifies Gemini File API resources via standard fetch()
+   * - Fetches server curriculum metadata from /api/health/curriculum for local/runtime status
+   * - Fails closed if the document is unreachable or unconfigured
    */
   public async getStatus(): Promise<DocumentStatus> {
+    if (this.config.statusFetcher) {
+      return this.config.statusFetcher();
+    }
+
     const docIds = this.getDocumentIds();
     const docName = this.getDocumentName();
     const now = new Date().toISOString();
 
-    if (docIds.length === 0) {
+    // 1. Explicit Gemini File API verification
+    const isGeminiFiles = docIds.some((id) => id.startsWith("files/") || id.startsWith("https://"));
+    if (docIds.length > 0 && isGeminiFiles) {
+      return this.verifyGeminiFiles(docIds, docName, now);
+    }
+
+    // 2. Explicit empty documentIds configuration -> fail-closed unconfigured
+    if (Array.isArray(this.config.documentIds) && this.config.documentIds.length === 0) {
       return {
         pdfAccessible: false,
         runtimeConnected: false,
@@ -248,119 +242,111 @@ export class CurriculumDocumentProvider {
       };
     }
 
-    // Determine if we are checking local files or Gemini File API resources
-    const isGeminiFiles = docIds.some((id) => id.startsWith("files/") || id.startsWith("https://"));
+    // 3. In isolated Node test mode without an active serverUrl or configured IDs, fail closed
+    if (
+      typeof window === "undefined" &&
+      !this.config.serverUrl &&
+      typeof process !== "undefined" &&
+      process?.env?.NODE_ENV === "test" &&
+      docIds.length === 0
+    ) {
+      return {
+        pdfAccessible: false,
+        runtimeConnected: false,
+        documentName: docName,
+        mimeType: "application/pdf",
+        documentIdOrUri: "NONE_CONFIGURED",
+        documentIds: [],
+        documentCount: 0,
+        parts: [],
+        ingestionStatus: "NOT_CONFIGURED",
+        retrievalStatus: "NOT_CONFIGURED",
+        groundingVerdict: "PDF_NOT_CONNECTED_TO_RUNTIME",
+        errorMessage: "No physical PDF or Gemini document URI configured in runtime.",
+        lastCheckedAt: now,
+      };
+    }
 
-    if (!isGeminiFiles) {
-      // Local filesystem verification
-      if (typeof process !== "undefined" && process.versions && process.versions.node) {
-        try {
-          const fs = await import("node:fs");
-          const partsStatus: DocumentPartStatus[] = [];
-          let allAccessible = true;
-          let missingFile: string | null = null;
+    // 4. Browser/Client Runtime: Fetch status from server endpoint using fetch()
+    try {
+      const endpoint = this.getServerEndpoint();
+      const res = await fetch(endpoint, {
+        method: "GET",
+        headers: { Accept: "application/json" },
+      });
 
-          docIds.forEach((filePath, idx) => {
-            const spec = GRADE12_CHEMISTRY_PARTS[idx] || {
-              partIndex: idx + 1,
-              partName: filePath.split("/").pop() || filePath,
-              pageStart: 1,
-              pageEnd: 371,
-            };
+      if (res.ok) {
+        const data = await res.json() as {
+          timestamp?: string;
+          document?: {
+            accessible: boolean;
+            runtimeConnected: boolean;
+            name?: string;
+            mimeType?: string;
+            identifier?: string;
+            documentIds?: string[];
+            documentCount?: number;
+            parts?: DocumentPartStatus[];
+            ingestionStatus: DocumentStatus["ingestionStatus"];
+            retrievalStatus: DocumentStatus["retrievalStatus"];
+            errorMessage?: string | null;
+          };
+          pipeline?: {
+            status: string;
+            groundingVerdict?: DocumentStatus["groundingVerdict"];
+            documentCount?: number;
+            connectedDocumentIds?: string[];
+          };
+        };
 
-            if (fs.existsSync(filePath)) {
-              const stats = fs.statSync(filePath);
-              if (stats.isFile() && stats.size > 0) {
-                partsStatus.push({
-                  partIndex: spec.partIndex,
-                  partName: spec.partName,
-                  pageStart: spec.pageStart,
-                  pageEnd: spec.pageEnd,
-                  resourceId: filePath,
-                  accessible: true,
-                  mimeType: "application/pdf",
-                });
-              } else {
-                allAccessible = false;
-                missingFile = filePath;
-                partsStatus.push({
-                  partIndex: spec.partIndex,
-                  partName: spec.partName,
-                  pageStart: spec.pageStart,
-                  pageEnd: spec.pageEnd,
-                  resourceId: filePath,
-                  accessible: false,
-                  errorMessage: "File is empty or not a regular file",
-                });
-              }
-            } else {
-              allAccessible = false;
-              missingFile = filePath;
-              partsStatus.push({
-                partIndex: spec.partIndex,
-                partName: spec.partName,
-                pageStart: spec.pageStart,
-                pageEnd: spec.pageEnd,
-                resourceId: filePath,
-                accessible: false,
-                errorMessage: "File does not exist on filesystem",
-              });
-            }
-          });
-
-          if (allAccessible) {
-            return {
-              pdfAccessible: true,
-              runtimeConnected: true,
-              documentName: docName,
-              mimeType: "application/pdf",
-              documentIdOrUri: docIds.join(","),
-              documentIds: docIds,
-              documentCount: docIds.length,
-              parts: partsStatus,
-              ingestionStatus: "INDEXED",
-              retrievalStatus: "OPERATIONAL",
-              groundingVerdict: "PDF_GROUNDED",
-              lastCheckedAt: now,
-            };
-          } else {
-            return {
-              pdfAccessible: false,
-              runtimeConnected: false,
-              documentName: docName,
-              mimeType: "application/pdf",
-              documentIdOrUri: docIds.join(","),
-              documentIds: docIds,
-              documentCount: docIds.length,
-              parts: partsStatus,
-              ingestionStatus: "FILE_NOT_FOUND",
-              retrievalStatus: "DISABLED",
-              groundingVerdict: "PDF_NOT_CONNECTED_TO_RUNTIME",
-              errorMessage: `One or more local PDF files not found or empty: ${missingFile}`,
-              lastCheckedAt: now,
-            };
-          }
-        } catch (err) {
+        if (data && data.document) {
           return {
-            pdfAccessible: false,
-            runtimeConnected: false,
-            documentName: docName,
-            mimeType: "application/pdf",
-            documentIdOrUri: docIds.join(","),
-            documentIds: docIds,
-            documentCount: docIds.length,
-            parts: [],
-            ingestionStatus: "FILE_NOT_FOUND",
-            retrievalStatus: "DISABLED",
-            groundingVerdict: "PDF_NOT_CONNECTED_TO_RUNTIME",
-            errorMessage: `Error accessing local files: ${err instanceof Error ? err.message : String(err)}`,
-            lastCheckedAt: now,
+            pdfAccessible: Boolean(data.document.accessible),
+            runtimeConnected: Boolean(data.document.runtimeConnected),
+            documentName: data.document.name || docName,
+            mimeType: data.document.mimeType || "application/pdf",
+            documentIdOrUri: data.document.identifier || (docIds.length > 0 ? docIds.join(",") : "NONE_CONFIGURED"),
+            documentIds: data.document.documentIds || docIds,
+            documentCount: data.document.documentCount ?? (data.document.documentIds?.length || 0),
+            parts: data.document.parts || [],
+            ingestionStatus: data.document.ingestionStatus || (data.document.runtimeConnected ? "INDEXED" : "NOT_CONFIGURED"),
+            retrievalStatus: data.document.retrievalStatus || (data.document.runtimeConnected ? "OPERATIONAL" : "NOT_CONFIGURED"),
+            groundingVerdict: data.pipeline?.groundingVerdict || (data.document.runtimeConnected ? "PDF_GROUNDED" : "PDF_NOT_CONNECTED_TO_RUNTIME"),
+            errorMessage: data.document.errorMessage || undefined,
+            lastCheckedAt: data.timestamp || now,
           };
         }
       }
+    } catch {
+      // Server unreachable, offline, or network error
     }
 
-    // Gemini File API resources verification
+    // Fail closed if the server is not reachable
+    return {
+      pdfAccessible: false,
+      runtimeConnected: false,
+      documentName: docName,
+      mimeType: "application/pdf",
+      documentIdOrUri: docIds.length > 0 ? docIds.join(",") : "NONE_CONFIGURED",
+      documentIds: docIds,
+      documentCount: docIds.length,
+      parts: [],
+      ingestionStatus: docIds.length > 0 ? "FILE_NOT_FOUND" : "NOT_CONFIGURED",
+      retrievalStatus: "NOT_CONFIGURED",
+      groundingVerdict: "PDF_NOT_CONNECTED_TO_RUNTIME",
+      errorMessage: "Curriculum document not accessible in browser runtime without server connection.",
+      lastCheckedAt: now,
+    };
+  }
+
+  /**
+   * Browser-safe Gemini File API verification using standard fetch()
+   */
+  protected async verifyGeminiFiles(
+    docIds: string[],
+    docName: string,
+    now: string
+  ): Promise<DocumentStatus> {
     const apiKey = this.getConfigValue("apiKey", "GEMINI_API_KEY");
     if (!apiKey) {
       return {
@@ -397,19 +383,22 @@ export class CurriculumDocumentProvider {
 
         const cleanId = resourceId.replace(/^.*\/files\//, "files/");
         try {
-          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/${cleanId}?key=${apiKey}`, {
-            method: "GET",
-          });
+          const res = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/${cleanId}?key=${apiKey}`,
+            { method: "GET" }
+          );
 
           if (res.ok) {
-            const fileData = await res.json() as {
+            const fileData = (await res.json()) as {
               state?: string;
               mimeType?: string;
               displayName?: string;
               uri?: string;
             };
             const isReady = fileData.state === "ACTIVE" || fileData.state === "PROCESSING";
-            const isPdf = fileData.mimeType === "application/pdf" || (!fileData.mimeType && cleanId.includes("files/"));
+            const isPdf =
+              fileData.mimeType === "application/pdf" ||
+              (!fileData.mimeType && cleanId.includes("files/"));
 
             if (isReady && isPdf) {
               partsStatus.push({
@@ -531,7 +520,6 @@ export class CurriculumDocumentProvider {
   ): Promise<CurriculumEvidence[]> {
     const isAvailable = await this.isDocumentAvailable();
     if (!isAvailable) {
-      // Fail closed: No real document evidence can be produced
       return [];
     }
 

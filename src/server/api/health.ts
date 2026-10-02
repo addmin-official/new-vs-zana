@@ -1,4 +1,4 @@
-import { CurriculumDocumentProvider } from "../../curriculum/providers/CurriculumDocumentProvider.ts";
+import { CurriculumServerProvider } from "../../curriculum/providers/CurriculumServerProvider.ts";
 
 export interface HealthEnv {
   LEARNING_RECORDS_KV?: {
@@ -73,7 +73,7 @@ export async function handleHealthRoute(request: Request, env: HealthEnv): Promi
 }
 
 export async function handleCurriculumHealthRoute(request: Request, env: HealthEnv): Promise<Response> {
-  const docProvider = new CurriculumDocumentProvider({
+  const docProvider = new CurriculumServerProvider({
     apiKey: env.GEMINI_API_KEY,
     documentIds: env.ZANA_CURRICULUM_DOCUMENT_IDS as string | undefined,
     documentUri: env.ZANA_CURRICULUM_DOCUMENT_URI as string | undefined,
