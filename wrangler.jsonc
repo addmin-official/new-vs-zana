@@ -64,18 +64,18 @@
     "VITE_FIREBASE_PROJECT_ID": "gen-lang-client-0009572581",
     "VITE_FIREBASE_STORAGE_BUCKET": "gen-lang-client-0009572581.firebasestorage.app",
     "VITE_FIREBASE_MESSAGING_SENDER_ID": "958839183835",
-    "VITE_FIREBASE_APP_ID": "1:958839183835:web:80cec81bbb0227f7b82ffe"
+    "VITE_FIREBASE_APP_ID": "1:958839183835:web:80cec81bbb0227f7b82ffe",
+    "ZANA_REVISION": "172d195"
   },
   "kv_namespaces": [
     {
       "binding": "RATE_LIMIT_KV",
-      "id": "45a7824a49234edfa6c4efe4089b02eb",
-      "preview_id": "c8f0dd5ea2034e439b83a98731fb2a41"
+      "id": "02f342188c8740b0ada898c36791e4a3",
+      "preview_id": "30c8a380662b489d85edc0dafc5b3858"
     },
     {
       "binding": "LEARNING_RECORDS_KV",
-      "id": "9ff7b6464e6c458b996c5ad1110ed4df",
-      "preview_id": "173850f56683467b8019a9cc459287a9"
+      "id": "a29b305980c94e169a741f4b29b9516e"
     }
   ],
   "r2_buckets": [
@@ -83,5 +83,5 @@
       "binding": "ZANA_CURRICULUM_BUCKET",
       "bucket_name": "zana-curriculum"
     }
-  ],
+  ]
 }
