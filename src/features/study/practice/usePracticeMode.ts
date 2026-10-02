@@ -6,6 +6,7 @@ import { PracticeSnapshot, PracticeAttempt } from "./practiceTypes.ts";
 import { DomainEventBus } from "../../../domain/DomainEventBus.ts";
 import { DomainEventFactory } from "../../../domain/DomainEventFactory.ts";
 import { fetchPracticeSnapshot, submitPracticeAnswer } from "../../../client/api/studyService.ts";
+import { playSuccessTone, playErrorTone, playCompletionTone } from "../../../services/soundEffects.ts";
 
 export interface UsePracticeModeProps {
   studentProfile: StudentProfile;
@@ -101,6 +102,12 @@ export function usePracticeMode({
         5000
       );
 
+      if (evaluation.isCorrect) {
+        playSuccessTone();
+      } else {
+        playErrorTone();
+      }
+
       // 2. Add attempt to state
       const newAttempt: PracticeAttempt = {
         questionId,
@@ -124,6 +131,7 @@ export function usePracticeMode({
         const score = totalCount > 0 ? (correctCount / totalCount) * 100 : 0;
         let feedbackMessage = prev.feedbackMessage;
         if (newAttempts.length === totalCount) {
+          playCompletionTone();
           if (score >= 70) {
             feedbackMessage = `ناوازەیە! توانیت بە سەرکەوتوویی سەرجەم پرسیارەکانی ئەم بەشە تەواو بکەیت بە نمرەی نایابی %${Math.round(score)}.`;
           } else {

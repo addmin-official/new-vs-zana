@@ -11,6 +11,11 @@ import { VisionApi } from "./visionApi.ts";
 import { VisionQuestionEngine } from "./VisionQuestionEngine.ts";
 import { DomainEventFactory } from "../../domain/DomainEventFactory.ts";
 import { domainEventStoreInstance } from "../../domain/DomainEventStore.ts";
+import {
+  playInteractionTone,
+  playTutorResponseTone,
+  playErrorTone,
+} from "../../services/soundEffects.ts";
 
 export function useVisionQuestion(context: VisionStudyContext) {
   const [snapshot, setSnapshot] = useState<VisionSnapshot>({
@@ -117,6 +122,7 @@ export function useVisionQuestion(context: VisionStudyContext) {
       return; // prevent duplicate submit
     }
 
+    playInteractionTone();
     const { studentId, subject, sessionId } = context;
 
     // Dispatch VISION_QUESTION_SUBMITTED event
@@ -176,6 +182,7 @@ export function useVisionQuestion(context: VisionStudyContext) {
 
       // Dispatch VISION_EXPLANATION_COMPLETED event if response text is present
       if (apiResult.responseText) {
+        playTutorResponseTone();
         try {
           const completedEvent = DomainEventFactory.createEvent(
             "VISION_EXPLANATION_COMPLETED",
@@ -204,6 +211,7 @@ export function useVisionQuestion(context: VisionStudyContext) {
         error: undefined,
       }));
     } catch (err: unknown) {
+      playErrorTone();
       const errMsg = err instanceof Error ? err.message : "هەڵەیەکی نەزانراو ڕوویدا.";
 
       // Dispatch VISION_PROCESSING_FAILED event

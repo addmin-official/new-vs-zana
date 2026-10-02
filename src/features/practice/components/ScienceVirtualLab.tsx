@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { VirtualLabPayload } from "../practiceTypes.ts";
 import { Award, FlaskConical, CheckCircle2, Lightbulb, ArrowLeft, RotateCcw, Play, Pause } from "lucide-react";
+import { useSoundEffects } from "../../../hooks/useSoundEffects.ts";
 
 interface ScienceVirtualLabProps {
   data: VirtualLabPayload;
@@ -8,6 +9,7 @@ interface ScienceVirtualLabProps {
 }
 
 export const ScienceVirtualLab: React.FC<ScienceVirtualLabProps> = ({ data, onComplete }) => {
+  const { playSuccess, playError, playInteraction, playCompletion } = useSoundEffects();
   const [controls, setControls] = useState<Record<string, number>>(data.defaultControls);
   const [currentTaskIndex, setCurrentTaskIndex] = useState(0);
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
@@ -26,6 +28,7 @@ export const ScienceVirtualLab: React.FC<ScienceVirtualLabProps> = ({ data, onCo
 
   const handleSelectOption = (optId: string) => {
     if (isAnswerSubmitted) return;
+    playInteraction();
     setSelectedOptionId(optId);
   };
 
@@ -33,7 +36,10 @@ export const ScienceVirtualLab: React.FC<ScienceVirtualLabProps> = ({ data, onCo
     if (!selectedOptionId || isAnswerSubmitted) return;
     setIsAnswerSubmitted(true);
     if (selectedOption?.isCorrect) {
+      playSuccess();
       setCorrectTasksCount((prev) => prev + 1);
+    } else {
+      playError();
     }
   };
 
@@ -44,6 +50,7 @@ export const ScienceVirtualLab: React.FC<ScienceVirtualLabProps> = ({ data, onCo
       setIsAnswerSubmitted(false);
       setShowHint(false);
     } else {
+      playCompletion();
       setIsFinished(true);
       const finalScore = selectedOption?.isCorrect ? correctTasksCount + 1 : correctTasksCount;
       onComplete(finalScore, data.tasks.length);

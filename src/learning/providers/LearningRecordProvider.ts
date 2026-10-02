@@ -34,17 +34,6 @@ export interface LearningRecordProvider {
   recordTaskCompletion?(studentId: string, taskDate?: string): Promise<StudentMasteryProfile>;
 }
 
-interface LocalFs {
-  existsSync(p: string): boolean;
-  readFileSync(p: string, e: string): string;
-  writeFileSync(p: string, c: string, e: string): void;
-}
-
-// Helper to access Node's fs module safely without breaking browser or Cloudflare environments
-const getFs = (): LocalFs | null => {
-  return null;
-};
-
 // =========================================================================
 // In-Memory Implementation (Server-side/Tests fallback)
 // =========================================================================
@@ -380,7 +369,6 @@ export class LocalStorageLearningRecordProvider implements LearningRecordProvide
 // =========================================================================
 export class PersistentLearningRecordProvider implements LearningRecordProvider {
   private memoryStore = new InMemoryLearningRecordProvider();
-  private filePath = "learning_records_db.json";
   private cloudflareKv: CloudflareKVBinding | null = null;
   private mode: "production" | "development" | "test";
 
@@ -418,63 +406,11 @@ export class PersistentLearningRecordProvider implements LearningRecordProvider 
   }
 
   private loadFromLocalFile(): void {
-    // Local JSON-file fallback must NEVER be used in production or test environments
-    if (this.mode !== "development") return;
-
-    const fs = getFs();
-    if (fs) {
-      try {
-        if (fs.existsSync(this.filePath)) {
-          const raw = fs.readFileSync(this.filePath, "utf-8");
-          const data = JSON.parse(raw);
-          if (data && typeof data === "object") {
-            // Rehydrate memoryStore
-            if (data.profiles) {
-              for (const [k, v] of Object.entries(data.profiles)) {
-                this.memoryStore.profiles.set(k, v as StudentMasteryProfile);
-              }
-            }
-            if (data.events) {
-              for (const [k, v] of Object.entries(data.events)) {
-                this.memoryStore.events.set(k, v as LearningEvent[]);
-              }
-            }
-            if (data.attempts) {
-              for (const [k, v] of Object.entries(data.attempts)) {
-                this.memoryStore.attempts.set(k, v as ExerciseAttempt[]);
-              }
-            }
-            if (data.recommendations) {
-              for (const [k, v] of Object.entries(data.recommendations)) {
-                this.memoryStore.recommendations.set(k, v as AdaptiveRecommendation[]);
-              }
-            }
-          }
-        }
-      } catch (e) {
-        console.warn("Could not load local learning database file, using in-memory:", e);
-      }
-    }
+    // In-memory backing is used for local development fallback
   }
 
   private saveToLocalFile(): void {
-    // JSON-file fallback must NEVER be used in production or test environments
-    if (this.mode !== "development") return;
-
-    const fs = getFs();
-    if (fs) {
-      try {
-        const data = {
-          profiles: Object.fromEntries(this.memoryStore["profiles"]),
-          events: Object.fromEntries(this.memoryStore["events"]),
-          attempts: Object.fromEntries(this.memoryStore["attempts"]),
-          recommendations: Object.fromEntries(this.memoryStore["recommendations"]),
-        };
-        fs.writeFileSync(this.filePath, JSON.stringify(data, null, 2), "utf-8");
-      } catch (e) {
-        console.warn("Could not save to local learning database file:", e);
-      }
-    }
+    // In-memory backing is used for local development fallback
   }
 
   // =========================================================================

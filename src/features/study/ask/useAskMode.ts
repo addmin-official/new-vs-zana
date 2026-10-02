@@ -11,6 +11,11 @@ import {
 import { askZana } from "./askApi.ts";
 import { DomainEventFactory } from "../../../domain/DomainEventFactory.ts";
 import { domainEventBusInstance } from "../../../domain/DomainEventBus.ts";
+import {
+  playInteractionTone,
+  playTutorResponseTone,
+  playErrorTone,
+} from "../../../services/soundEffects.ts";
 
 export function useAskMode(
   profile: StudentProfile,
@@ -57,6 +62,7 @@ export function useAskMode(
     const trimmed = text.trim();
     if (!trimmed || isSending) return;
 
+    playInteractionTone();
     setIsSending(true);
     setError(undefined);
 
@@ -113,6 +119,7 @@ export function useAskMode(
       });
 
       // Append Zana reply
+      playTutorResponseTone();
       const zanaMsgId = "msg_zana_" + Math.random().toString(36).substring(2, 9) + "_" + Date.now();
       const newZanaMessage: AskMessage = {
         id: zanaMsgId,
@@ -130,6 +137,7 @@ export function useAskMode(
         return [...updated, newZanaMessage].slice(-20);
       });
     } catch (apiErr: unknown) {
+      playErrorTone();
       const msg = apiErr instanceof Error ? apiErr.message : "کێشەیەک لە کاتی وەرگرتنی وەڵامی زانادا ڕوویدا.";
       setError(msg);
       setMessages((prev) =>

@@ -15,21 +15,6 @@ export interface AssessmentKVStore {
   delete?(key: string): Promise<void>;
 }
 
-// Helper to access Node's fs module safely without breaking browser or Cloudflare environments
-const getFs = () => {
-  if (typeof window === "undefined") {
-    try {
-      const nodeRequire = (globalThis as unknown as { require?: (moduleName: string) => unknown }).require;
-      if (typeof nodeRequire === "function") {
-        return nodeRequire("fs") as typeof import("fs");
-      }
-    } catch {
-      // Empty catch
-    }
-  }
-  return null;
-};
-
 // =========================================================================
 // In-Memory Implementation
 // =========================================================================
@@ -126,7 +111,6 @@ export class LocalStorageAssessmentRecordProvider implements AssessmentRecordPro
 // =========================================================================
 export class PersistentAssessmentRecordProvider implements AssessmentRecordProvider {
   private memoryStore = new InMemoryAssessmentRecordProvider();
-  private filePath = "assessment_records_db.json";
   private cloudflareKv: AssessmentKVStore | null = null;
   private mode: "production" | "development" | "test";
 
@@ -161,46 +145,11 @@ export class PersistentAssessmentRecordProvider implements AssessmentRecordProvi
   }
 
   private loadFromLocalFile(): void {
-    if (this.mode !== "development") return;
-    const fs = getFs();
-    if (fs) {
-      try {
-        if (fs.existsSync(this.filePath)) {
-          const raw = fs.readFileSync(this.filePath, "utf-8");
-          const data = JSON.parse(raw) as { attempts?: Record<string, AssessmentAttempt>; results?: Record<string, AssessmentResult> } | null;
-          if (data && typeof data === "object") {
-            if (data.attempts) {
-              for (const [k, v] of Object.entries(data.attempts)) {
-                this.memoryStore.attempts.set(k, v);
-              }
-            }
-            if (data.results) {
-              for (const [k, v] of Object.entries(data.results)) {
-                this.memoryStore.results.set(k, v);
-              }
-            }
-          }
-        }
-      } catch (e) {
-        console.warn("Could not load local assessment database file, using in-memory:", e);
-      }
-    }
+    // In-memory backing is used for local development fallback
   }
 
   private saveToLocalFile(): void {
-    if (this.mode !== "development") return;
-    const fs = getFs();
-    if (fs) {
-      try {
-        const data = {
-          attempts: Object.fromEntries(this.memoryStore.attempts),
-          results: Object.fromEntries(this.memoryStore.results)
-        };
-        fs.writeFileSync(this.filePath, JSON.stringify(data, null, 2), "utf-8");
-      } catch (e) {
-        console.warn("Could not save to local assessment database file:", e);
-      }
-    }
+    // In-memory backing is used for local development fallback
   }
 
   private getAttemptKey(attemptId: string): string {

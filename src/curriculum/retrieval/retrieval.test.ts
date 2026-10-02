@@ -192,4 +192,64 @@ describe("Patch 19.2 - Curriculum Index & Retrieval Engine", () => {
 
     assert.strictEqual(result.groundingStatus, "UNGROUNDED", "Must fail closed if physical PDF is required but unavailable");
   });
+
+  it("CurriculumServerProvider - verifies local filesystem and missing files correctly", async () => {
+    const { CurriculumServerProvider } = await import("../providers/CurriculumServerProvider.ts");
+
+    // Missing file test
+    const missingProvider = new CurriculumServerProvider({
+      documentIds: ["assets/curriculum/non_existent_file.pdf"],
+    });
+    const missingStatus = await missingProvider.getStatus();
+    assert.strictEqual(missingStatus.pdfAccessible, false);
+    assert.strictEqual(missingStatus.runtimeConnected, false);
+    assert.strictEqual(missingStatus.ingestionStatus, "FILE_NOT_FOUND");
+    assert.strictEqual(missingStatus.groundingVerdict, "PDF_NOT_CONNECTED_TO_RUNTIME");
+    assert.ok(missingStatus.errorMessage?.includes("non_existent_file.pdf"));
+
+    // Server-side unconfigured test
+    const unconfiguredServer = new CurriculumServerProvider({ documentIds: [] });
+    const unconfStatus = await unconfiguredServer.getStatus();
+    assert.strictEqual(unconfStatus.ingestionStatus, "NOT_CONFIGURED");
+    assert.strictEqual(unconfStatus.groundingVerdict, "PDF_NOT_CONNECTED_TO_RUNTIME");
+  });
+
+  it("CurriculumDocumentProvider - browser-safe wrapper does not contain Node filesystem imports and connects to server metadata", async () => {
+    const { CurriculumDocumentProvider } = await import("../providers/CurriculumDocumentProvider.ts");
+    const fs = await import("node:fs");
+
+    // Verify source code of CurriculumDocumentProvider is 100% free of Node-only imports
+    const clientProviderSource = fs.readFileSync("src/curriculum/providers/CurriculumDocumentProvider.ts", "utf-8");
+    assert.strictEqual(clientProviderSource.includes('from "node:fs"'), false);
+    assert.strictEqual(clientProviderSource.includes('from "fs"'), false);
+    assert.strictEqual(clientProviderSource.includes('require("node:fs")'), false);
+    assert.strictEqual(clientProviderSource.includes('require("fs")'), false);
+    assert.strictEqual(clientProviderSource.includes('import("node:fs")'), false);
+    assert.strictEqual(clientProviderSource.includes('from "node:path"'), false);
+
+    // Verify statusFetcher integration
+    const injectedProvider = new CurriculumDocumentProvider({
+      statusFetcher: async () => ({
+        pdfAccessible: true,
+        runtimeConnected: true,
+        documentName: "Grade12_Chemistry_Kurdish.pdf",
+        mimeType: "application/pdf",
+        documentIdOrUri: "server-injected-id",
+        documentIds: ["server-injected-id"],
+        documentCount: 1,
+        parts: [],
+        ingestionStatus: "INDEXED",
+        retrievalStatus: "OPERATIONAL",
+        groundingVerdict: "PDF_GROUNDED",
+        lastCheckedAt: new Date().toISOString(),
+      }),
+    });
+
+    const isAvailable = await injectedProvider.isDocumentAvailable();
+    assert.strictEqual(isAvailable, true);
+    const status = await injectedProvider.getStatus();
+    assert.strictEqual(status.ingestionStatus, "INDEXED");
+    assert.strictEqual(status.groundingVerdict, "PDF_GROUNDED");
+  });
 });
+
