@@ -401,6 +401,7 @@ test("14. Production Config Generation: Preserves assets, name, vars, and does n
     
     const expectedVars = { ...baseConfig.vars };
     const actualVars = { ...parsedGenerated.vars };
+    delete expectedVars.ZANA_REVISION;
     delete actualVars.ZANA_REVISION;
     
     assert.deepEqual(actualVars, expectedVars);
