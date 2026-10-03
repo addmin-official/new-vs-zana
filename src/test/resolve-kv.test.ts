@@ -410,8 +410,8 @@ test("14. Production Config Generation: Preserves assets, name, vars, and does n
     assert.deepEqual(parsedGenerated.kv_namespaces, [
       {
         binding: "RATE_LIMIT_KV",
-        id: "45a7824a49234edfa6c4efe4089b02eb",
-        preview_id: "c8f0dd5ea2034e439b83a98731fb2a41",
+        id: "02f342188c8740b0ada898c36791e4a3",
+        preview_id: "30c8a380662b489d85edc0dafc5b3858",
       },
       {
         binding: "LEARNING_RECORDS_KV",
