@@ -1,4 +1,22 @@
 import { GeminiProvider, ProviderGenerateParams } from "./GeminiProvider.ts";
+import { CurriculumDocumentProvider } from "../../curriculum/providers/CurriculumDocumentProvider.ts";
+
+/**
+ * Creates a CurriculumRetriever with env vars wired into the document provider.
+ * Required because Cloudflare Workers don't expose process.env.
+ */
+function createRetriever(env?: unknown): CurriculumRetriever {
+  const e = (env || {}) as Record<string, unknown>;
+  const docProvider = new CurriculumDocumentProvider({
+    apiKey: typeof e.GEMINI_API_KEY === "string" ? e.GEMINI_API_KEY : undefined,
+    documentIds: typeof e.ZANA_CURRICULUM_DOCUMENT_IDS === "string" ? e.ZANA_CURRICULUM_DOCUMENT_IDS : undefined,
+    documentUri: typeof e.ZANA_CURRICULUM_DOCUMENT_URI === "string" ? e.ZANA_CURRICULUM_DOCUMENT_URI : undefined,
+    documentId: typeof e.ZANA_CURRICULUM_DOCUMENT_ID === "string" ? e.ZANA_CURRICULUM_DOCUMENT_ID : undefined,
+    filePath: typeof e.ZANA_CURRICULUM_FILE_PATH === "string" ? e.ZANA_CURRICULUM_FILE_PATH : undefined,
+  });
+  return new CurriculumRetriever(undefined, undefined, docProvider);
+}
+
 import {
   ChatRequest,
   ChatResponse,
@@ -48,7 +66,7 @@ export class ProviderAdapter {
 
     let curriculumContext: CurriculumPromptContext | undefined = undefined;
     try {
-      const retriever = new CurriculumRetriever();
+      const retriever = createRetriever(env);
       const retrieval = await retriever.retrieve({
         grade,
         stream,
@@ -280,7 +298,7 @@ ${historySummary.join("\n")}
 
     let curriculumContext: CurriculumPromptContext | undefined = undefined;
     try {
-      const retriever = new CurriculumRetriever();
+      const retriever = createRetriever(env);
       const retrieval = await retriever.retrieve({
         grade,
         stream,
@@ -390,7 +408,7 @@ ${historySummary.join("\n")}
 
     let curriculumContext: CurriculumPromptContext | undefined = undefined;
     try {
-      const retriever = new CurriculumRetriever();
+      const retriever = createRetriever(env);
       const retrieval = await retriever.retrieve({
         grade,
         stream,
