@@ -68,8 +68,6 @@
     "VITE_FIREBASE_AUTH_DOMAIN": "gen-lang-client-0009572581.firebaseapp.com",
     "VITE_FIREBASE_PROJECT_ID": "gen-lang-client-0009572581",
     "VITE_FIREBASE_STORAGE_BUCKET": "gen-lang-client-0009572581.firebasestorage.app",
-    "VITE_FIREBASE_API_KEY": "AIzaSyCGoc-gg1lQfsJziEUFyR6M48hXaUMKRkY",
-    "VITE_FIREBASE_MEASUREMENT_ID": "G-RG8T98ZHBB",   
     "ZANA_REVISION": "172d195"
   },
   "kv_namespaces": [
