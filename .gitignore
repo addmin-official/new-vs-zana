@@ -17,3 +17,4 @@ firebase-applet-config.json
 
 # Wrangler local state (should not be committed)
 .wrangler/
+bun.lock
