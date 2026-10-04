@@ -4,6 +4,7 @@ import { LEVEL_LABELS } from "../features/student/studentDefaults.ts";
 import { StudentLevel } from "../features/student/studentTypes.ts";
 import { ThemeToggle } from "./ThemeToggle.tsx";
 import { SoundToggle } from "./SoundToggle.tsx";
+import { useIsAdmin } from "../hooks/useIsAdmin.ts";
 
 interface ZanaHeaderProps {
   profile: StudentProfile;
@@ -12,6 +13,8 @@ interface ZanaHeaderProps {
 }
 
 export function ZanaHeader({ profile, onOpenBrain, isBrainActive }: ZanaHeaderProps) {
+  const { isAdmin } = useIsAdmin();
+
   return (
     <header className="sticky top-0 z-50 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-100 dark:border-slate-800 px-4 py-3 shadow-xs transition-colors">
       <div className="max-w-md mx-auto flex items-center justify-between">
@@ -30,9 +33,9 @@ export function ZanaHeader({ profile, onOpenBrain, isBrainActive }: ZanaHeaderPr
           </div>
         </div>
 
-        {/* Right side: Brain Button, Sound Toggle, Theme Toggle & Student Mini Badge */}
+        {/* Right side: Brain Button (Admin Only), Sound Toggle, Theme Toggle & Student Mini Badge */}
         <div className="flex items-center gap-1.5 sm:gap-2">
-          {onOpenBrain && (
+          {isAdmin && onOpenBrain && (
             <button
               type="button"
               onClick={onOpenBrain}

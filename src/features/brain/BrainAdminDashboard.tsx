@@ -25,6 +25,7 @@ import {
   Zap,
 } from "lucide-react";
 import { InternalBrainService } from "../../core/brain/InternalBrainService";
+import { getBrainStatus, getBrainMetrics } from "../../services/adminApi.ts";
 import {
   ACTION_LEVEL_DEFINITIONS,
   ActionLevel,
@@ -89,6 +90,25 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
     }, 15000);
     return () => clearInterval(timer);
   }, [brain]);
+
+  // Synchronize and verify backend admin connection
+  useEffect(() => {
+    let isMounted = true;
+    Promise.all([getBrainStatus(), getBrainMetrics()])
+      .then(([status, metrics]) => {
+        if (isMounted) {
+          console.log("[BrainAdminDashboard] Backend Admin Connection Verified:", { status, metrics });
+        }
+      })
+      .catch((err) => {
+        if (isMounted) {
+          console.warn("[BrainAdminDashboard] Admin backend status check:", (err as Error)?.message || err);
+        }
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleRoleChange = (newRole: AdminRole) => {
     brain.setAdminRole(newRole);

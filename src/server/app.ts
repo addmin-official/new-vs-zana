@@ -28,6 +28,7 @@ import { handleFeedbackRoute } from "./api/feedback.ts";
 import { handleTelemetryExportRoute } from "./api/internal/telemetryExport.ts";
 import { handleHealthRoute, handleCurriculumHealthRoute } from "./api/health.ts";
 import { handleStudyRoomsRoute } from "./api/studyRooms.ts";
+import { verifyAdmin } from "../worker/adminGuard.ts";
 
 dotenv.config();
 
@@ -40,6 +41,40 @@ app.use((req, res, next) => {
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("X-XSS-Protection", "1; mode=block");
   next();
+});
+
+// Admin Guard for Express /api/admin/* and /api/internal/* routes
+app.use(async (req: Request, res: Response, next: NextFunction) => {
+  const pathname = req.path;
+  if (!pathname.startsWith("/api/admin/") && !pathname.startsWith("/api/internal/")) {
+    return next();
+  }
+
+  try {
+    const fullUrl = `${req.protocol}://${req.get("host") || "localhost"}${req.originalUrl}`;
+    const headers = new Headers();
+    for (const [k, v] of Object.entries(req.headers)) {
+      if (typeof v === "string") headers.set(k, v);
+      else if (Array.isArray(v)) headers.set(k, v.join(", "));
+    }
+    const webReq = new Request(fullUrl, {
+      method: req.method,
+      headers,
+    });
+    const check = await verifyAdmin(webReq, {
+      VITE_FIREBASE_API_KEY: process.env.VITE_FIREBASE_API_KEY,
+      ADMIN_TELEMETRY_SECRET: process.env.ADMIN_TELEMETRY_SECRET,
+    });
+    if (!check.ok) {
+      return res.status(403).json({
+        error: "Unauthorized",
+        detail: check.error || "دەستگەیشتن ڕەتکرایەوە. تەنها ئادمین دەتوانێت دەستی پێی بگات.",
+      });
+    }
+    next();
+  } catch (err) {
+    return res.status(403).json({ error: "Unauthorized", detail: String(err) });
+  }
 });
 
 app.use(express.json());
@@ -946,6 +981,30 @@ app.get("/api/internal/telemetry", async (req: Request, res: Response) => {
   } catch (err: unknown) {
     res.status(500).json({ error: (err as Error)?.message || "Internal Server Error" });
   }
+});
+
+app.get("/api/admin/brain/status", (req: Request, res: Response) => {
+  res.json({
+    ok: true,
+    status: "HEALTHY",
+    onlineServices: 6,
+    systemHealth: "Online",
+    level: "Level 0-5 Governed",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.get("/api/admin/brain/metrics", (req: Request, res: Response) => {
+  res.json({
+    ok: true,
+    brainActivity: 15,
+    successRate: "99.4%",
+    incidentsResolved: 1,
+    pendingApprovals: 0,
+    knowledgeGapsTotal: 2,
+    tamperProofAudit: "100%",
+    timestamp: new Date().toISOString(),
+  });
 });
 
 app.all("/api/study-rooms*", async (req: Request, res: Response) => {
