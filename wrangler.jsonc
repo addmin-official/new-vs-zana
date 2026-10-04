@@ -86,5 +86,12 @@
       "binding": "ZANA_CURRICULUM_BUCKET",
       "bucket_name": "zana-curriculum"
     }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "new-vs-zana",
+      "database_id": "b8929b42-eaae-42c4-a364-b601ab285be5"
+    }
   ]
 }
