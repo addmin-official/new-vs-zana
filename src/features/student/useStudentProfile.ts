@@ -5,7 +5,7 @@ import { getValidatedGrade, getValidatedStream, getValidatedSubject, getValidate
 import { ZanaStorage } from "../../services/storage.ts";
 import { getFirestoreDb, getFirebaseAuth, isFirebaseConfigured } from "../../services/firebase.ts";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 
 export function useStudentProfile() {
   const [isOfflineFallback, setIsOfflineFallback] = useState<boolean>(
@@ -111,15 +111,11 @@ export function useStudentProfile() {
           setIsOfflineFallback(true);
         }
       } else {
-        signInAnonymously(auth).catch((err: unknown) => {
-          setIsOfflineFallback(true);
-          const errCode = (err && typeof err === "object" && "code" in err) ? String((err as { code: unknown }).code) : "";
-          if (errCode === "auth/admin-restricted-operation" || String(err).includes("admin-restricted-operation")) {
-            console.info("Firebase Auth admin-restricted-operation caught: switching smoothly to local offline demo mode with seeded student data.");
-          } else {
-            console.warn("Firebase Auth anonymous sign-in unavailable, running in local guest mode:", (err as Error)?.message || err);
-          }
-        });
+        // Unauthenticated / logged out state
+        const saved = getStudentProfile();
+        if (saved) {
+          setProfileState(saved);
+        }
       }
     });
 

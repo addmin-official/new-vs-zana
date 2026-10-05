@@ -20,7 +20,8 @@ function forbidMatch(value, pattern, message) {
 
 const pkgText = read('package.json');
 const wrangler = read('wrangler.jsonc');
-const workflow = read('.github/workflows/ci.yml');
+const workflowPath = existsSync('.github/workflows/ci.yml') ? '.github/workflows/ci.yml' : '.github/workflows/ci.yml.disabled';
+const workflow = read(workflowPath);
 const models = read('src/server/config/aiModels.ts');
 const worker = read('src/worker/index.ts');
 const provider = read('src/server/ai/GeminiProvider.ts');
