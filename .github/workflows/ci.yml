@@ -137,7 +137,7 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-          - name: Build Client and Server
+      - name: Build Client and Server
         env:
           VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
