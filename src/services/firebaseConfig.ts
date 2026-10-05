@@ -8,54 +8,28 @@ const detectTestEnv = (): boolean => {
 
 const isTest = detectTestEnv();
 
+// Firebase configuration — injected at build time by Vite
 export const firebaseConfig = {
-  projectId: (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_FIREBASE_PROJECT_ID) ||
-             (typeof process !== "undefined" && process.env && process.env.VITE_FIREBASE_PROJECT_ID) ||
-             (isTest ? "gen-lang-client-0009572581" : ""),
-
-  appId: (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_FIREBASE_APP_ID) ||
-         (typeof process !== "undefined" && process.env && process.env.VITE_FIREBASE_APP_ID) ||
-         (isTest ? "1:958839183835:web:80cec81bbb0227f7b82ffe" : ""),
-
-  apiKey: (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_FIREBASE_API_KEY) ||
-          (typeof process !== "undefined" && process.env && process.env.VITE_FIREBASE_API_KEY) ||
-          (isTest ? "AIzaSyFakeKeyForTestEnvironmentOnly12345" : ""),
-
-  authDomain: (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_FIREBASE_AUTH_DOMAIN) ||
-              (typeof process !== "undefined" && process.env && process.env.VITE_FIREBASE_AUTH_DOMAIN) ||
-              (isTest ? "gen-lang-client-0009572581.firebaseapp.com" : ""),
-
-  firestoreDatabaseId: (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_FIREBASE_DATABASE_ID) ||
-                       (typeof process !== "undefined" && process.env && process.env.VITE_FIREBASE_DATABASE_ID) ||
-                       (isTest ? "ai-studio-zana-61fd6b5f-d052-40d1-8657-de471d642e8c" : ""),
-
-  storageBucket: (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_FIREBASE_STORAGE_BUCKET) ||
-                 (typeof process !== "undefined" && process.env && process.env.VITE_FIREBASE_STORAGE_BUCKET) ||
-                 (isTest ? "gen-lang-client-0009572581.firebasestorage.app" : ""),
-
-  messagingSenderId: (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID) ||
-                     (typeof process !== "undefined" && process.env && process.env.VITE_FIREBASE_MESSAGING_SENDER_ID) ||
-                     (isTest ? "958839183835" : ""),
-
-  measurementId: (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_FIREBASE_MEASUREMENT_ID) ||
-                 (typeof process !== "undefined" && process.env && process.env.VITE_FIREBASE_MEASUREMENT_ID) || "",
-
-  oAuthClientId: (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_FIREBASE_OAUTH_CLIENT_ID) ||
-                 (typeof process !== "undefined" && process.env && process.env.VITE_FIREBASE_OAUTH_CLIENT_ID) || "",
-
-  recaptchaSiteKey: (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_FIREBASE_RECAPTCHA_SITE_KEY) ||
-                    (typeof process !== "undefined" && process.env && process.env.VITE_FIREBASE_RECAPTCHA_SITE_KEY) || "",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "",
+  firestoreDatabaseId: import.meta.env.VITE_FIREBASE_DATABASE_ID || "",
+  oAuthClientId: import.meta.env.VITE_FIREBASE_OAUTH_CLIENT_ID || "",
+  recaptchaSiteKey: import.meta.env.VITE_FIREBASE_RECAPTCHA_SITE_KEY || "",
 };
 
-export const isFirebaseConfigured = (cfg: Partial<typeof firebaseConfig> = firebaseConfig): boolean => {
+export const isFirebaseConfigured = (
+  cfg: Partial<typeof firebaseConfig> = firebaseConfig
+): boolean => {
   const apiKey = cfg.apiKey;
   const projectId = cfg.projectId;
-  const appId = cfg.appId;
   if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) return false;
   if (!projectId || typeof projectId !== "string" || !projectId.trim()) return false;
-  if (appId !== undefined && typeof appId === "string" && appId.length > 0 && !appId.trim()) return false;
-  if (apiKey.includes("FakeKey") || apiKey.includes("placeholder") || apiKey.includes("YOUR_")) return false;
-  if (projectId.includes("placeholder") || projectId.includes("YOUR_")) return false;
+  if (apiKey.includes("FakeKey") || apiKey.includes("placeholder")) return false;
   return true;
 };
 
