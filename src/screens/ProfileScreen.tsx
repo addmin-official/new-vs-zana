@@ -4,12 +4,13 @@ import { SubjectKey } from "../features/student/studentTypes.ts";
 import { ZanaCard } from "../components/ZanaCard.tsx";
 import { ZanaButton } from "../components/ZanaButton.tsx";
 import { GRADES_LIST, SUBJECTS_DATA, LEVELS_LIST } from "../data/subjects.ts";
-import { Settings, Trash2, AlertTriangle, CheckCircle2, Award, Brain, Target, AlertCircle, Sun, Moon, Laptop, Palette, Volume2, VolumeX, Sparkles } from "lucide-react";
+import { Settings, Trash2, AlertTriangle, CheckCircle2, Award, Brain, Target, AlertCircle, Sun, Moon, Laptop, Palette, Volume2, VolumeX, Sparkles, LogOut } from "lucide-react";
 import { ConceptMasteryState } from "../learning/domain/MasteryTypes.ts";
 import { useStudentMastery } from "../learning/hooks/useStudentMastery.ts";
 import { useTheme } from "../context/ThemeContext.tsx";
 import { useSoundEffects } from "../hooks/useSoundEffects.ts";
 import { StudentStreakAndBadges } from "../components/StudentStreakAndBadges.tsx";
+import { logoutUser } from "../services/authService.ts";
 
 interface ProfileScreenProps {
   profile: StudentProfile;
@@ -421,6 +422,30 @@ export function ProfileScreen({ profile, onUpdateProfile, onResetAll }: ProfileS
               </button>
             </div>
           </div>
+        </div>
+      </ZanaCard>
+
+      {/* Account & Session Management */}
+      <ZanaCard>
+        <div className="space-y-3 text-right">
+          <h3 className="font-sans font-bold text-sm text-slate-800 dark:text-slate-200 border-b border-slate-100 dark:border-slate-800 pb-2 mb-2 flex items-center gap-1.5 justify-start">
+            <Settings className="w-4 h-4 text-blue-600" />
+            <span>هەژمار و چوونەدەرەوە</span>
+          </h3>
+          <p className="font-sans text-xs text-slate-500 dark:text-slate-400">
+            دەتوانیت لە هەژمارەکەت بچیتە دەرەوە بۆ چوونەژوورەوە بە هەژمارێکی تر یان وەک میوان.
+          </p>
+          <ZanaButton
+            variant="outline"
+            fullWidth
+            onClick={async () => {
+              await logoutUser();
+            }}
+            className="border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-center gap-2"
+          >
+            <LogOut className="w-4 h-4 text-red-500" />
+            <span>چوونەدەرەوە لە هەژمار (Logout)</span>
+          </ZanaButton>
         </div>
       </ZanaCard>
 
