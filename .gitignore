@@ -19,3 +19,8 @@ firebase-applet-config.json
 .wrangler/
 bun.lock
 scripts/service-account.json
+
+# Backups
+*.backup
+*.backup-*
+.backup-*/
