@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ku" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ZANA / زانا</title>
+    <meta name="description" content="هاوڕێی زیرەکی فێربوونی تۆ - Kurdish Sorani AI Tutor for Grades 9-12" />
+    <meta property="og:title" content="ZANA / زانا" />
+    <meta property="og:description" content="هاوڕێی زیرەکی فێربوونی تۆ - Kurdish Sorani AI Tutor for Grades 9-12" />
+    <script>
+      (function() {
+        try {
+          var saved = localStorage.getItem('zana_theme');
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if (saved === 'dark' || (!saved && prefersDark) || (saved === 'system' && prefersDark)) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <script>
+      (function() {
+        function isViteWsError(reason) {
+          if (!reason) return false;
+          var msg = typeof reason === 'string' ? reason : (reason.message || reason.stack || String(reason));
+          return (
+            msg.indexOf('WebSocket') !== -1 ||
+            msg.indexOf('websocket') !== -1 ||
+            msg.indexOf('failed to connect to websocket') !== -1
+          );
+        }
+
+        window.addEventListener('unhandledrejection', function(event) {
+          if (isViteWsError(event.reason)) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+          }
+        }, true);
+
+        window.addEventListener('error', function(event) {
+          if (isViteWsError(event.error || event.message)) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+          }
+        }, true);
+
+        var origError = console.error;
+        console.error = function() {
+          var first = arguments[0];
+          if (first && isViteWsError(first)) {
+            return;
+          }
+          return origError.apply(console, arguments);
+        };
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
