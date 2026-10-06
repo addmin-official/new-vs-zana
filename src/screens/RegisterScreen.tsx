@@ -123,7 +123,7 @@ export function RegisterScreen({
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 font-sans tracking-tight">
             خۆتۆمارکردن لە زانا
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-300">
             بەخێربێیت! با هەژماری نوێی فێربوونت دروست بکەین
           </p>
         </div>
@@ -341,7 +341,7 @@ export function RegisterScreen({
 
           {/* Terms Checkbox */}
           <div className="pt-1">
-            <label className="flex items-start gap-2.5 cursor-pointer select-none text-xs text-slate-600 dark:text-slate-400">
+            <label className="flex items-start gap-2.5 cursor-pointer select-none text-xs text-slate-600 dark:text-slate-300">
               <input
                 type="checkbox"
                 checked={acceptTerms}
@@ -373,7 +373,7 @@ export function RegisterScreen({
 
         {/* Footer */}
         <div className="text-center pt-2 border-t border-slate-100 dark:border-slate-800">
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-xs text-slate-500 dark:text-slate-300">
             پێشتر هەژمارت هەبووە؟{" "}
             <button
               type="button"

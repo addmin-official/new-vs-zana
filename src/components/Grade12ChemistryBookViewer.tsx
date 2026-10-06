@@ -402,7 +402,7 @@ export const Grade12ChemistryBookViewer: React.FC<Grade12ChemistryBookViewerProp
                 <p className={`font-bold text-xs leading-tight ${isActive ? "text-white" : "text-slate-900 dark:text-white"}`}>
                   ل. {p.pageStart} تا {p.pageEnd}
                 </p>
-                <p className={`text-[10px] mt-1 truncate ${isActive ? "text-blue-100" : "text-slate-500 dark:text-slate-400"}`}>
+                <p className={`text-[10px] mt-1 truncate ${isActive ? "text-blue-100" : "text-slate-500 dark:text-slate-300"}`}>
                   {p.partName.replace(".pdf", "")}
                 </p>
               </button>
@@ -421,7 +421,7 @@ export const Grade12ChemistryBookViewer: React.FC<Grade12ChemistryBookViewerProp
             <h4 className="text-base font-bold text-slate-900 dark:text-white mt-0.5">
               {activePart.unitTitle}
             </h4>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            <p className="text-xs text-slate-500 dark:text-slate-300 mt-1">
               {activePart.summaryKu}
             </p>
           </div>
@@ -488,7 +488,7 @@ export const Grade12ChemistryBookViewer: React.FC<Grade12ChemistryBookViewerProp
                       </div>
 
                       {isExpanded && (
-                        <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-2 pt-2 border-t border-slate-200/60 dark:border-slate-700/60 leading-relaxed">
+                        <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-2 pt-2 border-t border-slate-200/60 dark:border-slate-700/60 leading-relaxed">
                           {les.desc}
                         </p>
                       )}

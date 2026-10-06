@@ -52,7 +52,7 @@ export function ForgotPasswordScreen({ onNavigateToLogin }: ForgotPasswordScreen
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
             وشەی نهێنیت لەبیر چووە؟
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-xs">
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-300 max-w-xs">
             ئیمەیلەکەت بنووسە، لینکی فەرمی گەڕاندنەوەی وشەی نهێنیت بۆ دەنێرین
           </p>
         </div>

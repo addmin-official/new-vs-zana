@@ -61,7 +61,7 @@ export function ZanaHeader({ profile, onOpenBrain, isBrainActive }: ZanaHeaderPr
                 <p className="font-sans text-xs font-bold text-slate-800 dark:text-slate-200 leading-none">
                   {profile.name}
                 </p>
-                <p className="font-sans text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                <p className="font-sans text-[10px] text-slate-500 dark:text-slate-300 mt-0.5">
                   پۆلی {profile.grade} • {LEVEL_LABELS[profile.level as StudentLevel] || profile.level}
                 </p>
               </div>

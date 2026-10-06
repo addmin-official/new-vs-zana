@@ -40,7 +40,7 @@ export function AppShell({
             <p className="font-bold text-right" dir="rtl">
               دۆخی دەرەوەی هێڵی سنووردار چالاكە
             </p>
-            <p className="text-slate-500 dark:text-slate-400 text-[10px] mt-0.5 text-right" dir="rtl">
+            <p className="text-slate-500 dark:text-slate-300 text-[10px] mt-0.5 text-right" dir="rtl">
               هێڵ یان ناسنامەی ناوخۆیی سنووردارە. داتاکان لەسەر سێرڤەر پاشەکەوت ناکرێن.
             </p>
             {authError && (

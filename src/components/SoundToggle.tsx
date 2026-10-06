@@ -31,7 +31,7 @@ export function SoundToggle({ className = "" }: SoundToggleProps) {
       {soundEnabled ? (
         <Volume2 className="w-4 h-4 text-blue-600 dark:text-blue-400 transition-transform active:scale-95" />
       ) : (
-        <VolumeX className="w-4 h-4 text-slate-400 dark:text-slate-500 transition-transform active:scale-95" />
+        <VolumeX className="w-4 h-4 text-slate-400 dark:text-slate-400 transition-transform active:scale-95" />
       )}
     </button>
   );

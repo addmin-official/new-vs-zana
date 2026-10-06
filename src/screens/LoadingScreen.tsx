@@ -29,7 +29,7 @@ export function LoadingScreen({ message = "چاوەڕوان بە..." }: LoadingS
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 text-slate-600 dark:text-slate-400 pt-2">
+        <div className="flex items-center gap-2.5 text-slate-600 dark:text-slate-300 pt-2">
           <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
           <span className="text-sm font-medium">{message}</span>
         </div>

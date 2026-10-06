@@ -180,7 +180,7 @@ export function LoginScreen({
 
           {/* Remember me & Forgot Password */}
           <div className="flex items-center justify-between text-xs pt-0.5">
-            <label className="flex items-center gap-2 cursor-pointer select-none text-slate-600 dark:text-slate-400">
+            <label className="flex items-center gap-2 cursor-pointer select-none text-slate-600 dark:text-slate-300">
               <input
                 type="checkbox"
                 checked={rememberMe}
@@ -276,7 +276,7 @@ export function LoginScreen({
 
         {/* Footer */}
         <div className="text-center pt-2 border-t border-slate-100 dark:border-slate-800">
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-xs text-slate-500 dark:text-slate-300">
             هەژمارت نییە؟{" "}
             <button
               type="button"

@@ -184,7 +184,7 @@ export function StudentStreakAndBadges({
                 <h3 className="font-sans font-black text-sm text-slate-900 dark:text-slate-100">
                   بەردەوامیی فێربوونی ڕۆژانە (Daily Learning Streak)
                 </h3>
-                <p className="font-sans text-[11px] text-slate-500 dark:text-slate-400">
+                <p className="font-sans text-[11px] text-slate-500 dark:text-slate-300">
                   ڕێژەی ڕۆژە لەسەریەکەکان لە تەواوکردنی ئەرک و ڕاهێنانەکانی زانا
                 </p>
               </div>
@@ -210,7 +210,7 @@ export function StudentStreakAndBadges({
           {/* Big Streak Numbers */}
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-white dark:bg-slate-800/80 p-3.5 rounded-xl border border-slate-100 dark:border-slate-700/60 text-center">
-              <span className="block font-sans text-[11px] font-bold text-slate-400 dark:text-slate-400 mb-0.5">
+              <span className="block font-sans text-[11px] font-bold text-slate-400 dark:text-slate-300 mb-0.5">
                 بەردەوامیی ئێستا
               </span>
               <div className="flex items-center justify-center gap-1">
@@ -219,11 +219,11 @@ export function StudentStreakAndBadges({
                   {currentStreak}
                 </span>
               </div>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400">ڕۆژ لەسەریەک</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-300">ڕۆژ لەسەریەک</span>
             </div>
 
             <div className="bg-white dark:bg-slate-800/80 p-3.5 rounded-xl border border-slate-100 dark:border-slate-700/60 text-center">
-              <span className="block font-sans text-[11px] font-bold text-slate-400 dark:text-slate-400 mb-0.5">
+              <span className="block font-sans text-[11px] font-bold text-slate-400 dark:text-slate-300 mb-0.5">
                 بەرزترین بەردەوامی
               </span>
               <div className="flex items-center justify-center gap-1">
@@ -232,11 +232,11 @@ export function StudentStreakAndBadges({
                   {longestStreak}
                 </span>
               </div>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400">ڕۆژی تەواو</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-300">ڕۆژی تەواو</span>
             </div>
 
             <div className="bg-white dark:bg-slate-800/80 p-3.5 rounded-xl border border-slate-100 dark:border-slate-700/60 text-center">
-              <span className="block font-sans text-[11px] font-bold text-slate-400 dark:text-slate-400 mb-0.5">
+              <span className="block font-sans text-[11px] font-bold text-slate-400 dark:text-slate-300 mb-0.5">
                 کۆی ئەرکەکان
               </span>
               <div className="flex items-center justify-center gap-1">
@@ -245,7 +245,7 @@ export function StudentStreakAndBadges({
                   {totalTasksCompleted}
                 </span>
               </div>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400">ئەرکی تەواوکراو</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-300">ئەرکی تەواوکراو</span>
             </div>
           </div>
 
@@ -273,7 +273,7 @@ export function StudentStreakAndBadges({
                         ? "bg-amber-500 text-white shadow-xs font-black text-xs"
                         : d.isToday
                         ? "border-2 border-dashed border-amber-400 bg-amber-50/50 dark:bg-amber-950/20 text-amber-600"
-                        : "bg-slate-100 dark:bg-slate-700/50 text-slate-300 dark:text-slate-600"
+                        : "bg-slate-100 dark:bg-slate-700/50 text-slate-300 dark:text-slate-300"
                     }`}
                   >
                     {d.isCompleted ? (
@@ -320,7 +320,7 @@ export function StudentStreakAndBadges({
               <button
                 type="button"
                 onClick={() => setShowHistory(!showHistory)}
-                className="font-sans text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 flex items-center gap-1"
+                className="font-sans text-xs text-slate-500 hover:text-slate-700 dark:text-slate-300 flex items-center gap-1"
               >
                 <span>مێژووی ڕۆژە چالاکەکان ({streakHistory.length} ڕۆژ)</span>
                 {showHistory ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -356,7 +356,7 @@ export function StudentStreakAndBadges({
                 <h3 className="font-sans font-black text-sm text-slate-900 dark:text-slate-100">
                   نیشانە و دەستکەوتەکانی فێربوون (Achievement Badges)
                 </h3>
-                <p className="font-sans text-[11px] text-slate-500 dark:text-slate-400">
+                <p className="font-sans text-[11px] text-slate-500 dark:text-slate-300">
                   پاداشتی دەستکەوتە زانستییەکان وەک 'شارەزای کیمیا' و 'پێشەنگی باڵا'
                 </p>
               </div>
@@ -432,7 +432,7 @@ export function StudentStreakAndBadges({
                         <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold ${
                           badge.isUnlocked
                             ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
-                            : "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400"
+                            : "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300"
                         }`}>
                           {badge.isUnlocked ? "بەدەستهێنراوە" : getTierBadgeText(badge.tier)}
                         </span>
@@ -448,7 +448,7 @@ export function StudentStreakAndBadges({
 
                   {/* Progress bar */}
                   <div className="space-y-1 pt-1">
-                    <div className="flex items-center justify-between text-[10px] font-sans text-slate-500 dark:text-slate-400">
+                    <div className="flex items-center justify-between text-[10px] font-sans text-slate-500 dark:text-slate-300">
                       <span>{badge.progress.labelKu || `${badge.progress.current} / ${badge.progress.target}`}</span>
                       <span>{percent}%</span>
                     </div>
@@ -501,7 +501,7 @@ export function StudentStreakAndBadges({
               <p>{selectedBadge.descriptionKu}</p>
               <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-100 dark:border-slate-700/60 space-y-1">
                 <span className="font-bold block text-slate-700 dark:text-slate-200">ئاستی بەدەستهێنان:</span>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                <p className="text-[11px] text-slate-500 dark:text-slate-300">
                   {selectedBadge.progress.labelKu || `${selectedBadge.progress.current} لە ${selectedBadge.progress.target}`}
                 </p>
                 {selectedBadge.unlockedAt && (

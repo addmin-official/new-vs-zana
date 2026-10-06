@@ -303,7 +303,7 @@ export function ProfileScreen({ profile, onUpdateProfile, onResetAll }: ProfileS
               ڕووکاری بەرنامە (Theme & Mode)
             </h3>
           </div>
-          <p className="font-sans text-xs text-slate-500 dark:text-slate-400">
+          <p className="font-sans text-xs text-slate-500 dark:text-slate-300">
             شێوازی بینینی ڕووناک، تاریک یان خۆکار لەسەر بنەمای سیستەم هەڵبژێرە:
           </p>
 
@@ -387,7 +387,7 @@ export function ProfileScreen({ profile, onUpdateProfile, onResetAll }: ProfileS
             </button>
           </div>
 
-          <p className="font-sans text-xs text-slate-500 dark:text-slate-400">
+          <p className="font-sans text-xs text-slate-500 dark:text-slate-300">
             لێرەدا دەتوانیت دەنگە نەرمەکانی پاداشت و کارلێکی پرسیارەکان کارا یان بێدەنگ بکەیت.
           </p>
 
@@ -432,7 +432,7 @@ export function ProfileScreen({ profile, onUpdateProfile, onResetAll }: ProfileS
             <Settings className="w-4 h-4 text-blue-600" />
             <span>هەژمار و چوونەدەرەوە</span>
           </h3>
-          <p className="font-sans text-xs text-slate-500 dark:text-slate-400">
+          <p className="font-sans text-xs text-slate-500 dark:text-slate-300">
             دەتوانیت لە هەژمارەکەت بچیتە دەرەوە بۆ چوونەژوورەوە بە هەژمارێکی تر یان وەک میوان.
           </p>
           <ZanaButton

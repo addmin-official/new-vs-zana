@@ -33,7 +33,7 @@ export function BottomNavigation({ activeTab, onTabChange }: BottomNavigationPro
               className={`flex flex-col items-center justify-center flex-1 h-full min-h-[44px] cursor-pointer transition-colors ${
                 isActive
                   ? "text-blue-600 dark:text-blue-400 font-semibold"
-                  : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
+                  : "text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
               }`}
             >
               <Icon className={`w-4 h-4 mb-1 ${isActive ? "scale-110" : ""} transition-transform`} />

@@ -172,7 +172,7 @@ export function StudyRoomScreen({ profile, onNavigateToPractice, onNavigateToCha
                   className={`text-[10px] px-1.5 py-0.2 rounded-full ${
                     isSelected
                       ? "bg-white/20 text-white"
-                      : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
+                      : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300"
                   }`}
                 >
                   {r.activeCount}
@@ -224,7 +224,7 @@ export function StudyRoomScreen({ profile, onNavigateToPractice, onNavigateToCha
               <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
                 تایمەری قووڵبوونەوە
               </h3>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              <p className="text-[11px] text-slate-500 dark:text-slate-300">
                 کاتی تۆمارکراوی خوێندنی تۆ
               </p>
             </div>
@@ -236,7 +236,7 @@ export function StudyRoomScreen({ profile, onNavigateToPractice, onNavigateToCha
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
               isAmbiencePlaying
                 ? "bg-indigo-50 dark:bg-indigo-950/60 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300"
-                : "bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400"
+                : "bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
             }`}
             title="دەنگی کەشی خوێندن (باران و هێمنی)"
           >
@@ -260,7 +260,7 @@ export function StudyRoomScreen({ profile, onNavigateToPractice, onNavigateToCha
             <span className="font-mono text-3xl font-bold text-slate-900 dark:text-slate-100 tracking-wider">
               {formatTimer(focusSeconds)}
             </span>
-            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+            <span className="text-xs text-slate-500 dark:text-slate-300 font-medium">
               ({focusMinutes} خولەک)
             </span>
           </div>
@@ -309,7 +309,7 @@ export function StudyRoomScreen({ profile, onNavigateToPractice, onNavigateToCha
                   className={`px-2 py-1.5 rounded-lg text-xs font-medium border text-center transition-all cursor-pointer ${
                     isCurrent
                       ? `${meta.bg} ${meta.color} font-bold shadow-xs`
-                      : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50"
+                      : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50"
                   }`}
                 >
                   {meta.label}
@@ -322,7 +322,7 @@ export function StudyRoomScreen({ profile, onNavigateToPractice, onNavigateToCha
         {/* Current Concept & Goal */}
         <div className="flex flex-col gap-2 pt-1 border-t border-slate-100 dark:border-slate-800/80">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-300 flex items-center gap-1">
               <Target className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
               چەمک یان ئامانجی خوێندنت لەم ژوورەدا:
             </span>
@@ -354,7 +354,7 @@ export function StudyRoomScreen({ profile, onNavigateToPractice, onNavigateToCha
               </button>
               <button
                 onClick={() => setIsEditingGoal(false)}
-                className="text-xs text-slate-500 dark:text-slate-400 hover:underline cursor-pointer"
+                className="text-xs text-slate-500 dark:text-slate-300 hover:underline cursor-pointer"
               >
                 پاشگەزبوونەوە
               </button>
@@ -365,7 +365,7 @@ export function StudyRoomScreen({ profile, onNavigateToPractice, onNavigateToCha
                 {currentConcept || room?.featuredConcept || "خوێندنی گشتی"}
               </span>
               {goal && (
-                <span className="text-slate-600 dark:text-slate-400 block mt-0.5 text-[11px]">
+                <span className="text-slate-600 dark:text-slate-300 block mt-0.5 text-[11px]">
                   ئامانج: {goal}
                 </span>
               )}
@@ -383,7 +383,7 @@ export function StudyRoomScreen({ profile, onNavigateToPractice, onNavigateToCha
               هاوپۆلەکانت لەم چەمکەدا ({room?.participants?.length || 0})
             </h3>
           </div>
-          <span className="text-[11px] text-slate-500 dark:text-slate-400">
+          <span className="text-[11px] text-slate-500 dark:text-slate-300">
             لەسەر هەمان مەنهەج دەخوێنن
           </span>
         </div>
@@ -426,7 +426,7 @@ export function StudyRoomScreen({ profile, onNavigateToPractice, onNavigateToCha
                             </span>
                           )}
                         </div>
-                        <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                        <span className="text-[10px] text-slate-500 dark:text-slate-300">
                           پۆلی {p.grade} • {p.focusMinutes} خولەکە سەرقاڵە
                         </span>
                       </div>
@@ -441,14 +441,14 @@ export function StudyRoomScreen({ profile, onNavigateToPractice, onNavigateToCha
 
                   {/* Concept badge */}
                   <div className="bg-slate-50 dark:bg-slate-800/60 rounded-lg p-2 flex flex-col gap-0.5 border border-slate-100 dark:border-slate-800">
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                    <span className="text-[10px] text-slate-500 dark:text-slate-300">
                       چەمکی ئێستا:
                     </span>
                     <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">
                       {p.currentConcept || room.featuredConcept}
                     </p>
                     {p.goal && (
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 italic truncate">
+                      <p className="text-[11px] text-slate-500 dark:text-slate-300 italic truncate">
                         "{p.goal}"
                       </p>
                     )}
@@ -470,7 +470,7 @@ export function StudyRoomScreen({ profile, onNavigateToPractice, onNavigateToCha
                         {/* Join this concept */}
                         <button
                           onClick={() => setCurrentConcept(p.currentConcept)}
-                          className="text-[10px] text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer"
+                          className="text-[10px] text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer"
                           title="خوێندنی هەمان چەمک"
                         >
                           خوێندنی ئەمە
@@ -501,7 +501,7 @@ export function StudyRoomScreen({ profile, onNavigateToPractice, onNavigateToCha
                       </div>
                     </div>
                   ) : (
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400 text-center py-0.5">
+                    <div className="text-[11px] text-slate-500 dark:text-slate-300 text-center py-0.5">
                       ئامادەی بۆ سەرکەوتن ✨
                     </div>
                   )}
@@ -532,7 +532,7 @@ export function StudyRoomScreen({ profile, onNavigateToPractice, onNavigateToCha
               </button>
             </div>
 
-            <p className="text-xs text-slate-600 dark:text-slate-400">
+            <p className="text-xs text-slate-600 dark:text-slate-300">
               کاردانەوەیەکی بێدەنگ بنێرە بۆ ئەوەی هاوپۆلەکەت هەست بە پشتگیری بکات بێ ئەوەی لە خوێندن بکەوێت:
             </p>
 
@@ -575,7 +575,7 @@ export function StudyRoomScreen({ profile, onNavigateToPractice, onNavigateToCha
                   <span className="font-bold text-slate-900 dark:text-slate-100">
                     {m.studentName}
                   </span>
-                  <span className="text-slate-500 dark:text-slate-400 mr-1">
+                  <span className="text-slate-500 dark:text-slate-300 mr-1">
                     : {m.text}
                   </span>
                 </div>
