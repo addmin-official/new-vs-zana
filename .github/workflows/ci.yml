@@ -779,7 +779,7 @@ jobs:
   release:
     name: Generate Release Tag & Metadata
     needs: [validate, build, deploy-worker, verify-worker, smoke-tests, security-checks]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: false  # Disabled: GITHUB_TOKEN cannot push workflow files
     runs-on: ubuntu-latest
     environment: Production
     permissions: write-all
@@ -869,7 +869,7 @@ jobs:
 
   report-status:
     name: Report Pipeline Status
-    needs: [validate, build, wrangler-dry-run, deploy-worker, verify-worker, smoke-tests, security-checks, release]
+    needs: [validate, build, wrangler-dry-run, deploy-worker, verify-worker, smoke-tests, security-checks]
     if: always()
     runs-on: ubuntu-latest
     permissions:
