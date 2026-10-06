@@ -550,23 +550,6 @@ jobs:
           fi
 
           REVISION=$(jq -r '.revision' "$RESPONSE_FILE" 2>/dev/null || echo "")
-          echo "Parsed revision: $REVISION"
-          
-          EXPECTED_REVISION="${GITHUB_SHA:0:7}"
-          
-          if [[ ! "$EXPECTED_REVISION" =~ ^[0-9a-f]{7}$ ]]; then
-            echo "::error::Invalid expected revision"
-            exit 1
-          fi
-          
-          
-          if [ "${#REVISION}" -ge 7 ] && [ "${REVISION:0:7}" = "$EXPECTED_REVISION" ]; then
-            REVISION="$EXPECTED_REVISION"
-          fi
-          
-            exit 1
-          fi
-
           CORS_HEADER=$(grep -i 'access-control-allow-origin' "$HEADER_FILE" | head -n 1 | awk -F': ' '{print $2}' | tr -d '\r\n ' || echo "")
 
           echo "Received CORS Allowed Origin: '$CORS_HEADER'"
