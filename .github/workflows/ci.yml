@@ -784,6 +784,7 @@ jobs:
     environment: Production
     permissions:
       contents: write
+      actions: read
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -806,10 +807,10 @@ jobs:
           SHORT_SHA="${GITHUB_SHA:0:7}"
           RELEASE_TIME=$(date -u +"%Y%m%d-%H%M%S")
           RELEASE_TAG="release-${RELEASE_TIME}-${{ github.run_number }}-${SHORT_SHA}"
-          
+
           echo "Release Tag: $RELEASE_TAG"
           echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_ENV
-          
+
           node -e "
           const fs = require('fs');
 
@@ -859,10 +860,10 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          
+
           git tag -a "$RELEASE_TAG" -m "Automated production release $RELEASE_TAG"
           git push origin "$RELEASE_TAG"
-          
+
           gh release create "$RELEASE_TAG" \
             --title "Production Release $RELEASE_TAG" \
             --notes "Automated release triggered by GitHub Action run ${{ github.run_id }}. Commit: ${{ github.sha }}." \
