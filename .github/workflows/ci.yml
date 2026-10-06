@@ -782,9 +782,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: Production
-    permissions:
-      contents: write
-      actions: read
+    permissions: write-all
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
