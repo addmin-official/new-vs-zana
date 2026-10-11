@@ -22,7 +22,7 @@ export function ZanaButton({
 
  const variants = {
  primary: "bg-blue-600 hover:bg-blue-700 text-white focus:ring-blue-500 shadow-sm",
- secondary: "bg-slate-800 hover:bg-slate-900 text-white focus:ring-slate-700 shadow-sm",
+ secondary: "bg-slate-800 hover:bg-blue-600 text-white focus:ring-slate-700 shadow-sm",
  success: "bg-emerald-500 hover:bg-emerald-600 text-white focus:ring-emerald-400 shadow-sm",
  warning: "bg-amber-500 hover:bg-amber-600 text-white focus:ring-amber-400 shadow-sm",
  destructive: "bg-red-500 hover:bg-red-600 text-white focus:ring-red-400 shadow-sm",

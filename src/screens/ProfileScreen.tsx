@@ -63,7 +63,7 @@ export function ProfileScreen({ profile, onUpdateProfile, onResetAll }: ProfileS
       {/* Title */}
       <div className="text-right flex items-center gap-2 justify-end">
         <h2 className="font-sans font-bold text-xl text-slate-900 dark:text-white">ڕێکخستنی پڕۆفایل</h2>
-        <Settings className="w-5 h-5 text-slate-500 dark:text-slate-300" />
+        <Settings className="w-5 h-5 text-slate-700" />
       </div>
 
       {showSuccess && (
@@ -74,7 +74,7 @@ export function ProfileScreen({ profile, onUpdateProfile, onResetAll }: ProfileS
       )}
 
       {/* PHASE 15 - MASTERY & ADAPTIVE LEARNING DASHBOARD */}
-      <ZanaCard className="border-blue-150 bg-slate-50/30">
+      <ZanaCard className="border-blue-150 bg-blue-50/50">
         <div className="space-y-4 text-right" style={{ direction: "rtl" }}>
           <div className="flex items-center gap-2 justify-start border-b border-slate-100 pb-2.5 mb-2">
             <Brain className="w-5 h-5 text-blue-600" />
@@ -84,13 +84,13 @@ export function ProfileScreen({ profile, onUpdateProfile, onResetAll }: ProfileS
           </div>
 
           {loading ? (
-            <p className="font-sans text-xs text-slate-400 dark:text-slate-300 py-4 text-center">بۆ متمانەت، زانیارییەکان باردەکرێن...</p>
+            <p className="font-sans text-xs text-slate-600 py-4 text-center">بۆ متمانەت، زانیارییەکان باردەکرێن...</p>
           ) : (
             <div className="space-y-4">
               {/* Overall Score */}
               <div className="bg-white p-4 rounded-xl border border-slate-100 flex items-center justify-between gap-4">
                 <div className="text-right space-y-0.5">
-                  <span className="font-sans text-[11px] font-bold text-slate-400 dark:text-slate-300 block">نمرەی لێهاتوویی گشتی</span>
+                  <span className="font-sans text-[11px] font-bold text-slate-600 block">نمرەی لێهاتوویی گشتی</span>
                   <span className="font-sans font-black text-xl text-blue-700">
                     {Math.round((masteryProfile?.overallMasteryScore || 0) * 100)}%
                   </span>
@@ -103,7 +103,7 @@ export function ProfileScreen({ profile, onUpdateProfile, onResetAll }: ProfileS
               {/* Recommendations */}
               {recs && recs.length > 0 && (
                 <div className="space-y-2">
-                  <span className="font-sans text-xs font-bold text-slate-500 dark:text-slate-300 block">پێشنیارە گونجێنراوەکانی زانا (Adaptive Recommendations)</span>
+                  <span className="font-sans text-xs font-bold text-slate-700 block">پێشنیارە گونجێنراوەکانی زانا (Adaptive Recommendations)</span>
                   {recs.map((r) => (
                     <div key={r.id} className="bg-amber-50/40 p-3 rounded-xl border border-amber-100/70 text-right space-y-1.5">
                       <div className="flex items-center gap-1.5 justify-start text-amber-800">
@@ -131,7 +131,7 @@ export function ProfileScreen({ profile, onUpdateProfile, onResetAll }: ProfileS
                       <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
                       <div className="space-y-0.5 flex-1">
                         <span className="font-sans font-bold text-xs text-red-800 block">{m.nameKu}</span>
-                        <span className="font-sans text-[10px] text-slate-500 dark:text-slate-300 block">تەواوی دووبارەبوونەوە: {m.count} جار</span>
+                        <span className="font-sans text-[10px] text-slate-700 block">تەواوی دووبارەبوونەوە: {m.count} جار</span>
                       </div>
                     </div>
                   ))}
@@ -140,10 +140,10 @@ export function ProfileScreen({ profile, onUpdateProfile, onResetAll }: ProfileS
 
               {/* Concept Masteries List */}
               <div className="space-y-2">
-                <span className="font-sans text-xs font-bold text-slate-500 dark:text-slate-300 block">چەمکەکانی خشتەی خوێندن و فێربوون</span>
+                <span className="font-sans text-xs font-bold text-slate-700 block">چەمکەکانی خشتەی خوێندن و فێربوون</span>
                 {Object.keys(masteryProfile?.conceptMasteries || {}).length === 0 ? (
                   <div className="text-center p-6 bg-white border border-slate-100 rounded-xl">
-                    <p className="font-sans text-xs text-slate-400 dark:text-slate-300">تا ئێستا هیچ تاقیکردنەوە یان ڕاهێنانێک ئەنجام نەدراوە.</p>
+                    <p className="font-sans text-xs text-slate-600">تا ئێستا هیچ تاقیکردنەوە یان ڕاهێنانێک ئەنجام نەدراوە.</p>
                   </div>
                 ) : (
                   <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
@@ -214,7 +214,7 @@ export function ProfileScreen({ profile, onUpdateProfile, onResetAll }: ProfileS
 
           {/* Name */}
           <div className="space-y-1">
-            <label className="block text-right font-sans text-xs font-bold text-slate-500 dark:text-slate-300">
+            <label className="block text-right font-sans text-xs font-bold text-slate-700">
               ناوی قوتابی
             </label>
             <input
@@ -228,7 +228,7 @@ export function ProfileScreen({ profile, onUpdateProfile, onResetAll }: ProfileS
 
           {/* Grade selection */}
           <div className="space-y-1">
-            <label className="block text-right font-sans text-xs font-bold text-slate-500 dark:text-slate-300">
+            <label className="block text-right font-sans text-xs font-bold text-slate-700">
               پۆلی خوێندن
             </label>
             <select
@@ -247,7 +247,7 @@ export function ProfileScreen({ profile, onUpdateProfile, onResetAll }: ProfileS
 
           {/* Subject selection */}
           <div className="space-y-1">
-            <label className="block text-right font-sans text-xs font-bold text-slate-500 dark:text-slate-300">
+            <label className="block text-right font-sans text-xs font-bold text-slate-700">
               بابەتی خوێندن
             </label>
             <select
@@ -271,7 +271,7 @@ export function ProfileScreen({ profile, onUpdateProfile, onResetAll }: ProfileS
 
           {/* Level selection */}
           <div className="space-y-1">
-            <label className="block text-right font-sans text-xs font-bold text-slate-500 dark:text-slate-300">
+            <label className="block text-right font-sans text-xs font-bold text-slate-700">
               ئاستی ئێستای فێربوون
             </label>
             <select
@@ -303,7 +303,7 @@ export function ProfileScreen({ profile, onUpdateProfile, onResetAll }: ProfileS
               ڕووکاری بەرنامە (Theme & Mode)
             </h3>
           </div>
-          <p className="font-sans text-xs text-slate-500 dark:text-slate-400">
+          <p className="font-sans text-xs text-slate-500 dark:text-slate-600">
             شێوازی بینینی ڕووناک، تاریک یان خۆکار لەسەر بنەمای سیستەم هەڵبژێرە:
           </p>
 
@@ -343,7 +343,7 @@ export function ProfileScreen({ profile, onUpdateProfile, onResetAll }: ProfileS
                   : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-300"
               }`}
             >
-              <Laptop className="w-5 h-5 text-slate-500 dark:text-slate-300" />
+              <Laptop className="w-5 h-5 text-slate-700" />
               <span className="font-sans text-xs">سیستەم</span>
             </button>
           </div>
@@ -387,7 +387,7 @@ export function ProfileScreen({ profile, onUpdateProfile, onResetAll }: ProfileS
             </button>
           </div>
 
-          <p className="font-sans text-xs text-slate-500 dark:text-slate-400">
+          <p className="font-sans text-xs text-slate-500 dark:text-slate-600">
             لێرەدا دەتوانیت دەنگە نەرمەکانی پاداشت و کارلێکی پرسیارەکان کارا یان بێدەنگ بکەیت.
           </p>
 
@@ -432,7 +432,7 @@ export function ProfileScreen({ profile, onUpdateProfile, onResetAll }: ProfileS
             <Settings className="w-4 h-4 text-blue-600" />
             <span>هەژمار و چوونەدەرەوە</span>
           </h3>
-          <p className="font-sans text-xs text-slate-500 dark:text-slate-400">
+          <p className="font-sans text-xs text-slate-500 dark:text-slate-600">
             دەتوانیت لە هەژمارەکەت بچیتە دەرەوە بۆ چوونەژوورەوە بە هەژمارێکی تر یان وەک میوان.
           </p>
           <ZanaButton
@@ -456,7 +456,7 @@ export function ProfileScreen({ profile, onUpdateProfile, onResetAll }: ProfileS
             <AlertTriangle className="w-4 h-4 text-red-600" />
             <span>ناوچەی مەترسیدار</span>
           </h3>
-          <p className="font-sans text-xs text-slate-400 dark:text-slate-300">
+          <p className="font-sans text-xs text-slate-600">
             کرداری خوارەوە دەبێتە هۆی سرڕینەوەی بەردەوامی زانیارییەکانت.
           </p>
 
@@ -482,7 +482,7 @@ export function ProfileScreen({ profile, onUpdateProfile, onResetAll }: ProfileS
             <h4 className="font-sans font-bold text-base text-slate-900 dark:text-white">
               دڵنیایت لە سڕینەوەی گشتی؟
             </h4>
-            <p className="font-sans text-xs text-slate-500 dark:text-slate-300 leading-relaxed">
+            <p className="font-sans text-xs text-slate-700 leading-relaxed">
               ئەم کردارە تەواوی ناسنامەی قوتابی، پێشکەوتنەکان، نمرەی تاقیکردنەوەکان و مێژووی چات لەگەڵ زانا بە تەواوی ڕەشدەکاتەوە.
             </p>
             <div className="flex gap-2 justify-end">
