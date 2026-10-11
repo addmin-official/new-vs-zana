@@ -69,7 +69,7 @@ export const ScienceVirtualLab: React.FC<ScienceVirtualLabProps> = ({ data, onCo
  const bulbColor = `rgba(251, 191, 36, ${glowIntensity})`;
 
  return (
- <div className="bg-slate-900 rounded-2xl p-4 text-white space-y-4">
+ <div className="bg-blue-50 rounded-2xl p-4 text-blue-900 border-2 border-blue-200 space-y-4">
  {/* Lab Toolbar */}
  <div className="flex items-center justify-between pb-1 border-b border-slate-800">
  <span className="text-[11px] font-bold text-sky-400">خولگەی کارەبایی ڕاستەوخۆ</span>
@@ -243,7 +243,7 @@ export const ScienceVirtualLab: React.FC<ScienceVirtualLabProps> = ({ data, onCo
  }
 
  return (
- <div className="bg-slate-900 rounded-2xl p-4 text-white space-y-4">
+ <div className="bg-blue-50 rounded-2xl p-4 text-blue-900 border-2 border-blue-200 space-y-4">
  {/* Titration Bench Canvas */}
  <div className="relative w-full h-56 bg-slate-950/80 border border-slate-800 rounded-xl flex items-center justify-center p-2 select-none overflow-hidden">
  <svg width="300" height="200" className="overflow-visible">
@@ -345,7 +345,7 @@ export const ScienceVirtualLab: React.FC<ScienceVirtualLabProps> = ({ data, onCo
  const acceleration = parseFloat((appliedForce / mass).toFixed(2));
 
  return (
- <div className="bg-slate-900 rounded-2xl p-4 text-white space-y-4">
+ <div className="bg-blue-50 rounded-2xl p-4 text-blue-900 border-2 border-blue-200 space-y-4">
  {/* Track Canvas */}
  <div className="relative w-full h-48 bg-slate-950/80 border border-slate-800 rounded-xl flex items-center justify-center p-2 select-none overflow-hidden">
  <svg width="300" height="160">

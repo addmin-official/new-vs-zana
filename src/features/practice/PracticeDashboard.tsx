@@ -163,7 +163,7 @@ export const PracticeDashboard: React.FC<PracticeDashboardProps> = ({
  onClick={() => setSelectedGrade(g.id)}
  className={`px-3 py-1.5 rounded-xl transition-all shrink-0 cursor-pointer text-xs ${
  selectedGrade === g.id
- ? "bg-slate-900 text-white font-bold"
+ ? "bg-blue-600 text-white font-bold"
  : "bg-white border border-slate-200 text-slate-600 hover:border-slate-300"
  }`}
  >

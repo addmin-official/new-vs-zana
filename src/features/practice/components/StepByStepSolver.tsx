@@ -107,7 +107,7 @@ export const StepByStepSolver: React.FC<StepByStepSolverProps> = ({ data, onComp
  </p>
 
  {data.problemContextKu && (
- <div className="bg-slate-900 text-white rounded-xl p-3 text-center font-mono text-base font-bold tracking-wider" dir="ltr">
+ <div className="bg-blue-50 border-2 border-blue-200 text-blue-900 rounded-xl p-3 text-center font-mono text-base font-bold tracking-wider" dir="ltr">
  {data.problemContextKu}
  </div>
  )}

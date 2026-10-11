@@ -730,7 +730,7 @@ export function AssessmentIntelligencePanel({
  <div className="pt-2">
  <button
  onClick={handleNext}
- className="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-sans text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer min-h-[40px]"
+ className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-sans text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer min-h-[40px]"
  >
  <span>{isLastQuestion ? "بینینی ئەنجامی کۆتایی" : "پرسیاری داهاتوو"}</span>
  <ChevronRight className="w-4 h-4 rotate-180 shrink-0" />

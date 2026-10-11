@@ -247,7 +247,7 @@ export function PracticePanel({
  ? !(shortAnswers[question.id]?.trim())
  : !selectedChoices[question.id])
  }
- className="w-full py-2 bg-slate-900 hover:bg-slate-950 text-white font-sans text-xs font-black rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-1.5"
+ className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-sans text-xs font-black rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-1.5"
  style={{ minHeight: "44px" }}
  >
  {isLoading ? (

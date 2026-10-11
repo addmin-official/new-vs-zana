@@ -104,7 +104,7 @@ export const InteractiveDiagramViewer: React.FC<InteractiveDiagramViewerProps> =
  const yInterceptSvgY = centerY - yIntercept * scale;
 
  return (
- <div className="flex flex-col items-center justify-center p-3 bg-slate-900 rounded-2xl text-white">
+ <div className="flex flex-col items-center justify-center p-3 bg-blue-50 rounded-2xl text-blue-900 border-2 border-blue-200">
  <svg width="300" height="300" className="overflow-hidden select-none">
  {/* Grid lines */}
  {[-5, -4, -3, -2, -1, 1, 2, 3, 4, 5].map((i) => (
@@ -195,7 +195,7 @@ export const InteractiveDiagramViewer: React.FC<InteractiveDiagramViewerProps> =
  const mCoords = getShellCoords(110, mElectrons);
 
  return (
- <div className="flex flex-col items-center justify-center p-3 bg-slate-900 rounded-2xl text-white">
+ <div className="flex flex-col items-center justify-center p-3 bg-blue-50 rounded-2xl text-blue-900 border-2 border-blue-200">
  <svg width="300" height="280" className="select-none">
  {/* Orbits */}
  <circle cx={centerX} cy={centerY} r="40" fill="none" stroke="#334155" strokeWidth="1.5" strokeDasharray="3,3" />

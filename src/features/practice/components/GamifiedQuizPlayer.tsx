@@ -114,7 +114,7 @@ export const GamifiedQuizPlayer: React.FC<GamifiedQuizPlayerProps> = ({ data, on
  return (
  <div id="gamified-quiz-player" className="space-y-4" dir="rtl">
  {/* Gamified Header: Points, Streak, Timer */}
- <div className="bg-slate-900 text-white rounded-2xl p-4 shadow-xs space-y-3">
+ <div className="bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-2xl p-4 shadow-xs space-y-3">
  <div className="flex items-center justify-between">
  <div className="flex items-center gap-2">
  <span className="bg-amber-500 text-slate-950 font-black text-xs px-2.5 py-1 rounded-lg font-mono flex items-center gap-1">
