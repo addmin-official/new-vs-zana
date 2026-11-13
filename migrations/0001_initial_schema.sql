@@ -18,6 +18,5 @@ CREATE TABLE IF NOT EXISTS learning_records (
   FOREIGN KEY (student_id) REFERENCES students(id)
 );
 
-CREATE INDEX idx_students_firebase_uid ON students(firebase_uid);
-CREATE INDEX idx_learning_records_student ON 
-learning_records(student_id);
+CREATE INDEX IF NOT EXISTS idx_students_firebase_uid ON students(firebase_uid);
+CREATE INDEX IF NOT EXISTS idx_learning_records_student ON learning_records(student_id);
