@@ -433,6 +433,7 @@ export interface ExecutionPlan {
   resultReportKu?: string;
   learningsRecorded?: string[];
   affectedFiles?: string[];
+  isExecuted?: boolean;
 }
 
 export interface AuditLogEntry {

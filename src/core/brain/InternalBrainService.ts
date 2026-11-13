@@ -5,6 +5,7 @@
  * and safe 10-step execution framework.
  */
 
+import crypto from 'node:crypto';
 import {
   ActionLevel,
   AdminPreferenceMemory,
@@ -37,31 +38,25 @@ import {
 // Cryptographic 256-bit audit hash representation for tamper-evident chaining
 function computeSimpleHash(input: string): string {
   try {
-    if (typeof process !== 'undefined' && process.versions?.node) {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const crypto = require('node:crypto');
-      if (crypto && typeof crypto.createHash === 'function') {
-        return crypto.createHash('sha256').update(input).digest('hex');
-      }
-    }
+    return crypto.createHash('sha256').update(input).digest('hex');
   } catch {
     // browser or edge fallback
+    let h0 = 0x6a09e667, h1 = 0xbb67ae85, h2 = 0x3c6ef372, h3 = 0xa54ff53a;
+    let h4 = 0x510e527f, h5 = 0x9b05688c, h6 = 0x1f83d9ab, h7 = 0x5be0cd19;
+    for (let i = 0; i < input.length; i++) {
+      const code = input.charCodeAt(i);
+      h0 = ((h0 << 5) - h0 + code) | 0;
+      h1 = ((h1 << 7) - h1 + (code * 31)) | 0;
+      h2 = ((h2 << 11) - h2 + (code * 17)) | 0;
+      h3 = ((h3 << 13) - h3 + (code * 23)) | 0;
+      h4 = ((h4 << 17) - h4 + (code * 29)) | 0;
+      h5 = ((h5 << 19) - h5 + (code * 37)) | 0;
+      h6 = ((h6 << 23) - h6 + (code * 41)) | 0;
+      h7 = ((h7 << 29) - h7 + (code * 43)) | 0;
+    }
+    const toHex = (n: number) => (n >>> 0).toString(16).padStart(8, '0');
+    return `${toHex(h0)}${toHex(h1)}${toHex(h2)}${toHex(h3)}${toHex(h4)}${toHex(h5)}${toHex(h6)}${toHex(h7)}`;
   }
-  let h0 = 0x6a09e667, h1 = 0xbb67ae85, h2 = 0x3c6ef372, h3 = 0xa54ff53a;
-  let h4 = 0x510e527f, h5 = 0x9b05688c, h6 = 0x1f83d9ab, h7 = 0x5be0cd19;
-  for (let i = 0; i < input.length; i++) {
-    const code = input.charCodeAt(i);
-    h0 = ((h0 << 5) - h0 + code) | 0;
-    h1 = ((h1 << 7) - h1 + (code * 31)) | 0;
-    h2 = ((h2 << 11) - h2 + (code * 17)) | 0;
-    h3 = ((h3 << 13) - h3 + (code * 23)) | 0;
-    h4 = ((h4 << 17) - h4 + (code * 29)) | 0;
-    h5 = ((h5 << 19) - h5 + (code * 37)) | 0;
-    h6 = ((h6 << 23) - h6 + (code * 41)) | 0;
-    h7 = ((h7 << 29) - h7 + (code * 43)) | 0;
-  }
-  const toHex = (n: number) => (n >>> 0).toString(16).padStart(8, '0');
-  return `${toHex(h0)}${toHex(h1)}${toHex(h2)}${toHex(h3)}${toHex(h4)}${toHex(h5)}${toHex(h6)}${toHex(h7)}`;
 }
 
 // Redact confidential patterns (tokens, passwords, private keys, bearer headers)
@@ -555,6 +550,8 @@ export class InternalBrainService {
     ['/cache/curriculum_edge_cache.bin', 'ACTIVE_CACHE_DATA_V1'],
     ['/config/system_thresholds.json', '{"maxConcurrency":50,"rateLimit":100}'],
   ]);
+  private executingCommands: Set<string> = new Set();
+  private executedCommandIds: Set<string> = new Set();
 
   // --- 12. Golden Tests Suite (8 Categories) ---
   private goldenTests: GoldenTestCase[] = [
@@ -1566,6 +1563,22 @@ export class InternalBrainService {
       return plan;
     }
 
+    if (this.executedCommandIds.has(plan.commandId) || (registered && registered.isExecuted)) {
+      advance('approve');
+      plan.isApproved = false;
+      plan.resultReport = 'Execution rejected: Plan has already been executed (replay prevented).';
+      plan.resultReportKu = 'ڕەتکرایەوە: ئەم پلانە پێشتر جێبەجێکراوە و ناتوانرێت دووبارە بکرێتەوە.';
+      return plan;
+    }
+
+    if (this.executingCommands.has(plan.commandId)) {
+      advance('approve');
+      plan.isApproved = false;
+      plan.resultReport = 'Execution rejected: Concurrent execution conflict for this plan.';
+      plan.resultReportKu = 'ڕەتکرایەوە: داواکارییەکی هاوکات بۆ ئەم پلانە لە ئێستادا لە جێبەجێکردندایە.';
+      return plan;
+    }
+
     // Prevent execution if ambiguous/no tools matched
     if (plan.steps.length === 0) {
       advance('report');
@@ -1574,21 +1587,33 @@ export class InternalBrainService {
       return plan;
     }
 
-    // 7. Execute
-    advance('execute');
-    for (const step of plan.steps) {
-      step.status = 'executing';
-      await new Promise((r) => setTimeout(r, 80));
-      step.isExecuted = true;
-      step.status = 'success';
-      step.executionLog = `Tool [${step.toolId}] completed successfully at Action Level ${step.actionLevel}. Snapshot recorded.`;
-    }
-
-    // If mutating, apply state mutation
-    if (plan.rollbackAvailable && plan.affectedFiles && plan.affectedFiles.length > 0) {
-      for (const targetPath of plan.affectedFiles) {
-        this.managedStateStore.set(targetPath, `MUTATED_BY_${plan.commandId}_AT_${Date.now()}`);
+    this.executingCommands.add(plan.commandId);
+    try {
+      // 7. Execute
+      advance('execute');
+      for (const step of plan.steps) {
+        step.status = 'executing';
+        await new Promise((r) => setTimeout(r, 80));
+        step.isExecuted = true;
+        step.status = 'success';
+        step.executionLog = `Tool [${step.toolId}] completed successfully at Action Level ${step.actionLevel}. Snapshot recorded.`;
       }
+
+      // If mutating, apply state mutation
+      if (plan.rollbackAvailable && plan.affectedFiles && plan.affectedFiles.length > 0) {
+        for (const targetPath of plan.affectedFiles) {
+          this.managedStateStore.set(targetPath, `MUTATED_BY_${plan.commandId}_AT_${Date.now()}`);
+        }
+      }
+
+      // Mark executed for idempotency
+      this.executedCommandIds.add(plan.commandId);
+      plan.isExecuted = true;
+      if (registered) {
+        registered.isExecuted = true;
+      }
+    } finally {
+      this.executingCommands.delete(plan.commandId);
     }
 
     // 8. Verify
