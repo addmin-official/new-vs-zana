@@ -1807,9 +1807,10 @@ export default {
         }
         const brainService = InternalBrainService.getInstance();
         const executedPlan = await brainService.executePipeline(body.plan);
+        const isRejected = executedPlan.requiresApproval && !executedPlan.isApproved;
         return new Response(
-          JSON.stringify({ ok: true, plan: executedPlan }),
-          { status: 200, headers: responseHeaders }
+          JSON.stringify({ ok: !isRejected, plan: executedPlan }),
+          { status: isRejected ? 400 : 200, headers: responseHeaders }
         );
       }
 
@@ -1848,11 +1849,12 @@ export default {
         });
       }
 
-      // GET /api/admin/brain/audit (Audit History)
+      // GET /api/admin/brain/audit (Audit History & Chain Integrity)
       if (pathname === "/api/admin/brain/audit" && request.method === "GET") {
         const brainService = InternalBrainService.getInstance();
+        const integrity = brainService.verifyAuditChainIntegrity();
         return new Response(
-          JSON.stringify({ ok: true, auditLog: brainService.getAuditLog() }),
+          JSON.stringify({ ok: true, auditLog: brainService.getAuditLog(), integrity }),
           { status: 200, headers: responseHeaders }
         );
       }
@@ -1860,8 +1862,11 @@ export default {
       // GET /api/admin/brain/preferences (Admin Preference Memory)
       if (pathname === "/api/admin/brain/preferences" && request.method === "GET") {
         const brainService = InternalBrainService.getInstance();
+        const preferences = (verifiedAdmin?.role as AdminRole) === "super_admin"
+          ? brainService.getPreferenceMemory()
+          : brainService.getPreferenceMemory(verifiedAdmin?.uid);
         return new Response(
-          JSON.stringify({ ok: true, preferences: brainService.getPreferenceMemory() }),
+          JSON.stringify({ ok: true, preferences }),
           { status: 200, headers: responseHeaders }
         );
       }
@@ -1870,11 +1875,18 @@ export default {
       if (pathname === "/api/admin/brain/preferences" && request.method === "POST") {
         const body = (await request.json().catch(() => ({}))) as Partial<AdminPreferenceMemory>;
         const brainService = InternalBrainService.getInstance();
-        const updated = brainService.updatePreferenceMemory(body, verifiedAdmin?.uid || "admin_sys_01");
-        return new Response(
-          JSON.stringify({ ok: true, preference: updated }),
-          { status: 200, headers: responseHeaders }
-        );
+        try {
+          const updated = brainService.updatePreferenceMemory(body, verifiedAdmin?.uid || "admin_sys_01");
+          return new Response(
+            JSON.stringify({ ok: true, preference: updated }),
+            { status: 200, headers: responseHeaders }
+          );
+        } catch (err) {
+          return new Response(
+            JSON.stringify({ ok: false, error: (err as Error).message }),
+            { status: 400, headers: responseHeaders }
+          );
+        }
       }
 
       // /api/study-rooms*

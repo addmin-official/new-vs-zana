@@ -28,7 +28,7 @@ import { handleFeedbackRoute } from "./api/feedback.ts";
 import { handleTelemetryExportRoute } from "./api/internal/telemetryExport.ts";
 import { handleHealthRoute, handleCurriculumHealthRoute } from "./api/health.ts";
 import { handleStudyRoomsRoute } from "./api/studyRooms.ts";
-import { verifyAdmin } from "../worker/adminGuard.ts";
+import { verifyAdmin, type AdminVerifyResult } from "../worker/adminGuard.ts";
 import { InternalBrainService } from "../core/brain/InternalBrainService.ts";
 import type { AdminRole, ExecutionPlan, AdminPreferenceMemory } from "../core/brain/types.ts";
 
@@ -66,6 +66,8 @@ app.use(async (req: Request, res: Response, next: NextFunction) => {
     const check = await verifyAdmin(webReq, {
       VITE_FIREBASE_API_KEY: process.env.VITE_FIREBASE_API_KEY,
       ADMIN_TELEMETRY_SECRET: process.env.ADMIN_TELEMETRY_SECRET,
+      ALLOW_TEST_AUTH_MOCK: process.env.ALLOW_TEST_AUTH_MOCK,
+      ZANA_ENV: process.env.ZANA_ENV,
     });
     if (!check.ok) {
       return res.status(403).json({
@@ -73,6 +75,7 @@ app.use(async (req: Request, res: Response, next: NextFunction) => {
         detail: check.error || "دەستگەیشتن ڕەتکرایەوە. تەنها ئادمین دەتوانێت دەستی پێی بگات.",
       });
     }
+    res.locals.admin = check;
     next();
   } catch (err) {
     return res.status(403).json({ error: "Unauthorized", detail: String(err) });
@@ -1030,30 +1033,32 @@ app.get("/api/admin/brain/metrics", (req: Request, res: Response) => {
 });
 
 app.post("/api/admin/brain/command/plan", (req: Request, res: Response) => {
+  const admin = res.locals.admin as AdminVerifyResult | undefined;
   const commandText = (req.body?.command as string) || "";
   const brainService = InternalBrainService.getInstance();
   const plan = brainService.prepareExecutionPlan(commandText);
   const perm = brainService.checkPermission(plan, {
-    id: "admin_express",
-    name: "Express Admin",
-    role: "super_admin" as AdminRole,
-    email: "admin@example.com",
+    id: admin?.uid || "admin",
+    name: admin?.email || "Admin",
+    role: (admin?.role as AdminRole) || "super_admin",
+    email: admin?.email || "admin@example.com",
     permissions: ["*"],
   });
   res.json({ ok: true, plan, permission: perm });
 });
 
 app.post("/api/admin/brain/command/approve", (req: Request, res: Response) => {
+  const admin = res.locals.admin as AdminVerifyResult | undefined;
   const { plan, isSecondarySignOff } = req.body as { plan?: ExecutionPlan; isSecondarySignOff?: boolean };
   if (!plan) {
     return res.status(400).json({ ok: false, error: "Missing plan payload" });
   }
   const brainService = InternalBrainService.getInstance();
   const approverUser = {
-    id: "admin_express_uid",
-    name: "Express Admin Approver",
-    role: "super_admin" as AdminRole,
-    email: "admin@example.com",
+    id: admin?.uid || "admin_uid",
+    name: admin?.email || "Admin Approver",
+    role: (admin?.role as AdminRole) || "super_admin",
+    email: admin?.email || "admin@example.com",
     permissions: ["*"],
   };
   const result = brainService.approvePlan(plan, approverUser, Boolean(isSecondarySignOff));
@@ -1067,7 +1072,8 @@ app.post("/api/admin/brain/command/execute", async (req: Request, res: Response)
   }
   const brainService = InternalBrainService.getInstance();
   const executedPlan = await brainService.executePipeline(plan);
-  res.json({ ok: true, plan: executedPlan });
+  const isRejected = executedPlan.requiresApproval && !executedPlan.isApproved;
+  res.status(isRejected ? 400 : 200).json({ ok: !isRejected, plan: executedPlan });
 });
 
 app.post("/api/admin/brain/command/rollback", (req: Request, res: Response) => {
@@ -1093,19 +1099,29 @@ app.post("/api/admin/brain/golden-tests/run", (req: Request, res: Response) => {
 
 app.get("/api/admin/brain/audit", (req: Request, res: Response) => {
   const brainService = InternalBrainService.getInstance();
-  res.json({ ok: true, auditLog: brainService.getAuditLog() });
+  const integrity = brainService.verifyAuditChainIntegrity();
+  res.json({ ok: true, auditLog: brainService.getAuditLog(), integrity });
 });
 
 app.get("/api/admin/brain/preferences", (req: Request, res: Response) => {
+  const admin = res.locals.admin as AdminVerifyResult | undefined;
   const brainService = InternalBrainService.getInstance();
-  res.json({ ok: true, preferences: brainService.getPreferenceMemory() });
+  const preferences = (admin?.role as AdminRole) === "super_admin"
+    ? brainService.getPreferenceMemory()
+    : brainService.getPreferenceMemory(admin?.uid);
+  res.json({ ok: true, preferences });
 });
 
 app.post("/api/admin/brain/preferences", (req: Request, res: Response) => {
+  const admin = res.locals.admin as AdminVerifyResult | undefined;
   const body = req.body as Partial<AdminPreferenceMemory>;
   const brainService = InternalBrainService.getInstance();
-  const updated = brainService.updatePreferenceMemory(body, "admin_express_uid");
-  res.json({ ok: true, preference: updated });
+  try {
+    const updated = brainService.updatePreferenceMemory(body, admin?.uid || "admin_sys_01");
+    res.json({ ok: true, preference: updated });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: (err as Error).message });
+  }
 });
 
 app.all("/api/study-rooms*", async (req: Request, res: Response) => {

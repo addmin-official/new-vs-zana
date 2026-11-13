@@ -551,6 +551,10 @@ export class InternalBrainService {
 
   private plannedCommands: Map<string, ExecutionPlan> = new Map();
   private stateSnapshots: Map<string, { targetPath: string; previousData: Record<string, unknown>; timestamp: string }> = new Map();
+  private managedStateStore: Map<string, string> = new Map([
+    ['/cache/curriculum_edge_cache.bin', 'ACTIVE_CACHE_DATA_V1'],
+    ['/config/system_thresholds.json', '{"maxConcurrency":50,"rateLimit":100}'],
+  ]);
 
   // --- 12. Golden Tests Suite (8 Categories) ---
   private goldenTests: GoldenTestCase[] = [
@@ -857,11 +861,31 @@ export class InternalBrainService {
   public getDecisionMemory(): DecisionMemoryItem[] {
     return [...this.decisionMemory];
   }
-  public getPreferenceMemory(): AdminPreferenceMemory[] {
+  public getPreferenceMemory(adminId?: string): AdminPreferenceMemory[] {
+    if (adminId) {
+      return this.preferenceMemory.filter((p) => p.adminId === adminId);
+    }
     return [...this.preferenceMemory];
   }
 
   public updatePreferenceMemory(updates: Partial<AdminPreferenceMemory>, adminId = 'admin_sys_01'): AdminPreferenceMemory {
+    if (updates.riskToleranceThreshold !== undefined) {
+      if (typeof updates.riskToleranceThreshold !== 'number' || updates.riskToleranceThreshold < 0 || updates.riskToleranceThreshold > 100) {
+        throw new Error('Invalid riskToleranceThreshold: must be a number between 0 and 100');
+      }
+    }
+    if (updates.notificationFrequency !== undefined) {
+      const allowed = ['realtime', 'daily_digest'];
+      if (!allowed.includes(updates.notificationFrequency)) {
+        throw new Error(`Invalid notificationFrequency: must be one of ${allowed.join(', ')}`);
+      }
+    }
+    if (updates.languagePreference !== undefined) {
+      const allowed = ['ku', 'en', 'bilingual'];
+      if (!allowed.includes(updates.languagePreference)) {
+        throw new Error(`Invalid languagePreference: must be one of ${allowed.join(', ')}`);
+      }
+    }
     let existing = this.preferenceMemory.find((p) => p.adminId === adminId);
     if (!existing) {
       existing = {
@@ -892,6 +916,59 @@ export class InternalBrainService {
 
   public getStateSnapshot(commandId: string): { targetPath: string; previousData: Record<string, unknown>; timestamp: string } | undefined {
     return this.stateSnapshots.get(commandId);
+  }
+
+  public getManagedState(path: string): string | undefined {
+    return this.managedStateStore.get(path);
+  }
+
+  public setManagedState(path: string, content: string): void {
+    this.managedStateStore.set(path, content);
+  }
+
+  public computeAuditHash(entry: Omit<AuditLogEntry, 'tamperProofHash'> & { tamperProofHash?: string }): string {
+    if (entry.id === 'audit_init_01' && entry.previousHash === '0000000000000000') {
+      return computeSimpleHash(`genesis:${entry.id}:${entry.executionStatus}`);
+    }
+    const payload = [
+      entry.previousHash,
+      entry.id,
+      entry.timestamp,
+      entry.commandId,
+      entry.actor.id,
+      entry.actionLevel,
+      entry.riskScore,
+      entry.commandText,
+      entry.executionStatus,
+    ].join(':');
+    return computeSimpleHash(payload);
+  }
+
+  public verifyAuditChainIntegrity(): { isValid: boolean; brokenAtIndex?: number; brokenEntryId?: string; reason?: string } {
+    for (let i = 0; i < this.auditLog.length; i++) {
+      const entry = this.auditLog[i];
+      const expectedHash = this.computeAuditHash(entry);
+      if (entry.tamperProofHash !== expectedHash) {
+        return {
+          isValid: false,
+          brokenAtIndex: i,
+          brokenEntryId: entry.id,
+          reason: `Hash mismatch on entry ${entry.id}: computed ${expectedHash} != stored ${entry.tamperProofHash}`,
+        };
+      }
+      if (i < this.auditLog.length - 1) {
+        const nextOlder = this.auditLog[i + 1];
+        if (entry.previousHash !== nextOlder.tamperProofHash) {
+          return {
+            isValid: false,
+            brokenAtIndex: i,
+            brokenEntryId: entry.id,
+            reason: `Chain broken between ${entry.id} and ${nextOlder.id}: previousHash ${entry.previousHash} != older entry hash ${nextOlder.tamperProofHash}`,
+          };
+        }
+      }
+    }
+    return { isValid: true };
   }
 
   // --- 12. Golden Tests Suite Execution ---
@@ -1287,11 +1364,13 @@ export class InternalBrainService {
       affectedFiles,
     };
 
-    this.plannedCommands.set(commandId, plan);
+    this.plannedCommands.set(commandId, JSON.parse(JSON.stringify(plan)) as ExecutionPlan);
     if (plan.rollbackAvailable) {
+      const targetPath = affectedFiles[0] || '/cache/curriculum_edge_cache.bin';
+      const existingContent = this.managedStateStore.get(targetPath) || 'ACTIVE_CACHE_DATA_V1';
       this.stateSnapshots.set(commandId, {
-        targetPath: affectedFiles[0] || '/cache/curriculum_edge_cache.bin',
-        previousData: { state: 'pre_mutation', commandId, timestamp: new Date().toISOString() },
+        targetPath,
+        previousData: { state: 'pre_mutation', content: existingContent, commandId, timestamp: new Date().toISOString() },
         timestamp: new Date().toISOString(),
       });
     }
@@ -1393,7 +1472,7 @@ export class InternalBrainService {
         plan.approvalTimestamp = new Date().toISOString();
         plan.currentPhase = 'execute';
         if (this.plannedCommands.has(plan.commandId)) {
-          this.plannedCommands.set(plan.commandId, plan);
+          this.plannedCommands.set(plan.commandId, JSON.parse(JSON.stringify(plan)) as ExecutionPlan);
         }
         return {
           success: true,
@@ -1406,7 +1485,7 @@ export class InternalBrainService {
       plan.approvalTimestamp = new Date().toISOString();
       plan.currentPhase = 'execute';
       if (this.plannedCommands.has(plan.commandId)) {
-        this.plannedCommands.set(plan.commandId, plan);
+        this.plannedCommands.set(plan.commandId, JSON.parse(JSON.stringify(plan)) as ExecutionPlan);
       }
       return { success: true, isFullyApproved: true };
     }
@@ -1465,10 +1544,26 @@ export class InternalBrainService {
           plan.resultReportKu = 'ڕەتکرایەوە: پەسەندکردنی دوو-قۆناغی پێویستی بە دوو بەڕێوەبەری جیاوازە.';
           return plan;
         }
+        if (plan.dualApproval.expiresAt && new Date(plan.dualApproval.expiresAt).getTime() < Date.now()) {
+          advance('approve');
+          plan.isApproved = false;
+          plan.resultReport = 'Execution rejected: Dual approval window has expired.';
+          plan.resultReportKu = 'ڕەتکرایەوە: ماوەی کارایی پەسەندکردنەکە بەسەرچووە.';
+          return plan;
+        }
       } else if (!plan.isApproved) {
         advance('approve');
         return plan;
       }
+    }
+
+    const registered = this.plannedCommands.get(plan.commandId);
+    if (registered && (registered.rawCommand !== plan.rawCommand || registered.actionLevel !== plan.actionLevel)) {
+      advance('approve');
+      plan.isApproved = false;
+      plan.resultReport = 'Execution rejected: Plan payload does not match registered server plan.';
+      plan.resultReportKu = 'ڕەتکرایەوە: دەستکاری لە پلانی پەسەندکراودا کراوە.';
+      return plan;
     }
 
     // Prevent execution if ambiguous/no tools matched
@@ -1487,6 +1582,13 @@ export class InternalBrainService {
       step.isExecuted = true;
       step.status = 'success';
       step.executionLog = `Tool [${step.toolId}] completed successfully at Action Level ${step.actionLevel}. Snapshot recorded.`;
+    }
+
+    // If mutating, apply state mutation
+    if (plan.rollbackAvailable && plan.affectedFiles && plan.affectedFiles.length > 0) {
+      for (const targetPath of plan.affectedFiles) {
+        this.managedStateStore.set(targetPath, `MUTATED_BY_${plan.commandId}_AT_${Date.now()}`);
+      }
     }
 
     // 8. Verify
@@ -1515,10 +1617,7 @@ export class InternalBrainService {
 
     // Append to tamper-evident audit log
     const lastHash = this.auditLog.length > 0 ? this.auditLog[0].tamperProofHash : '0000000000000000';
-    const auditPayload = `${lastHash}:${plan.commandId}:${this.currentUser.id}:${plan.actionLevel}:${plan.riskAssessment.score}:${Date.now()}`;
-    const newHash = computeSimpleHash(auditPayload);
-
-    this.auditLog.unshift({
+    const auditEntry: AuditLogEntry = {
       id: `audit_${Date.now()}`,
       timestamp: new Date().toISOString(),
       actor: {
@@ -1537,9 +1636,11 @@ export class InternalBrainService {
       executionStatus: 'success',
       verificationPassed: true,
       rollbackEligible: plan.rollbackAvailable,
-      tamperProofHash: newHash,
       previousHash: lastHash,
-    });
+      tamperProofHash: '',
+    };
+    auditEntry.tamperProofHash = this.computeAuditHash(auditEntry);
+    this.auditLog.unshift(auditEntry);
 
     // Record decision memory if Level 3, 4, or 5
     if (plan.actionLevel >= 3) {
@@ -1599,6 +1700,9 @@ export class InternalBrainService {
     // 1. Perform state snapshot restoration
     const snapshot = this.stateSnapshots.get(commandId);
     if (snapshot) {
+      if (typeof snapshot.previousData.content === 'string') {
+        this.managedStateStore.set(snapshot.targetPath, snapshot.previousData.content);
+      }
       this.stateSnapshots.delete(commandId);
     }
     const fileOp = this.fileOperations.find((f) => f.backupSnapshotId === auditEntry.commandId || f.id.includes(auditEntry.commandId));
@@ -1610,10 +1714,8 @@ export class InternalBrainService {
     auditEntry.executionStatus = 'rolled_back';
     auditEntry.verificationPassed = true;
 
-    // 3. Cryptographically re-hash audit chain to secure tamper-evident history
-    const rollbackEvidence = `ROLLBACK_VERIFIED:${auditEntry.id}:${Date.now()}`;
-    const previousHash = auditEntry.tamperProofHash;
-    auditEntry.tamperProofHash = computeSimpleHash(`${previousHash}:${rollbackEvidence}`);
+    // 3. Cryptographically re-hash audit chain deterministically
+    auditEntry.tamperProofHash = this.computeAuditHash(auditEntry);
 
     return {
       success: true,

@@ -299,33 +299,128 @@ describe("Admin Guard and 3-Layer Protection System", () => {
   test("Rollback & Snapshot Integrity - Restores state snapshot and verifies tamper-evident audit hash", async () => {
     const { InternalBrainService } = await import("../core/brain/InternalBrainService.ts");
     const brain = InternalBrainService.getInstance();
+    const targetPath = "/cache/curriculum_edge_cache.bin";
+    brain.setManagedState(targetPath, "ACTIVE_CACHE_DATA_V1");
+    const initialContent = brain.getManagedState(targetPath);
+    assert.strictEqual(initialContent, "ACTIVE_CACHE_DATA_V1");
+
     const plan = brain.prepareExecutionPlan("خاوێنکردنەوەی کەش");
     assert.strictEqual(plan.rollbackAvailable, true);
 
     const snapshot = brain.getStateSnapshot(plan.commandId);
     assert.ok(snapshot, "State snapshot must be recorded for reversible command");
+    assert.strictEqual(snapshot?.previousData.content, "ACTIVE_CACHE_DATA_V1");
 
+    // Execute mutation
     await brain.executePipeline(plan);
+    const mutatedContent = brain.getManagedState(targetPath);
+    assert.ok(mutatedContent && mutatedContent.startsWith(`MUTATED_BY_${plan.commandId}`), "State must be mutated post-execution");
+
+    // Rollback execution
     const rollbackRes = brain.rollbackExecution(plan.commandId);
     assert.strictEqual(rollbackRes.success, true);
     assert.strictEqual(rollbackRes.verified, true);
     assert.match(rollbackRes.messageKu, /بە تەواوی گەڕێندرایەوە/);
+
+    // Read back state post-rollback
+    const restoredContent = brain.getManagedState(targetPath);
+    assert.strictEqual(restoredContent, "ACTIVE_CACHE_DATA_V1", "State must be restored to pre-mutation snapshot");
+
+    // Verify audit chain integrity
+    const integrity = brain.verifyAuditChainIntegrity();
+    assert.strictEqual(integrity.isValid, true, "Audit chain must remain valid after rollback");
   });
 
-  test("Preference Memory - Stores and updates admin preference configuration", async () => {
+  test("Audit Chain Cryptographic Integrity - Detects tampering with log history", async () => {
     const { InternalBrainService } = await import("../core/brain/InternalBrainService.ts");
     const brain = InternalBrainService.getInstance();
+    const initialIntegrity = brain.verifyAuditChainIntegrity();
+    assert.strictEqual(initialIntegrity.isValid, true, "Initial audit chain must be valid");
+
+    const log = brain.getAuditLog();
+    assert.ok(log.length > 0, "Audit log must contain entries");
+    const targetEntry = log[0];
+    const originalText = targetEntry.commandText;
+
+    // Tamper with commandText
+    targetEntry.commandText = "سڕینەوەی نایاسایی هاککراو (TAMPERED)";
+    const tamperedIntegrity = brain.verifyAuditChainIntegrity();
+    assert.strictEqual(tamperedIntegrity.isValid, false, "Chain integrity must fail when entry content is modified");
+    assert.strictEqual(tamperedIntegrity.brokenEntryId, targetEntry.id);
+
+    // Restore original text
+    targetEntry.commandText = originalText;
+    const restoredIntegrity = brain.verifyAuditChainIntegrity();
+    assert.strictEqual(restoredIntegrity.isValid, true, "Integrity must pass when restored");
+  });
+
+  test("Dual Approval Hardening - Rejects expired approval window and modified plan payload", async () => {
+    const { InternalBrainService } = await import("../core/brain/InternalBrainService.ts");
+    const brain = InternalBrainService.getInstance();
+    const plan = brain.prepareExecutionPlan("سڕینەوەی کاتی داتا");
+    assert.strictEqual(plan.requiresDualApproval, true);
+
+    const approver1 = {
+      id: "admin_alice_01",
+      name: "Admin Alice",
+      role: "super_admin" as const,
+      email: "alice@example.com",
+      permissions: ["*"],
+    };
+    const approver2 = {
+      id: "admin_bob_02",
+      name: "Admin Bob",
+      role: "super_admin" as const,
+      email: "bob@example.com",
+      permissions: ["*"],
+    };
+
+    brain.approvePlan(plan, approver1, false);
+    brain.approvePlan(plan, approver2, true);
+
+    // Test Expiration
+    plan.dualApproval!.expiresAt = new Date(Date.now() - 5000).toISOString(); // 5s in past
+    const expiredResult = await brain.executePipeline(plan);
+    assert.strictEqual(expiredResult.isApproved, false);
+    assert.match(expiredResult.resultReportKu || "", /ماوەی کارایی پەسەندکردنەکە بەسەرچووە/);
+
+    // Test Plan Payload Tampering
+    const plan2 = brain.prepareExecutionPlan("خاوێنکردنەوەی کەش");
+    brain.approvePlan(plan2, approver1, false);
+    plan2.rawCommand = "سڕینەوەی تەواوی داتابەیس (MODIFIED_AFTER_PLAN)";
+    const tamperedPlanResult = await brain.executePipeline(plan2);
+    assert.strictEqual(tamperedPlanResult.isApproved, false);
+    assert.match(tamperedPlanResult.resultReportKu || "", /دەستکاری لە پلانی پەسەندکراودا کراوە/);
+  });
+
+  test("Preference Memory - Stores, updates, validates and scopes preferences", async () => {
+    const { InternalBrainService } = await import("../core/brain/InternalBrainService.ts");
+    const brain = InternalBrainService.getInstance();
+
+    // Valid update
     const updated = brain.updatePreferenceMemory({
-      notificationFrequency: "hourly",
+      notificationFrequency: "daily_digest",
       riskToleranceThreshold: 75,
     }, "admin_test_pref_uid");
 
     assert.strictEqual(updated.adminId, "admin_test_pref_uid");
-    assert.strictEqual(updated.notificationFrequency, "hourly");
+    assert.strictEqual(updated.notificationFrequency, "daily_digest");
     assert.strictEqual(updated.riskToleranceThreshold, 75);
 
-    const allPrefs = brain.getPreferenceMemory();
-    assert.ok(allPrefs.some((p) => p.adminId === "admin_test_pref_uid"));
+    // Validation rejection on out-of-range threshold
+    assert.throws(() => {
+      brain.updatePreferenceMemory({ riskToleranceThreshold: 150 }, "admin_test_pref_uid");
+    }, /Invalid riskToleranceThreshold/);
+
+    // Validation rejection on invalid frequency
+    assert.throws(() => {
+      brain.updatePreferenceMemory({ notificationFrequency: "instant_spam" as never }, "admin_test_pref_uid");
+    }, /Invalid notificationFrequency/);
+
+    // Scoped retrieval
+    const scoped = brain.getPreferenceMemory("admin_test_pref_uid");
+    assert.strictEqual(scoped.length, 1);
+    assert.strictEqual(scoped[0].adminId, "admin_test_pref_uid");
   });
 
   test("Worker Layer - GET & POST /api/admin/brain/preferences works for authenticated admin", async () => {
@@ -354,12 +449,108 @@ describe("Admin Guard and 3-Layer Protection System", () => {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ notificationFrequency: "digest" }),
+      body: JSON.stringify({ notificationFrequency: "daily_digest" }),
     });
     const postRes = await worker.fetch(postReq, env as never);
     assert.strictEqual(postRes.status, 200);
     const data = (await postRes.json()) as { ok?: boolean; preference?: { notificationFrequency?: string } };
     assert.strictEqual(data.ok, true);
-    assert.strictEqual(data.preference?.notificationFrequency, "digest");
+    assert.strictEqual(data.preference?.notificationFrequency, "daily_digest");
+
+    // Invalid payload rejection with 400
+    const invalidPost = new Request("https://new-vs-zana.zana-platform.workers.dev/api/admin/brain/preferences", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ riskToleranceThreshold: 999 }),
+    });
+    const invalidRes = await worker.fetch(invalidPost, env as never);
+    assert.strictEqual(invalidRes.status, 400);
+  });
+
+  test("Express Server Layer - Parity test for admin guard and routes", async () => {
+    const { app } = await import("../server/app.ts");
+    const http = await import("node:http");
+
+    process.env.ALLOW_TEST_AUTH_MOCK = "true";
+    process.env.ZANA_ENV = "test";
+
+    const server = http.createServer(app);
+    await new Promise<void>((resolve) => server.listen(0, resolve));
+    const port = (server.address() as { port: number }).port;
+    const baseUrl = `http://127.0.0.1:${port}`;
+
+    try {
+      // 1. Unauthenticated request rejected with 403
+      const unauthRes = await fetch(`${baseUrl}/api/admin/brain/status`);
+      assert.strictEqual(unauthRes.status, 403);
+
+      const token = createMockToken({
+        email: "addmin.official.idg@gmail.com",
+        admin: true,
+        role: "SuperAdmin",
+        sub: "express-admin-uid-100",
+      });
+
+      // 2. Authenticated GET /api/admin/brain/status returns 200
+      const statusRes = await fetch(`${baseUrl}/api/admin/brain/status`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      assert.strictEqual(statusRes.status, 200);
+      const statusData = (await statusRes.json()) as { ok: boolean; status: string };
+      assert.strictEqual(statusData.ok, true);
+
+      // 3. Authenticated POST /api/admin/brain/command/plan
+      const planRes = await fetch(`${baseUrl}/api/admin/brain/command/plan`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ command: "پشکنینی گشتی" }),
+      });
+      assert.strictEqual(planRes.status, 200);
+      const planData = (await planRes.json()) as { ok: boolean; plan: { commandId: string } };
+      assert.strictEqual(planData.ok, true);
+
+      // 4. Authenticated POST /api/admin/brain/preferences with validation
+      const prefRes = await fetch(`${baseUrl}/api/admin/brain/preferences`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ notificationFrequency: "daily_digest", riskToleranceThreshold: 40 }),
+      });
+      assert.strictEqual(prefRes.status, 200);
+      const prefData = (await prefRes.json()) as { ok: boolean; preference: { adminId: string; notificationFrequency: string } };
+      assert.strictEqual(prefData.ok, true);
+      assert.strictEqual(prefData.preference.adminId, "express-admin-uid-100");
+      assert.strictEqual(prefData.preference.notificationFrequency, "daily_digest");
+
+      // 5. Invalid preference rejected with 400
+      const badPrefRes = await fetch(`${baseUrl}/api/admin/brain/preferences`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ riskToleranceThreshold: -10 }),
+      });
+      assert.strictEqual(badPrefRes.status, 400);
+
+      // 6. GET /api/admin/brain/audit returns integrity
+      const auditRes = await fetch(`${baseUrl}/api/admin/brain/audit`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      assert.strictEqual(auditRes.status, 200);
+      const auditData = (await auditRes.json()) as { ok: boolean; integrity: { isValid: boolean } };
+      assert.strictEqual(auditData.ok, true);
+      assert.strictEqual(auditData.integrity.isValid, true);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 });
