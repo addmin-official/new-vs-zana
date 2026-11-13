@@ -239,4 +239,127 @@ describe("Admin Guard and 3-Layer Protection System", () => {
     const data = (await res.json()) as { ok?: boolean; brainActivity?: number };
     assert.strictEqual(data.ok, true);
   });
+
+  test("Governance Integrity - Rejects forged dual-approval with identical UIDs on execution", async () => {
+    const { InternalBrainService } = await import("../core/brain/InternalBrainService.ts");
+    const brain = InternalBrainService.getInstance();
+    const plan = brain.prepareExecutionPlan("سڕینەوەی داتابەیس");
+    assert.strictEqual(plan.requiresDualApproval, true);
+
+    // Forged dual-approval payload with identical UID
+    plan.dualApproval = {
+      primaryApproved: true,
+      primaryApprover: "Admin One",
+      primaryApproverId: "uid_attacker_01",
+      secondaryApproved: true,
+      secondaryApprover: "Admin One Impersonating Two",
+      secondaryApproverId: "uid_attacker_01",
+    };
+    plan.isApproved = true;
+
+    const executed = await brain.executePipeline(plan);
+    assert.strictEqual(executed.isApproved, false);
+    assert.match(executed.resultReportKu || "", /پەسەندکردنی دوو-قۆناغی پێویستی بە دوو بەڕێوەبەری جیاوازە/);
+  });
+
+  test("Governance Integrity - Executes smoothly with verified distinct dual UIDs", async () => {
+    const { InternalBrainService } = await import("../core/brain/InternalBrainService.ts");
+    const brain = InternalBrainService.getInstance();
+    const plan = brain.prepareExecutionPlan("سڕینەوەی کاتی");
+    assert.strictEqual(plan.requiresDualApproval, true);
+
+    const approver1 = {
+      id: "uid_lead_admin_101",
+      name: "Lead Admin",
+      role: "super_admin" as const,
+      email: "lead@example.com",
+      permissions: ["*"],
+    };
+    const approver2 = {
+      id: "uid_security_auditor_202",
+      name: "Security Auditor",
+      role: "super_admin" as const,
+      email: "auditor@example.com",
+      permissions: ["*"],
+    };
+
+    const firstRes = brain.approvePlan(plan, approver1, false);
+    assert.strictEqual(firstRes.success, true);
+    assert.strictEqual(firstRes.isFullyApproved, false);
+
+    const secondRes = brain.approvePlan(plan, approver2, true);
+    assert.strictEqual(secondRes.success, true);
+    assert.strictEqual(secondRes.isFullyApproved, true);
+
+    const executed = await brain.executePipeline(plan);
+    assert.strictEqual(executed.currentPhase, "learn");
+    assert.strictEqual(executed.verificationResults?.verified, true);
+  });
+
+  test("Rollback & Snapshot Integrity - Restores state snapshot and verifies tamper-evident audit hash", async () => {
+    const { InternalBrainService } = await import("../core/brain/InternalBrainService.ts");
+    const brain = InternalBrainService.getInstance();
+    const plan = brain.prepareExecutionPlan("خاوێنکردنەوەی کەش");
+    assert.strictEqual(plan.rollbackAvailable, true);
+
+    const snapshot = brain.getStateSnapshot(plan.commandId);
+    assert.ok(snapshot, "State snapshot must be recorded for reversible command");
+
+    await brain.executePipeline(plan);
+    const rollbackRes = brain.rollbackExecution(plan.commandId);
+    assert.strictEqual(rollbackRes.success, true);
+    assert.strictEqual(rollbackRes.verified, true);
+    assert.match(rollbackRes.messageKu, /بە تەواوی گەڕێندرایەوە/);
+  });
+
+  test("Preference Memory - Stores and updates admin preference configuration", async () => {
+    const { InternalBrainService } = await import("../core/brain/InternalBrainService.ts");
+    const brain = InternalBrainService.getInstance();
+    const updated = brain.updatePreferenceMemory({
+      notificationFrequency: "hourly",
+      riskToleranceThreshold: 75,
+    }, "admin_test_pref_uid");
+
+    assert.strictEqual(updated.adminId, "admin_test_pref_uid");
+    assert.strictEqual(updated.notificationFrequency, "hourly");
+    assert.strictEqual(updated.riskToleranceThreshold, 75);
+
+    const allPrefs = brain.getPreferenceMemory();
+    assert.ok(allPrefs.some((p) => p.adminId === "admin_test_pref_uid"));
+  });
+
+  test("Worker Layer - GET & POST /api/admin/brain/preferences works for authenticated admin", async () => {
+    const env = {
+      GEMINI_API_KEY: "fake-key",
+      ZANA_ENV: "test",
+      ALLOW_TEST_AUTH_MOCK: "true",
+    };
+    const token = createMockToken({
+      email: "addmin.official.idg@gmail.com",
+      admin: true,
+      role: "SuperAdmin",
+      sub: "admin-uid-1",
+    });
+
+    const getReq = new Request("https://new-vs-zana.zana-platform.workers.dev/api/admin/brain/preferences", {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const getRes = await worker.fetch(getReq, env as never);
+    assert.strictEqual(getRes.status, 200);
+
+    const postReq = new Request("https://new-vs-zana.zana-platform.workers.dev/api/admin/brain/preferences", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ notificationFrequency: "digest" }),
+    });
+    const postRes = await worker.fetch(postReq, env as never);
+    assert.strictEqual(postRes.status, 200);
+    const data = (await postRes.json()) as { ok?: boolean; preference?: { notificationFrequency?: string } };
+    assert.strictEqual(data.ok, true);
+    assert.strictEqual(data.preference?.notificationFrequency, "digest");
+  });
 });

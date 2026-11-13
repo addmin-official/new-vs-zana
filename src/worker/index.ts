@@ -45,7 +45,7 @@ import { handleHealthRoute, handleCurriculumHealthRoute } from "../server/api/he
 import { handleStudyRoomsRoute } from "../server/api/studyRooms.ts";
 import { verifyAdmin, type AdminVerifyResult } from "./adminGuard.ts";
 import { InternalBrainService } from "../core/brain/InternalBrainService.ts";
-import type { AdminRole, ExecutionPlan } from "../core/brain/types.ts";
+import type { AdminRole, ExecutionPlan, AdminPreferenceMemory } from "../core/brain/types.ts";
 import { enforceAiRateLimit } from "../server/middleware/rateLimiter.ts";
 import { applySecurityHeaders } from "../server/middleware/security.ts";
 import { validateProductionEnv } from "../server/config/envValidator.ts";
@@ -1853,6 +1853,26 @@ export default {
         const brainService = InternalBrainService.getInstance();
         return new Response(
           JSON.stringify({ ok: true, auditLog: brainService.getAuditLog() }),
+          { status: 200, headers: responseHeaders }
+        );
+      }
+
+      // GET /api/admin/brain/preferences (Admin Preference Memory)
+      if (pathname === "/api/admin/brain/preferences" && request.method === "GET") {
+        const brainService = InternalBrainService.getInstance();
+        return new Response(
+          JSON.stringify({ ok: true, preferences: brainService.getPreferenceMemory() }),
+          { status: 200, headers: responseHeaders }
+        );
+      }
+
+      // POST /api/admin/brain/preferences (Update Admin Preference Memory)
+      if (pathname === "/api/admin/brain/preferences" && request.method === "POST") {
+        const body = (await request.json().catch(() => ({}))) as Partial<AdminPreferenceMemory>;
+        const brainService = InternalBrainService.getInstance();
+        const updated = brainService.updatePreferenceMemory(body, verifiedAdmin?.uid || "admin_sys_01");
+        return new Response(
+          JSON.stringify({ ok: true, preference: updated }),
           { status: 200, headers: responseHeaders }
         );
       }

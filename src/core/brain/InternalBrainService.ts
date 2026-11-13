@@ -36,6 +36,17 @@ import {
 
 // Cryptographic 256-bit audit hash representation for tamper-evident chaining
 function computeSimpleHash(input: string): string {
+  try {
+    if (typeof process !== 'undefined' && process.versions?.node) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const crypto = require('node:crypto');
+      if (crypto && typeof crypto.createHash === 'function') {
+        return crypto.createHash('sha256').update(input).digest('hex');
+      }
+    }
+  } catch {
+    // browser or edge fallback
+  }
   let h0 = 0x6a09e667, h1 = 0xbb67ae85, h2 = 0x3c6ef372, h3 = 0xa54ff53a;
   let h4 = 0x510e527f, h5 = 0x9b05688c, h6 = 0x1f83d9ab, h7 = 0x5be0cd19;
   for (let i = 0; i < input.length; i++) {
@@ -538,6 +549,9 @@ export class InternalBrainService {
     },
   ];
 
+  private plannedCommands: Map<string, ExecutionPlan> = new Map();
+  private stateSnapshots: Map<string, { targetPath: string; previousData: Record<string, unknown>; timestamp: string }> = new Map();
+
   // --- 12. Golden Tests Suite (8 Categories) ---
   private goldenTests: GoldenTestCase[] = [
     {
@@ -845,6 +859,39 @@ export class InternalBrainService {
   }
   public getPreferenceMemory(): AdminPreferenceMemory[] {
     return [...this.preferenceMemory];
+  }
+
+  public updatePreferenceMemory(updates: Partial<AdminPreferenceMemory>, adminId = 'admin_sys_01'): AdminPreferenceMemory {
+    let existing = this.preferenceMemory.find((p) => p.adminId === adminId);
+    if (!existing) {
+      existing = {
+        id: `mem_pref_${Date.now()}`,
+        type: 'preference',
+        adminId,
+        notificationFrequency: 'realtime',
+        riskToleranceThreshold: 50,
+        reportingStyle: 'detailed',
+        languagePreference: 'bilingual',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        owner: 'System Governance',
+        retentionDays: 180,
+        accessLevel: 'admin',
+        reviewDate: '2027-01-01',
+        confidentialRedacted: false,
+      };
+      this.preferenceMemory.push(existing);
+    }
+    Object.assign(existing, updates, { updatedAt: new Date().toISOString() });
+    return { ...existing };
+  }
+
+  public getPlan(commandId: string): ExecutionPlan | undefined {
+    return this.plannedCommands.get(commandId);
+  }
+
+  public getStateSnapshot(commandId: string): { targetPath: string; previousData: Record<string, unknown>; timestamp: string } | undefined {
+    return this.stateSnapshots.get(commandId);
   }
 
   // --- 12. Golden Tests Suite Execution ---
@@ -1217,7 +1264,7 @@ export class InternalBrainService {
     const simulationSummary = `Simulated execution of ${steps.length} operation(s) at Action Level ${actionLevel}. Estimated runtime: ~160ms. Safety boundary status: SAFE.`;
     const simulationSummaryKu = `ئەنجامی سیمولەیشن بۆ ${steps.length} کردار لە ئاستی ${actionLevel}. ماوەی خەمڵێنراو: نزیکەی ١٦٠ میلی‌چرکە. سنووری ئاسایش: تەواو پارێزراو.`;
 
-    return {
+    const plan: ExecutionPlan = {
       commandId,
       rawCommand: sanitizedCommand,
       intent,
@@ -1239,6 +1286,17 @@ export class InternalBrainService {
       rollbackPlanSummaryKu,
       affectedFiles,
     };
+
+    this.plannedCommands.set(commandId, plan);
+    if (plan.rollbackAvailable) {
+      this.stateSnapshots.set(commandId, {
+        targetPath: affectedFiles[0] || '/cache/curriculum_edge_cache.bin',
+        previousData: { state: 'pre_mutation', commandId, timestamp: new Date().toISOString() },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    return plan;
   }
 
   /**
@@ -1334,6 +1392,9 @@ export class InternalBrainService {
         plan.approvedBy = `${plan.dualApproval.primaryApprover} & ${approver.name} (Dual Approved - Verified Distinct UIDs)`;
         plan.approvalTimestamp = new Date().toISOString();
         plan.currentPhase = 'execute';
+        if (this.plannedCommands.has(plan.commandId)) {
+          this.plannedCommands.set(plan.commandId, plan);
+        }
         return {
           success: true,
           isFullyApproved: true,
@@ -1344,6 +1405,9 @@ export class InternalBrainService {
       plan.approvedBy = approver.name;
       plan.approvalTimestamp = new Date().toISOString();
       plan.currentPhase = 'execute';
+      if (this.plannedCommands.has(plan.commandId)) {
+        this.plannedCommands.set(plan.commandId, plan);
+      }
       return { success: true, isFullyApproved: true };
     }
 
@@ -1388,6 +1452,17 @@ export class InternalBrainService {
       if (plan.requiresDualApproval) {
         if (!plan.dualApproval?.primaryApproved || !plan.dualApproval?.secondaryApproved) {
           advance('approve');
+          return plan;
+        }
+        if (
+          !plan.dualApproval.primaryApproverId ||
+          !plan.dualApproval.secondaryApproverId ||
+          plan.dualApproval.primaryApproverId === plan.dualApproval.secondaryApproverId
+        ) {
+          advance('approve');
+          plan.isApproved = false;
+          plan.resultReport = 'Execution rejected: Dual approval requires two distinct administrator UIDs.';
+          plan.resultReportKu = 'ڕەتکرایەوە: پەسەندکردنی دوو-قۆناغی پێویستی بە دوو بەڕێوەبەری جیاوازە.';
           return plan;
         }
       } else if (!plan.isApproved) {
@@ -1522,6 +1597,10 @@ export class InternalBrainService {
     }
 
     // 1. Perform state snapshot restoration
+    const snapshot = this.stateSnapshots.get(commandId);
+    if (snapshot) {
+      this.stateSnapshots.delete(commandId);
+    }
     const fileOp = this.fileOperations.find((f) => f.backupSnapshotId === auditEntry.commandId || f.id.includes(auditEntry.commandId));
     if (fileOp) {
       fileOp.rollbackStatus = 'restored';

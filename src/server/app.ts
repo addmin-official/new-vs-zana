@@ -30,6 +30,7 @@ import { handleHealthRoute, handleCurriculumHealthRoute } from "./api/health.ts"
 import { handleStudyRoomsRoute } from "./api/studyRooms.ts";
 import { verifyAdmin } from "../worker/adminGuard.ts";
 import { InternalBrainService } from "../core/brain/InternalBrainService.ts";
+import type { AdminRole, ExecutionPlan, AdminPreferenceMemory } from "../core/brain/types.ts";
 
 dotenv.config();
 
@@ -1026,6 +1027,85 @@ app.get("/api/admin/brain/metrics", (req: Request, res: Response) => {
       : { available: false, labelKu: "داتامان نییە" },
     timestamp: new Date().toISOString(),
   });
+});
+
+app.post("/api/admin/brain/command/plan", (req: Request, res: Response) => {
+  const commandText = (req.body?.command as string) || "";
+  const brainService = InternalBrainService.getInstance();
+  const plan = brainService.prepareExecutionPlan(commandText);
+  const perm = brainService.checkPermission(plan, {
+    id: "admin_express",
+    name: "Express Admin",
+    role: "super_admin" as AdminRole,
+    email: "admin@example.com",
+    permissions: ["*"],
+  });
+  res.json({ ok: true, plan, permission: perm });
+});
+
+app.post("/api/admin/brain/command/approve", (req: Request, res: Response) => {
+  const { plan, isSecondarySignOff } = req.body as { plan?: ExecutionPlan; isSecondarySignOff?: boolean };
+  if (!plan) {
+    return res.status(400).json({ ok: false, error: "Missing plan payload" });
+  }
+  const brainService = InternalBrainService.getInstance();
+  const approverUser = {
+    id: "admin_express_uid",
+    name: "Express Admin Approver",
+    role: "super_admin" as AdminRole,
+    email: "admin@example.com",
+    permissions: ["*"],
+  };
+  const result = brainService.approvePlan(plan, approverUser, Boolean(isSecondarySignOff));
+  res.status(result.success ? 200 : 400).json({ ok: result.success, ...result, plan });
+});
+
+app.post("/api/admin/brain/command/execute", async (req: Request, res: Response) => {
+  const { plan } = req.body as { plan?: ExecutionPlan };
+  if (!plan) {
+    return res.status(400).json({ ok: false, error: "Missing plan payload" });
+  }
+  const brainService = InternalBrainService.getInstance();
+  const executedPlan = await brainService.executePipeline(plan);
+  res.json({ ok: true, plan: executedPlan });
+});
+
+app.post("/api/admin/brain/command/rollback", (req: Request, res: Response) => {
+  const { commandId } = req.body as { commandId?: string };
+  if (!commandId) {
+    return res.status(400).json({ ok: false, error: "Missing commandId" });
+  }
+  const brainService = InternalBrainService.getInstance();
+  const result = brainService.rollbackExecution(commandId);
+  res.status(result.success ? 200 : 400).json({ ok: result.success, ...result });
+});
+
+app.post("/api/admin/brain/golden-tests/run", (req: Request, res: Response) => {
+  const { testId } = req.body as { testId?: string };
+  const brainService = InternalBrainService.getInstance();
+  if (testId) {
+    const r = brainService.runGoldenTest(testId);
+    return res.json({ ok: r.success, ...r });
+  }
+  const allRes = brainService.runAllGoldenTests();
+  res.json({ ok: true, ...allRes });
+});
+
+app.get("/api/admin/brain/audit", (req: Request, res: Response) => {
+  const brainService = InternalBrainService.getInstance();
+  res.json({ ok: true, auditLog: brainService.getAuditLog() });
+});
+
+app.get("/api/admin/brain/preferences", (req: Request, res: Response) => {
+  const brainService = InternalBrainService.getInstance();
+  res.json({ ok: true, preferences: brainService.getPreferenceMemory() });
+});
+
+app.post("/api/admin/brain/preferences", (req: Request, res: Response) => {
+  const body = req.body as Partial<AdminPreferenceMemory>;
+  const brainService = InternalBrainService.getInstance();
+  const updated = brainService.updatePreferenceMemory(body, "admin_express_uid");
+  res.json({ ok: true, preference: updated });
 });
 
 app.all("/api/study-rooms*", async (req: Request, res: Response) => {
