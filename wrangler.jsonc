@@ -101,7 +101,7 @@
   "migrations": [
     {
       "tag": "v1",
-      "new_classes": ["AdminCommandDO"]
+      "new_sqlite_classes": ["AdminCommandDO"]
     }
   ]
 }
