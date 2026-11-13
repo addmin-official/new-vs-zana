@@ -6,6 +6,11 @@
  */
 
 import crypto from 'node:crypto';
+import { AdminD1Repository, type AuditCheckpointRecord } from './storage/AdminD1Repository.ts';
+import {
+  type IAdminCommandCoordinator,
+  LocalDurableObjectCoordinator,
+} from './durable/AdminCommandCoordinator.ts';
 import {
   ActionLevel,
   AdminPreferenceMemory,
@@ -552,6 +557,21 @@ export class InternalBrainService {
   ]);
   private executingCommands: Set<string> = new Set();
   private executedCommandIds: Set<string> = new Set();
+  private coordinator: IAdminCommandCoordinator = new LocalDurableObjectCoordinator();
+  private repository: AdminD1Repository = new AdminD1Repository();
+
+  public setStorageAdapters(coordinator: IAdminCommandCoordinator, repository: AdminD1Repository): void {
+    this.coordinator = coordinator;
+    this.repository = repository;
+  }
+
+  public getCoordinator(): IAdminCommandCoordinator {
+    return this.coordinator;
+  }
+
+  public getRepository(): AdminD1Repository {
+    return this.repository;
+  }
 
   // --- 12. Golden Tests Suite (8 Categories) ---
   private goldenTests: GoldenTestCase[] = [
@@ -966,6 +986,28 @@ export class InternalBrainService {
       }
     }
     return { isValid: true };
+  }
+
+  public createAuditCheckpoint(hmacSecret?: string): AuditCheckpointRecord {
+    const head = this.auditLog[0];
+    const headHash = head ? head.tamperProofHash : '0000000000000000';
+    const entryCount = this.auditLog.length;
+    const checkpointId = `cp_${Date.now()}_${entryCount}`;
+    const payload = `${checkpointId}:${entryCount}:${headHash}`;
+    const signatureOrHmac = hmacSecret
+      ? crypto.createHmac('sha256', hmacSecret).update(payload).digest('hex')
+      : crypto.createHash('sha256').update(payload).digest('hex');
+
+    const cp: AuditCheckpointRecord = {
+      checkpointId,
+      latestAuditId: head ? head.id : 'genesis',
+      entryCount,
+      headHash,
+      signatureOrHmac,
+      createdAt: new Date().toISOString(),
+    };
+    this.repository.saveCheckpoint(cp).catch(console.warn);
+    return cp;
   }
 
   // --- 12. Golden Tests Suite Execution ---
@@ -1579,11 +1621,22 @@ export class InternalBrainService {
       return plan;
     }
 
+    // Acquire persistent/Durable Object execution lock
+    const lockRes = await this.coordinator.acquireExecutionLock(plan.commandId, plan.rawCommand, plan);
+    if (!lockRes.success) {
+      advance('approve');
+      plan.isApproved = false;
+      plan.resultReport = lockRes.error || 'Execution rejected: lock acquisition failed';
+      plan.resultReportKu = lockRes.errorKu || 'ڕەتکرایەوە: وەرگرتنی قفڵی جێبەجێکردن سەرکەوتوو نەبوو.';
+      return plan;
+    }
+
     // Prevent execution if ambiguous/no tools matched
     if (plan.steps.length === 0) {
       advance('report');
       plan.resultReport = `Command unrecognized: No valid executable actions matched in allowlist. Clarification required.`;
       plan.resultReportKu = `فەرمانەکە نەناسراوە: هیچ کردارێکی ڕێپێدراو لە کەتەلۆگی allowlist نەدۆزرایەوە. تکایە مەبەستی فەرمانەکە ڕوون بکەرەوە.`;
+      await this.coordinator.unlockExecution(plan.commandId);
       return plan;
     }
 
@@ -1612,8 +1665,10 @@ export class InternalBrainService {
       if (registered) {
         registered.isExecuted = true;
       }
+      await this.coordinator.finishExecution(plan.commandId, plan);
     } finally {
       this.executingCommands.delete(plan.commandId);
+      await this.coordinator.unlockExecution(plan.commandId);
     }
 
     // 8. Verify

@@ -89,5 +89,19 @@
       "database_name": "new-vs-zana",
       "database_id": "b8929b42-eaae-42c4-a364-b601ab285be5"
     }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "ADMIN_COMMAND_DO",
+        "class_name": "AdminCommandDO"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_classes": ["AdminCommandDO"]
+    }
   ]
 }

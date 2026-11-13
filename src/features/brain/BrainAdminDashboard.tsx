@@ -27,7 +27,15 @@ import {
  RefreshCw,
 } from "lucide-react";
 import { InternalBrainService } from "../../core/brain/InternalBrainService";
-import { getBrainStatus, getBrainMetrics } from "../../services/adminApi.ts";
+import {
+  getBrainStatus,
+  getBrainMetrics,
+  planAdminCommand,
+  approveAdminCommand,
+  executeAdminCommand,
+  rollbackAdminCommand,
+  getAdminAuditLog,
+} from "../../services/adminApi.ts";
 import { useIsAdmin } from "../../hooks/useIsAdmin.ts";
 import {
  ACTION_LEVEL_DEFINITIONS,
@@ -158,71 +166,140 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
 
  useEffect(() => {
   void fetchBackendStatus();
+  getAdminAuditLog()
+    .then((res) => {
+      if (res?.auditLog && Array.isArray(res.auditLog) && res.auditLog.length > 0) {
+        setAuditLogs(res.auditLog);
+      }
+    })
+    .catch(() => {});
  }, []);
 
- const handlePlanCommand = (cmdText?: string) => {
- const textToRun = cmdText || commandInput;
- if (!textToRun.trim()) return;
+ const handlePlanCommand = async (cmdText?: string) => {
+  const textToRun = cmdText || commandInput;
+  if (!textToRun.trim()) return;
 
- setPermissionError(null);
- setExecutionMessage(null);
+  setPermissionError(null);
+  setExecutionMessage(null);
 
- const plan = brain.prepareExecutionPlan(textToRun);
+  try {
+    const res = await planAdminCommand(textToRun);
+    if (res?.plan) {
+      setActivePlan(res.plan);
+      if (res.permission && !res.permission.allowed) {
+        setPermissionError({
+          reason: res.permission.reason || "Permission denied",
+          reasonKu: res.permission.reasonKu || "مۆڵەتی پێویستت نییە بۆ ئەم کردارە",
+        });
+      }
+      return;
+    }
+  } catch {
+    // Fallback to local execution plan
+  }
 
- // Check RBAC permission
- const perm = brain.checkPermission(plan);
- if (!perm.allowed) {
- setPermissionError({
- reason: perm.reason || "Permission denied",
- reasonKu: perm.reasonKu || "مۆڵەتی پێویستت نییە بۆ ئەم کردارە",
- });
- setActivePlan(plan);
- return;
- }
+  const plan = brain.prepareExecutionPlan(textToRun);
 
- setActivePlan(plan);
+  // Check RBAC permission
+  const perm = brain.checkPermission(plan);
+  if (!perm.allowed) {
+    setPermissionError({
+      reason: perm.reason || "Permission denied",
+      reasonKu: perm.reasonKu || "مۆڵەتی پێویستت نییە بۆ ئەم کردارە",
+    });
+    setActivePlan(plan);
+    return;
+  }
+
+  setActivePlan(plan);
  };
 
  const handleRunExecution = async () => {
- if (!activePlan) return;
- setIsExecuting(true);
- setExecutionMessage(null);
+  if (!activePlan) return;
+  setIsExecuting(true);
+  setExecutionMessage(null);
 
- try {
- const updatedPlan = await brain.executePipeline(activePlan, (phase, updated) => {
- setActivePlan({ ...updated, currentPhase: phase });
- });
+  try {
+    try {
+      const execRes = await executeAdminCommand(activePlan);
+      if (execRes?.plan) {
+        setActivePlan(execRes.plan);
+        try {
+          const auditRes = await getAdminAuditLog();
+          if (auditRes?.auditLog) setAuditLogs(auditRes.auditLog);
+        } catch {}
+        setSnapshot(brain.getObservabilitySnapshot());
+        if (execRes.plan.currentPhase === "approve") {
+          setExecutionMessage(
+            execRes.plan.requiresDualApproval
+              ? "وەستێنرا لە دەروازەی پەسەندکردنی دوو-قۆناغی (Level 5 Dual Approval Gate): هەردوو واژۆی بەڕێوەبەر و ئۆدیتەری ئاسایش پێویستە."
+              : "وەستێنرا لە دەروازەی پەسەندکردن (Level 4 Approval Gate): واژۆی بەڕێوەبەری سیستەم پێویستە."
+          );
+        } else if (execRes.plan.currentPhase === "learn") {
+          setExecutionMessage("سەرکەوتوو بوو: سەرجەم ١٠ هەنگاوەکان بە سەرکەوتوویی تەواو بوون و لە ئۆدیت لۆگ و بیرگەی سیستەم تۆمار کران.");
+        }
+        return;
+      }
+    } catch {
+      // Fallback to local execution pipeline
+    }
 
- setActivePlan({ ...updatedPlan });
- setAuditLogs(brain.getAuditLog());
- setSnapshot(brain.getObservabilitySnapshot());
+    const updatedPlan = await brain.executePipeline(activePlan, (phase, updated) => {
+      setActivePlan({ ...updated, currentPhase: phase });
+    });
 
- if (updatedPlan.currentPhase === "approve") {
- setExecutionMessage(
- updatedPlan.requiresDualApproval
- ? "وەستێنرا لە دەروازەی پەسەندکردنی دوو-قۆناغی (Level 5 Dual Approval Gate): هەردوو واژۆی بەڕێوەبەر و ئۆدیتەری ئاسایش پێویستە."
- : "وەستێنرا لە دەروازەی پەسەندکردن (Level 4 Approval Gate): واژۆی بەڕێوەبەری سیستەم پێویستە."
- );
- } else if (updatedPlan.currentPhase === "learn") {
- setExecutionMessage("سەرکەوتوو بوو: سەرجەم ١٠ هەنگاوەکان بە سەرکەوتوویی تەواو بوون و لە ئۆدیت لۆگ و بیرگەی سیستەم تۆمار کران.");
- }
- } finally {
- setIsExecuting(false);
- }
+    setActivePlan({ ...updatedPlan });
+    setAuditLogs(brain.getAuditLog());
+    setSnapshot(brain.getObservabilitySnapshot());
+
+    if (updatedPlan.currentPhase === "approve") {
+      setExecutionMessage(
+        updatedPlan.requiresDualApproval
+          ? "وەستێنرا لە دەروازەی پەسەندکردنی دوو-قۆناغی (Level 5 Dual Approval Gate): هەردوو واژۆی بەڕێوەبەر و ئۆدیتەری ئاسایش پێویستە."
+          : "وەستێنرا لە دەروازەی پەسەندکردن (Level 4 Approval Gate): واژۆی بەڕێوەبەری سیستەم پێویستە."
+      );
+    } else if (updatedPlan.currentPhase === "learn") {
+      setExecutionMessage("سەرکەوتوو بوو: سەرجەم ١٠ هەنگاوەکان بە سەرکەوتوویی تەواو بوون و لە ئۆدیت لۆگ و بیرگەی سیستەم تۆمار کران.");
+    }
+  } finally {
+    setIsExecuting(false);
+  }
  };
 
  const handlePrimaryApprove = async () => {
   if (!activePlan) return;
   const currentUid = adminInfo.uid || brain.getCurrentUser().id;
+
+  try {
+    const res = await approveAdminCommand(activePlan, false);
+    if (res?.result) {
+      if (!res.result.success) {
+        showNotification("error", res.result.error || "هەڵە لە پەسەندکردنی سەرەکی");
+        return;
+      }
+      showNotification("info", "واژۆی سەرەکی بە سەرکەوتوویی لە داتابەیس تۆمار کرا.");
+      try {
+        const auditRes = await getAdminAuditLog();
+        if (auditRes?.auditLog) setAuditLogs(auditRes.auditLog);
+      } catch {}
+      if (res.result.isFullyApproved) {
+        await handleRunExecution();
+      }
+      return;
+    }
+  } catch {
+    // Fallback to local brain
+  }
+
   const res = brain.approvePlan(activePlan, { ...brain.getCurrentUser(), id: currentUid }, false);
   if (!res.success) {
-   showNotification("error", res.error || "هەڵە لە پەسەندکردنی سەرەکی");
-   return;
+    showNotification("error", res.error || "هەڵە لە پەسەندکردنی سەرەکی");
+    return;
   }
   setActivePlan({ ...activePlan });
   showNotification("info", "واژۆی سەرەکی بە سەرکەوتوویی تۆمار کرا.");
   if (res.isFullyApproved) {
-   await handleRunExecution();
+    await handleRunExecution();
   }
  };
 
@@ -230,28 +307,68 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
   if (!activePlan) return;
   const currentUid = adminInfo.uid || brain.getCurrentUser().id;
   if (activePlan.dualApproval?.primaryApproverId && activePlan.dualApproval.primaryApproverId === currentUid) {
-   showNotification("error", "سەرپێچی پەسەندکردنی دوو-قۆناغی: ناکرێت هەمان بەکارهێنەر واژۆی دووەم بکات.");
-   return;
+    showNotification("error", "سەرپێچی پەسەندکردنی دوو-قۆناغی: ناکرێت هەمان بەکارهێنەر واژۆی دووەم بکات.");
+    return;
   }
+
+  try {
+    const res = await approveAdminCommand(activePlan, true);
+    if (res?.result) {
+      if (!res.result.success) {
+        showNotification("error", res.result.error || "هەڵە لە پەسەندکردنی دووەم");
+        return;
+      }
+      showNotification("info", "واژۆی دووەم بە سەرکەوتوویی لە داتابەیس تۆمار کرا.");
+      try {
+        const auditRes = await getAdminAuditLog();
+        if (auditRes?.auditLog) setAuditLogs(auditRes.auditLog);
+      } catch {}
+      if (res.result.isFullyApproved) {
+        await handleRunExecution();
+      }
+      return;
+    }
+  } catch {
+    // Fallback to local brain
+  }
+
   const res = brain.approvePlan(activePlan, { ...brain.getCurrentUser(), id: currentUid }, true);
   if (!res.success) {
-   showNotification("error", res.error || "هەڵە لە پەسەندکردنی دووەم");
-   return;
+    showNotification("error", res.error || "هەڵە لە پەسەندکردنی دووەم");
+    return;
   }
   setActivePlan({ ...activePlan });
   showNotification("info", "واژۆی دووەم بە سەرکەوتوویی تۆمار کرا.");
   if (res.isFullyApproved) {
-   await handleRunExecution();
+    await handleRunExecution();
   }
  };
 
- const handleRollback = (commandId: string) => {
+ const handleRollback = async (commandId: string) => {
+  try {
+    const res = await rollbackAdminCommand(commandId);
+    if (res?.result) {
+      if (res.result.success) {
+        showNotification("success", `${res.result.messageKu} - ${res.result.message}`);
+        try {
+          const auditRes = await getAdminAuditLog();
+          if (auditRes?.auditLog) setAuditLogs(auditRes.auditLog);
+        } catch {}
+      } else {
+        showNotification("error", `هەڵە لە گەڕاندنەوە: ${res.result.messageKu}`);
+      }
+      return;
+    }
+  } catch {
+    // Fallback
+  }
+
   const res = brain.rollbackExecution(commandId);
   if (res.success) {
-   showNotification("success", `${res.messageKu} - ${res.message}`);
-   setAuditLogs([...brain.getAuditLog()]);
+    showNotification("success", `${res.messageKu} - ${res.message}`);
+    setAuditLogs([...brain.getAuditLog()]);
   } else {
-   showNotification("error", `هەڵە لە گەڕاندنەوە: ${res.messageKu}`);
+    showNotification("error", `هەڵە لە گەڕاندنەوە: ${res.messageKu}`);
   }
  };
 
@@ -789,7 +906,7 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
  key={chip.label}
  onClick={() => {
  setCommandInput(chip.cmd);
- handlePlanCommand(chip.cmd);
+ void handlePlanCommand(chip.cmd);
  }}
  className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition text-[10px]"
  >
@@ -804,12 +921,12 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
  type="text"
  value={commandInput}
  onChange={(e) => setCommandInput(e.target.value)}
- onKeyDown={(e) => e.key === "Enter" && handlePlanCommand()}
+ onKeyDown={(e) => e.key === "Enter" && void handlePlanCommand()}
  placeholder="فەرمانەکەت بنووسە بە زمانی کوردی یان ئینگلیزی..."
  className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
  />
  <button
- onClick={() => handlePlanCommand()}
+ onClick={() => { void handlePlanCommand(); }}
  disabled={isExecuting || !commandInput.trim()}
  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 transition"
  >
@@ -1069,7 +1186,7 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
 
  {activePlan.currentPhase === "learn" && activePlan.rollbackAvailable && (
  <button
- onClick={() => handleRollback(activePlan.commandId)}
+ onClick={() => { void handleRollback(activePlan.commandId); }}
  className="px-3 py-2 bg-rose-900/60 hover:bg-rose-800 text-rose-200 border border-rose-700 rounded-lg text-xs flex items-center gap-1 transition"
  >
  <RotateCcw className="w-3.5 h-3.5" />
@@ -1445,7 +1562,7 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
  onClick={() => {
  setActiveSubTab("terminal");
  setCommandInput(qaResponse.recommendedCommandKu!);
- handlePlanCommand(qaResponse.recommendedCommandKu);
+ void handlePlanCommand(qaResponse.recommendedCommandKu);
  }}
  className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-medium transition"
  >

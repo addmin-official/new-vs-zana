@@ -1,3 +1,5 @@
+import { verifyFirebaseIdToken, type VerifyJwtResult } from "./jwtVerifier.ts";
+
 export interface AdminVerifyResult {
   ok: boolean;
   uid?: string;
@@ -8,33 +10,12 @@ export interface AdminVerifyResult {
 
 export const ADMIN_EMAILS = ["addmin.official.idg@gmail.com"];
 
-function parseJwtHeaderAndPayload(token: string): {
-  header: Record<string, unknown> | null;
-  payload: Record<string, unknown> | null;
-} {
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) {
-      return { header: null, payload: null };
-    }
-    const decodeBase64 = (str: string) => {
-      const base64 = str.replace(/-/g, "+").replace(/_/g, "/");
-      return typeof atob === "function"
-        ? atob(base64)
-        : Buffer.from(base64, "base64").toString("utf-8");
-    };
-    const header = JSON.parse(decodeBase64(parts[0])) as Record<string, unknown>;
-    const payload = JSON.parse(decodeBase64(parts[1])) as Record<string, unknown>;
-    return { header, payload };
-  } catch {
-    return { header: null, payload: null };
-  }
-}
-
 export async function verifyAdmin(
   request: Request,
   env: {
     VITE_FIREBASE_API_KEY?: string;
+    FIREBASE_PROJECT_ID?: string;
+    VITE_FIREBASE_PROJECT_ID?: string;
     ADMIN_TELEMETRY_SECRET?: string;
     ADMIN_EMAIL?: string;
     ADMIN_EMAILS?: string;
@@ -58,10 +39,10 @@ export async function verifyAdmin(
   const configuredEmails = [
     ...ADMIN_EMAILS,
     ...(typeof env.ADMIN_EMAIL === "string" ? [env.ADMIN_EMAIL] : []),
-    ...(typeof env.ADMIN_EMAILS === "string" ? env.ADMIN_EMAILS.split(",").map(e => e.trim()) : []),
+    ...(typeof env.ADMIN_EMAILS === "string" ? env.ADMIN_EMAILS.split(",").map((e) => e.trim()) : []),
   ].map((e) => e.toLowerCase());
 
-  // 1. Machine-to-Machine Secret (Telemetry / Cron)
+  // 1. Machine-to-Machine Secret (Telemetry / Cron / Internal)
   if (env.ADMIN_TELEMETRY_SECRET && token === env.ADMIN_TELEMETRY_SECRET) {
     return {
       ok: true,
@@ -71,41 +52,42 @@ export async function verifyAdmin(
     };
   }
 
-  // 2. Structural & Expiration Pre-Validation
-  const { header, payload } = parseJwtHeaderAndPayload(token);
-  if (!header || !payload) {
-    return { ok: false, error: "Malformed token: Invalid JWT structure" };
-  }
+  const projectId = String(
+    env.FIREBASE_PROJECT_ID ||
+    env.VITE_FIREBASE_PROJECT_ID ||
+    (typeof process !== "undefined" ? (process.env?.FIREBASE_PROJECT_ID || process.env?.VITE_FIREBASE_PROJECT_ID) : undefined) ||
+    "gen-lang-client-0009572581"
+  );
 
-  // Check algorithm: reject unsigned / "none"
-  if (header.alg === "none" || !header.alg) {
-    return { ok: false, error: "Unauthorized: Insecure JWT algorithm" };
-  }
-
-  // Check expiration if present
-  if (typeof payload.exp === "number") {
-    const nowSec = Math.floor(Date.now() / 1000);
-    if (nowSec >= payload.exp) {
-      return { ok: false, error: "Token expired" };
-    }
-  }
-
-  // Check subject presence
-  const subject = payload.sub || payload.user_id;
-  if (!subject || typeof subject !== "string") {
-    return { ok: false, error: "Malformed token: missing subject (sub)" };
-  }
-
-  // 3. Online Verification via Google Identity Toolkit
-  const apiKey = (env.VITE_FIREBASE_API_KEY || (typeof process !== "undefined" ? process.env?.VITE_FIREBASE_API_KEY : undefined)) as string | undefined;
-
-  // Check if test mock mode is explicitly permitted (restricted to test environments only)
+  // Check test mock mode permission: strictly restricted to test environments only
   const zanaEnv = (env.ZANA_ENV ?? (typeof process !== "undefined" ? (process.env?.ZANA_ENV || process.env?.NODE_ENV) : undefined)) as string | undefined;
   const isTestEnvironment = zanaEnv === "test";
   const testMockFlag = env.ALLOW_TEST_AUTH_MOCK ?? (typeof process !== "undefined" ? process.env?.ALLOW_TEST_AUTH_MOCK : undefined);
   const allowTestMock = testMockFlag === "true" && isTestEnvironment;
 
-  if (apiKey && !allowTestMock) {
+  // 2. Cryptographic Verification via Web Crypto API (Cached RS256 JWKS)
+  const jwkResult: VerifyJwtResult = await verifyFirebaseIdToken(token, projectId, {
+    allowTestMock,
+    configuredEmails,
+  });
+
+  if (jwkResult.ok) {
+    return {
+      ok: true,
+      uid: jwkResult.uid,
+      email: jwkResult.email,
+      role: jwkResult.role,
+    };
+  }
+
+  // If in test mode with mock tokens, return the rejection
+  if (allowTestMock) {
+    return { ok: false, error: jwkResult.error || "Unauthorized in test mock mode" };
+  }
+
+  // 3. Fallback: Online Lookup via Google Identity Toolkit (if API key present)
+  const apiKey = (env.VITE_FIREBASE_API_KEY || (typeof process !== "undefined" ? process.env?.VITE_FIREBASE_API_KEY : undefined)) as string | undefined;
+  if (apiKey) {
     try {
       const res = await fetch(
         `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`,
@@ -117,7 +99,6 @@ export async function verifyAdmin(
       );
 
       if (!res.ok) {
-        // STRICT DENY: Identity Toolkit rejected the token
         return { ok: false, error: `Authentication failed: Google Identity Toolkit returned ${res.status}` };
       }
 
@@ -144,7 +125,7 @@ export async function verifyAdmin(
             userRole = (parsedClaims.role as string) || "super_admin";
           }
         } catch {
-          // ignore parsing error
+          // ignore
         }
       }
 
@@ -160,37 +141,10 @@ export async function verifyAdmin(
         role: userRole,
       };
     } catch {
-      // STRICT DENY: Network failure or unreachable service MUST NOT grant access
       return { ok: false, error: "Authentication failed: unable to verify credentials with identity provider" };
     }
   }
 
-  // 4. Test Mock Mode (ONLY enabled when ALLOW_TEST_AUTH_MOCK is active in test environment)
-  if (allowTestMock) {
-    const parts = token.split(".");
-    const signature = parts[2] || "";
-
-    // Reject forged / empty signatures in mock mode
-    if (!signature || signature === "invalid-signature" || signature === "forged") {
-      return { ok: false, error: "Unauthorized: Invalid token signature" };
-    }
-
-    const email = typeof payload.email === "string" ? payload.email.toLowerCase() : "";
-    const hasAdminClaim = payload.admin === true || payload.role === "SuperAdmin" || payload.role === "super_admin";
-    const isAuthorizedEmail = Boolean(email && configuredEmails.includes(email));
-
-    if (!isAuthorizedEmail && !hasAdminClaim) {
-      return { ok: false, error: "Unauthorized: User is not an admin" };
-    }
-
-    return {
-      ok: true,
-      uid: String(subject),
-      email: email || configuredEmails[0],
-      role: hasAdminClaim ? "super_admin" : "system_admin",
-    };
-  }
-
-  // 5. Default Deny when neither online verification nor test mock is applicable
-  return { ok: false, error: "Unauthorized: Verification service unavailable (deny-by-default)" };
+  // 4. Default Deny
+  return { ok: false, error: jwkResult.error || "Unauthorized: Verification service unavailable (deny-by-default)" };
 }

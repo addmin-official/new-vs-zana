@@ -1103,6 +1103,12 @@ app.get("/api/admin/brain/audit", (req: Request, res: Response) => {
   res.json({ ok: true, auditLog: brainService.getAuditLog(), integrity });
 });
 
+app.post("/api/admin/brain/audit/checkpoint", (req: Request, res: Response) => {
+  const brainService = InternalBrainService.getInstance();
+  const checkpoint = brainService.createAuditCheckpoint(process.env.AUDIT_HMAC_SECRET);
+  res.json({ ok: true, checkpoint });
+});
+
 app.get("/api/admin/brain/preferences", (req: Request, res: Response) => {
   const admin = res.locals.admin as AdminVerifyResult | undefined;
   const brainService = InternalBrainService.getInstance();

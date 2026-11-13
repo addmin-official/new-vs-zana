@@ -46,9 +46,18 @@ import { handleStudyRoomsRoute } from "../server/api/studyRooms.ts";
 import { verifyAdmin, type AdminVerifyResult } from "./adminGuard.ts";
 import { InternalBrainService } from "../core/brain/InternalBrainService.ts";
 import type { AdminRole, ExecutionPlan, AdminPreferenceMemory } from "../core/brain/types.ts";
+import { AdminCommandDO } from "../core/brain/durable/AdminCommandDO.ts";
+import {
+  CloudflareDurableObjectCoordinator,
+  LocalDurableObjectCoordinator,
+  type DurableObjectNamespaceLike,
+} from "../core/brain/durable/AdminCommandCoordinator.ts";
+import { AdminD1Repository, type D1DatabaseLike } from "../core/brain/storage/AdminD1Repository.ts";
 import { enforceAiRateLimit } from "../server/middleware/rateLimiter.ts";
 import { applySecurityHeaders } from "../server/middleware/security.ts";
 import { validateProductionEnv } from "../server/config/envValidator.ts";
+
+export { AdminCommandDO };
 
 export type KVNamespace = AssessmentKVStore;
 
@@ -111,6 +120,9 @@ export interface Env {
   ZANA_CURRICULUM_FILE_PATH?: string;
   ZANA_CURRICULUM_FILE_NAME?: string;
   ZANA_LEARNING_KV?: AssessmentKVStore;
+  ADMIN_COMMAND_DO?: DurableObjectNamespaceLike;
+  DB?: D1DatabaseLike;
+  AUDIT_HMAC_SECRET?: string;
   [key: string]: unknown;
 }
 
@@ -1852,9 +1864,38 @@ export default {
       // GET /api/admin/brain/audit (Audit History & Chain Integrity)
       if (pathname === "/api/admin/brain/audit" && request.method === "GET") {
         const brainService = InternalBrainService.getInstance();
+        const coordinator = env.ADMIN_COMMAND_DO
+          ? new CloudflareDurableObjectCoordinator(env.ADMIN_COMMAND_DO)
+          : new LocalDurableObjectCoordinator({ DB: env.DB });
+        const repo = new AdminD1Repository(env.DB);
+        brainService.setStorageAdapters(coordinator, repo);
+
+        const auditLog = await repo.getAuditLog();
         const integrity = brainService.verifyAuditChainIntegrity();
+        const latestCheckpoint = await repo.getLatestCheckpoint();
         return new Response(
-          JSON.stringify({ ok: true, auditLog: brainService.getAuditLog(), integrity }),
+          JSON.stringify({
+            ok: true,
+            auditLog: auditLog.length > 0 ? auditLog : brainService.getAuditLog(),
+            integrity,
+            latestCheckpoint,
+          }),
+          { status: 200, headers: responseHeaders }
+        );
+      }
+
+      // POST /api/admin/brain/audit/checkpoint (Cryptographic Checkpoint)
+      if (pathname === "/api/admin/brain/audit/checkpoint" && request.method === "POST") {
+        const brainService = InternalBrainService.getInstance();
+        const coordinator = env.ADMIN_COMMAND_DO
+          ? new CloudflareDurableObjectCoordinator(env.ADMIN_COMMAND_DO)
+          : new LocalDurableObjectCoordinator({ DB: env.DB });
+        const repo = new AdminD1Repository(env.DB);
+        brainService.setStorageAdapters(coordinator, repo);
+
+        const checkpoint = brainService.createAuditCheckpoint(env.AUDIT_HMAC_SECRET);
+        return new Response(
+          JSON.stringify({ ok: true, checkpoint }),
           { status: 200, headers: responseHeaders }
         );
       }
@@ -1862,11 +1903,17 @@ export default {
       // GET /api/admin/brain/preferences (Admin Preference Memory)
       if (pathname === "/api/admin/brain/preferences" && request.method === "GET") {
         const brainService = InternalBrainService.getInstance();
+        const coordinator = env.ADMIN_COMMAND_DO
+          ? new CloudflareDurableObjectCoordinator(env.ADMIN_COMMAND_DO)
+          : new LocalDurableObjectCoordinator({ DB: env.DB });
+        const repo = new AdminD1Repository(env.DB);
+        brainService.setStorageAdapters(coordinator, repo);
+
         const preferences = (verifiedAdmin?.role as AdminRole) === "super_admin"
-          ? brainService.getPreferenceMemory()
-          : brainService.getPreferenceMemory(verifiedAdmin?.uid);
+          ? await repo.getPreferences()
+          : await repo.getPreferences(verifiedAdmin?.uid);
         return new Response(
-          JSON.stringify({ ok: true, preferences }),
+          JSON.stringify({ ok: true, preferences: preferences.length > 0 ? preferences : brainService.getPreferenceMemory(verifiedAdmin?.uid) }),
           { status: 200, headers: responseHeaders }
         );
       }
@@ -1875,8 +1922,15 @@ export default {
       if (pathname === "/api/admin/brain/preferences" && request.method === "POST") {
         const body = (await request.json().catch(() => ({}))) as Partial<AdminPreferenceMemory>;
         const brainService = InternalBrainService.getInstance();
+        const coordinator = env.ADMIN_COMMAND_DO
+          ? new CloudflareDurableObjectCoordinator(env.ADMIN_COMMAND_DO)
+          : new LocalDurableObjectCoordinator({ DB: env.DB });
+        const repo = new AdminD1Repository(env.DB);
+        brainService.setStorageAdapters(coordinator, repo);
+
         try {
           const updated = brainService.updatePreferenceMemory(body, verifiedAdmin?.uid || "admin_sys_01");
+          await repo.upsertPreferences(updated);
           return new Response(
             JSON.stringify({ ok: true, preference: updated }),
             { status: 200, headers: responseHeaders }
