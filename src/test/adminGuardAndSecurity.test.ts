@@ -423,7 +423,7 @@ describe("Admin Guard and 3-Layer Protection System", () => {
     assert.strictEqual(scoped[0].adminId, "admin_test_pref_uid");
   });
 
-  test("Worker Layer - GET & POST /api/admin/brain/preferences works for authenticated admin", async () => {
+  test("Worker Layer - GET & POST /api/admin/brain/preferences requires DO & D1 and works when bound", async () => {
     const env = {
       GEMINI_API_KEY: "fake-key",
       ZANA_ENV: "test",
@@ -436,11 +436,46 @@ describe("Admin Guard and 3-Layer Protection System", () => {
       sub: "admin-uid-1",
     });
 
+    // 1. Fail-closed test: missing DO or DB returns 503 Service Unavailable
+    const getReqMissing = new Request("https://new-vs-zana.zana-platform.workers.dev/api/admin/brain/preferences", {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const missingRes = await worker.fetch(getReqMissing, env as never);
+    assert.strictEqual(missingRes.status, 503);
+    const missingData = (await missingRes.json()) as { error?: string };
+    assert.match(missingData.error || "", /PERSISTENCE_BINDINGS_REQUIRED/);
+
+    // 2. Bound environment: provides ADMIN_COMMAND_DO and DB
+    const mockDb = {
+      prepare: () => ({
+        bind: () => ({
+          run: async () => ({ success: true }),
+          all: async () => ({ results: [] }),
+          first: async () => null,
+        }),
+        run: async () => ({ success: true }),
+        all: async () => ({ results: [] }),
+        first: async () => null,
+      }),
+    };
+    const mockDO = {
+      idFromName: (name: string) => ({ toString: () => `id_${name}` }),
+      get: () => ({
+        fetch: async () => new Response(JSON.stringify({ ok: true })),
+      }),
+    };
+    const envWithPersistence = {
+      ...env,
+      ADMIN_COMMAND_DO: mockDO,
+      DB: mockDb,
+    };
+
     const getReq = new Request("https://new-vs-zana.zana-platform.workers.dev/api/admin/brain/preferences", {
       method: "GET",
       headers: { Authorization: `Bearer ${token}` },
     });
-    const getRes = await worker.fetch(getReq, env as never);
+    const getRes = await worker.fetch(getReq, envWithPersistence as never);
     assert.strictEqual(getRes.status, 200);
 
     const postReq = new Request("https://new-vs-zana.zana-platform.workers.dev/api/admin/brain/preferences", {
@@ -451,7 +486,7 @@ describe("Admin Guard and 3-Layer Protection System", () => {
       },
       body: JSON.stringify({ notificationFrequency: "daily_digest" }),
     });
-    const postRes = await worker.fetch(postReq, env as never);
+    const postRes = await worker.fetch(postReq, envWithPersistence as never);
     assert.strictEqual(postRes.status, 200);
     const data = (await postRes.json()) as { ok?: boolean; preference?: { notificationFrequency?: string } };
     assert.strictEqual(data.ok, true);
@@ -466,7 +501,7 @@ describe("Admin Guard and 3-Layer Protection System", () => {
       },
       body: JSON.stringify({ riskToleranceThreshold: 999 }),
     });
-    const invalidRes = await worker.fetch(invalidPost, env as never);
+    const invalidRes = await worker.fetch(invalidPost, envWithPersistence as never);
     assert.strictEqual(invalidRes.status, 400);
   });
 
@@ -646,5 +681,125 @@ describe("Admin Guard and 3-Layer Protection System", () => {
       // Restore
       (auditLog[0] as { commandText: string }).commandText = originalText;
     }
+  });
+
+  test("Deployment Gate Blocker 1 - Fail-closed 503 on all worker governance routes when DO or DB is missing", async () => {
+    const token = createMockToken({
+      email: "addmin.official.idg@gmail.com",
+      admin: true,
+      role: "SuperAdmin",
+      sub: "fail-closed-tester",
+    });
+
+    const routes = [
+      { path: "/api/admin/brain/command/plan", method: "POST", body: { command: "پشکنین" } },
+      { path: "/api/admin/brain/command/approve", method: "POST", body: { plan: { commandId: "cmd_test" } } },
+      { path: "/api/admin/brain/command/execute", method: "POST", body: { plan: { commandId: "cmd_test" } } },
+      { path: "/api/admin/brain/command/rollback", method: "POST", body: { commandId: "cmd_test" } },
+      { path: "/api/admin/brain/audit", method: "GET" },
+      { path: "/api/admin/brain/audit/checkpoint", method: "POST" },
+      { path: "/api/admin/brain/preferences", method: "GET" },
+      { path: "/api/admin/brain/preferences", method: "POST", body: { notificationFrequency: "daily_digest" } },
+    ];
+
+    for (const r of routes) {
+      const req = new Request(`https://new-vs-zana.zana-platform.workers.dev${r.path}`, {
+        method: r.method,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: r.body ? JSON.stringify(r.body) : undefined,
+      });
+
+      // env missing ADMIN_COMMAND_DO and DB
+      const res = await worker.fetch(req, {} as never);
+      assert.strictEqual(res.status, 503, `Route ${r.path} (${r.method}) must return 503 when bindings are missing`);
+      const body = (await res.json()) as { ok: boolean; error: string; errorKu: string };
+      assert.strictEqual(body.ok, false);
+      assert.match(body.error, /PERSISTENCE_BINDINGS_REQUIRED/);
+      assert.match(body.errorKu, /fail-closed/);
+    }
+  });
+
+  test("Deployment Gate Blocker 3 - Rollback is strictly append-only and preserves audit hash chain integrity", async () => {
+    const { InternalBrainService } = await import("../core/brain/InternalBrainService.ts");
+    const brain = InternalBrainService.getInstance();
+
+    // 1. Initial audit chain integrity check
+    const initialChainCheck = brain.verifyAuditChainIntegrity();
+    assert.strictEqual(initialChainCheck.isValid, true, "Initial chain must be valid");
+
+    // 2. Prepare and execute a command with rollback capability
+    const plan = brain.prepareExecutionPlan("خاوێنکردنەوەی کەش و فایلە کاتییەکان");
+    assert.strictEqual(plan.rollbackAvailable, true, "Plan must have rollbackAvailable: true");
+
+    // If approval is required, approve it
+    if (plan.requiresApproval) {
+      const admin1 = { id: "admin_u1", name: "Admin One", role: "super_admin" as const, email: "admin1@example.com", permissions: ["*"] };
+      brain.approvePlan(plan, admin1, false);
+      if (plan.requiresDualApproval) {
+        const admin2 = { id: "admin_u2", name: "Admin Two", role: "super_admin" as const, email: "admin2@example.com", permissions: ["*"] };
+        brain.approvePlan(plan, admin2, true);
+      }
+    }
+
+    const executedPlan = await brain.executePipeline(plan);
+    assert.strictEqual(executedPlan.isExecuted, true, "Command must be executed");
+
+    // Verify snapshot was created
+    const snapshot = brain.getStateSnapshot(plan.commandId);
+    assert.ok(snapshot, "State snapshot must exist for command");
+
+    // Locate the executed audit log entry
+    const auditBeforeRollback = brain.getAuditLog();
+    const originalAuditEntry = auditBeforeRollback.find((a) => a.commandId === plan.commandId && a.executionStatus === "success");
+    assert.ok(originalAuditEntry, "Original audit entry with executionStatus='success' must exist");
+    const originalEntryId = originalAuditEntry.id;
+    const originalEntryHash = originalAuditEntry.tamperProofHash;
+
+    // Chain must be valid prior to rollback
+    assert.strictEqual(brain.verifyAuditChainIntegrity().isValid, true);
+
+    // 3. Execute rollback
+    const rollbackResult = await brain.rollbackExecutionAsync(plan.commandId);
+    assert.strictEqual(rollbackResult.success, true, "Rollback must succeed");
+    assert.strictEqual(rollbackResult.verified, true, "Rollback state read-back must be verified");
+
+    // 4. Invariant Check: Strictly append-only
+    const auditAfterRollback = brain.getAuditLog();
+    assert.strictEqual(auditAfterRollback.length, auditBeforeRollback.length + 1, "Audit log length must increase by exactly 1");
+
+    // The head of the audit chain must be the new rollback event
+    const headRollbackEntry = auditAfterRollback[0];
+    assert.strictEqual(headRollbackEntry.executionStatus, "rolled_back", "Head audit event must have status 'rolled_back'");
+    assert.strictEqual(headRollbackEntry.commandId, plan.commandId);
+    assert.strictEqual(headRollbackEntry.revertsAuditId, originalEntryId);
+    assert.strictEqual(headRollbackEntry.revertsCommandId, plan.commandId);
+    assert.strictEqual(headRollbackEntry.previousHash, auditBeforeRollback[0].tamperProofHash);
+
+    // CRITICAL: Original entry MUST NOT BE MUTATED
+    const retrievedOriginal = auditAfterRollback.find((a) => a.id === originalEntryId);
+    assert.ok(retrievedOriginal);
+    assert.strictEqual(retrievedOriginal.executionStatus, "success", "Original entry status must remain 'success' without mutation");
+    assert.strictEqual(retrievedOriginal.tamperProofHash, originalEntryHash, "Original entry hash must remain unaltered");
+
+    // Cryptographic hash chain MUST remain valid
+    const postRollbackIntegrity = brain.verifyAuditChainIntegrity();
+    assert.strictEqual(postRollbackIntegrity.isValid, true, "Hash chain must remain valid after rollback");
+
+    // 5. Replay prevention of rollback
+    const secondRollback = await brain.rollbackExecutionAsync(plan.commandId);
+    assert.strictEqual(secondRollback.success, false, "Second rollback attempt must fail");
+    assert.match(secondRollback.messageKu, /پێشتر گەڕێندراوەتەوە/);
+
+    // 6. Rollback failure logging preserves audit integrity
+    const failedRollback = await brain.rollbackExecutionAsync("non_existent_command_999");
+    assert.strictEqual(failedRollback.success, false);
+    const auditAfterFailed = brain.getAuditLog();
+    const failedEntry = auditAfterFailed[0];
+    assert.strictEqual(failedEntry.executionStatus, "rollback_failed");
+    assert.strictEqual(failedEntry.commandId, "non_existent_command_999");
+    assert.strictEqual(brain.verifyAuditChainIntegrity().isValid, true, "Chain must remain valid after rollback failure entry");
   });
 });

@@ -1404,14 +1404,17 @@ export class InternalBrainService {
     };
 
     this.plannedCommands.set(commandId, JSON.parse(JSON.stringify(plan)) as ExecutionPlan);
+    this.repository.saveCommand(plan).catch(console.warn);
     if (plan.rollbackAvailable) {
       const targetPath = affectedFiles[0] || '/cache/curriculum_edge_cache.bin';
       const existingContent = this.managedStateStore.get(targetPath) || 'ACTIVE_CACHE_DATA_V1';
-      this.stateSnapshots.set(commandId, {
+      const snapshotRecord = {
         targetPath,
         previousData: { state: 'pre_mutation', content: existingContent, commandId, timestamp: new Date().toISOString() },
         timestamp: new Date().toISOString(),
-      });
+      };
+      this.stateSnapshots.set(commandId, snapshotRecord);
+      this.repository.saveSnapshot(commandId, targetPath, snapshotRecord.previousData).catch(console.warn);
     }
 
     return plan;
@@ -1721,6 +1724,8 @@ export class InternalBrainService {
     };
     auditEntry.tamperProofHash = this.computeAuditHash(auditEntry);
     this.auditLog.unshift(auditEntry);
+    await this.repository.appendAuditEvent(auditEntry);
+    await this.repository.saveCommand(plan);
 
     // Record decision memory if Level 3, 4, or 5
     if (plan.actionLevel >= 3) {
@@ -1747,28 +1752,15 @@ export class InternalBrainService {
 
   /**
    * Executes a verified safe rollback for an executed command.
+   * Guarantees strict append-only audit invariant: NEVER updates previous audit records.
+   * Appends a new cryptographically chained audit record (status: 'rolled_back' or 'rollback_failed').
    */
   public rollbackExecution(commandId: string): { success: boolean; message: string; messageKu: string; verified: boolean } {
-    const auditEntry = this.auditLog.find((a) => a.commandId === commandId);
-    if (!auditEntry) {
-      return {
-        success: false,
-        verified: false,
-        message: 'Command not found in active audit history.',
-        messageKu: 'فەرمانەکە لە مێژووی کردارەکاندا نەدۆزرایەوە.',
-      };
-    }
-
-    if (!auditEntry.rollbackEligible) {
-      return {
-        success: false,
-        verified: false,
-        message: 'This operation is not rollback eligible.',
-        messageKu: 'ئەم کردارە لە ڕووی سیاسەتەوە توانای گەڕانەوەی بۆ دیاری نەکراوە.',
-      };
-    }
-
-    if (auditEntry.executionStatus === 'rolled_back') {
+    // 1. Check if command was already rolled back
+    const alreadyRolledBack = this.auditLog.some(
+      (a) => a.commandId === commandId && (a.executionStatus === 'rolled_back' || a.executionStatus === 'rollback_completed')
+    );
+    if (alreadyRolledBack) {
       return {
         success: false,
         verified: true,
@@ -1777,31 +1769,296 @@ export class InternalBrainService {
       };
     }
 
-    // 1. Perform state snapshot restoration
-    const snapshot = this.stateSnapshots.get(commandId);
-    if (snapshot) {
-      if (typeof snapshot.previousData.content === 'string') {
-        this.managedStateStore.set(snapshot.targetPath, snapshot.previousData.content);
-      }
-      this.stateSnapshots.delete(commandId);
+    // 2. Locate original execution audit entry
+    const originalEntry = this.auditLog.find((a) => a.commandId === commandId && a.executionStatus === 'success');
+    if (!originalEntry || !originalEntry.rollbackEligible) {
+      const prevHash = this.auditLog.length > 0 ? this.auditLog[0].tamperProofHash : '0000000000000000';
+      const failAudit: AuditLogEntry = {
+        id: `audit_rbfail_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        timestamp: new Date().toISOString(),
+        actor: { id: this.currentUser.id, name: this.currentUser.name, role: this.currentUser.role },
+        commandId,
+        commandText: `Rollback attempt failed for [${commandId}]: not found or not rollback eligible`,
+        actionLevel: originalEntry ? originalEntry.actionLevel : 5,
+        toolCategory: originalEntry ? originalEntry.toolCategory : 'restricted',
+        riskScore: 50,
+        riskLevel: 'high',
+        approvedBy: this.currentUser.name,
+        executionStatus: 'rollback_failed',
+        verificationPassed: false,
+        rollbackEligible: false,
+        previousHash: prevHash,
+        tamperProofHash: '',
+        revertsAuditId: originalEntry?.id,
+        revertsCommandId: commandId,
+      };
+      failAudit.tamperProofHash = this.computeAuditHash(failAudit);
+      this.auditLog.unshift(failAudit);
+      this.repository.appendAuditEvent(failAudit).catch(console.warn);
+
+      return {
+        success: false,
+        verified: false,
+        message: 'This operation is not rollback eligible or command was not found.',
+        messageKu: 'ئەم کردارە لە ڕووی سیاسەتەوە توانای گەڕانەوەی بۆ دیاری نەکراوە یان فەرمانەکە نەدۆزرایەوە.',
+      };
     }
-    const fileOp = this.fileOperations.find((f) => f.backupSnapshotId === auditEntry.commandId || f.id.includes(auditEntry.commandId));
+
+    // 3. Perform state snapshot restoration & read-back verification
+    const snapshot = this.stateSnapshots.get(commandId);
+    let readBackVerified = false;
+    if (snapshot && typeof snapshot.previousData.content === 'string') {
+      this.managedStateStore.set(snapshot.targetPath, snapshot.previousData.content);
+      const readBack = this.managedStateStore.get(snapshot.targetPath);
+      readBackVerified = readBack === snapshot.previousData.content;
+    } else {
+      readBackVerified = true;
+    }
+
+    if (!readBackVerified) {
+      const prevHash = this.auditLog.length > 0 ? this.auditLog[0].tamperProofHash : '0000000000000000';
+      const failAudit: AuditLogEntry = {
+        id: `audit_rbfail_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        timestamp: new Date().toISOString(),
+        actor: { id: this.currentUser.id, name: this.currentUser.name, role: this.currentUser.role },
+        commandId,
+        commandText: `Rollback read-back verification failed for command [${commandId}]`,
+        actionLevel: originalEntry.actionLevel,
+        toolCategory: originalEntry.toolCategory,
+        riskScore: 80,
+        riskLevel: 'critical',
+        approvedBy: this.currentUser.name,
+        executionStatus: 'rollback_failed',
+        verificationPassed: false,
+        rollbackEligible: false,
+        previousHash: prevHash,
+        tamperProofHash: '',
+        revertsAuditId: originalEntry.id,
+        revertsCommandId: commandId,
+        snapshotId: commandId,
+      };
+      failAudit.tamperProofHash = this.computeAuditHash(failAudit);
+      this.auditLog.unshift(failAudit);
+      this.repository.appendAuditEvent(failAudit).catch(console.warn);
+
+      return {
+        success: false,
+        verified: false,
+        message: 'Post-rollback state verification failed.',
+        messageKu: 'پشکنینی دۆخی پاش-گەڕانەوە سەرکەوتوو نەبوو.',
+      };
+    }
+
+    // 4. Update mutable entities outside audit_log (admin_commands & file operations)
+    const fileOp = this.fileOperations.find((f) => f.backupSnapshotId === originalEntry.commandId || f.id.includes(originalEntry.commandId));
     if (fileOp) {
       fileOp.rollbackStatus = 'restored';
     }
+    const registered = this.plannedCommands.get(commandId);
+    if (registered) {
+      registered.rollbackTriggered = true;
+      registered.rollbackSuccess = true;
+      registered.currentPhase = 'learn';
+      this.repository.saveCommand(registered).catch(console.warn);
+    }
+    this.coordinator.rollback(commandId).catch(console.warn);
 
-    // 2. Perform post-rollback verification
-    auditEntry.executionStatus = 'rolled_back';
-    auditEntry.verificationPassed = true;
+    // 5. DO NOT MUTATE originalEntry! Append a NEW audit record with executionStatus: 'rolled_back'
+    const prevHash = this.auditLog.length > 0 ? this.auditLog[0].tamperProofHash : '0000000000000000';
+    const rollbackAuditEntry: AuditLogEntry = {
+      id: `audit_rb_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      timestamp: new Date().toISOString(),
+      actor: {
+        id: this.currentUser.id,
+        name: this.currentUser.name,
+        role: this.currentUser.role,
+      },
+      commandId,
+      commandText: `Rollback command [${commandId}]: Safely restored state to pre-execution snapshot`,
+      actionLevel: originalEntry.actionLevel,
+      toolCategory: originalEntry.toolCategory,
+      riskScore: 10,
+      riskLevel: 'low',
+      approvedBy: this.currentUser.name,
+      dualApprovedBy: originalEntry.dualApprovedBy,
+      executionStatus: 'rolled_back',
+      verificationPassed: true,
+      rollbackEligible: false,
+      previousHash: prevHash,
+      tamperProofHash: '',
+      revertsAuditId: originalEntry.id,
+      revertsCommandId: commandId,
+      snapshotId: commandId,
+    };
+    rollbackAuditEntry.tamperProofHash = this.computeAuditHash(rollbackAuditEntry);
 
-    // 3. Cryptographically re-hash audit chain deterministically
-    auditEntry.tamperProofHash = this.computeAuditHash(auditEntry);
+    // Strictly append-only: unshift new event to head of audit chain
+    this.auditLog.unshift(rollbackAuditEntry);
+    this.repository.appendAuditEvent(rollbackAuditEntry).catch(console.warn);
 
     return {
       success: true,
       verified: true,
-      message: `Command [${commandId}] safely rolled back to pre-execution snapshot. Post-rollback state cryptographically verified with hash ${auditEntry.tamperProofHash.slice(0, 16)}.`,
-      messageKu: `فەرمانی [${commandId}] بە تەواوی گەڕێندرایەوە بۆ دۆخی پێشوو و پشکنینی پاش-گەڕانەوە بە بەڵگەی هاش (${auditEntry.tamperProofHash.slice(0, 16)}) دەستەبەرکرا.`,
+      message: `Command [${commandId}] safely rolled back to pre-execution snapshot. New append-only audit event recorded with hash ${rollbackAuditEntry.tamperProofHash.slice(0, 16)}.`,
+      messageKu: `فەرمانی [${commandId}] بە تەواوی گەڕێندرایەوە بۆ دۆخی پێشوو و ڕووداوێکی نوێی ئۆدیت بە هاش (${rollbackAuditEntry.tamperProofHash.slice(0, 16)}) بە شێوەی نەگۆڕ پاشەکەوت کرا.`,
+    };
+  }
+
+  /**
+   * Async variant of rollbackExecution that awaits D1 persistence and Durable Object coordination.
+   */
+  public async rollbackExecutionAsync(commandId: string): Promise<{ success: boolean; message: string; messageKu: string; verified: boolean }> {
+    const alreadyRolledBack = this.auditLog.some(
+      (a) => a.commandId === commandId && (a.executionStatus === 'rolled_back' || a.executionStatus === 'rollback_completed')
+    );
+    if (alreadyRolledBack) {
+      return {
+        success: false,
+        verified: true,
+        message: 'Command has already been rolled back.',
+        messageKu: 'ئەم فەرمانە پێشتر گەڕێندراوەتەوە.',
+      };
+    }
+
+    let originalEntry = this.auditLog.find((a) => a.commandId === commandId && a.executionStatus === 'success');
+    if (!originalEntry && this.repository) {
+      const persistedLogs = await this.repository.getAuditLog();
+      originalEntry = persistedLogs.find((a) => a.commandId === commandId && a.executionStatus === 'success');
+    }
+
+    if (!originalEntry || !originalEntry.rollbackEligible) {
+      const prevHash = this.auditLog.length > 0 ? this.auditLog[0].tamperProofHash : '0000000000000000';
+      const failAudit: AuditLogEntry = {
+        id: `audit_rbfail_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        timestamp: new Date().toISOString(),
+        actor: { id: this.currentUser.id, name: this.currentUser.name, role: this.currentUser.role },
+        commandId,
+        commandText: `Rollback attempt failed for [${commandId}]: not found or not rollback eligible`,
+        actionLevel: originalEntry ? originalEntry.actionLevel : 5,
+        toolCategory: originalEntry ? originalEntry.toolCategory : 'restricted',
+        riskScore: 50,
+        riskLevel: 'high',
+        approvedBy: this.currentUser.name,
+        executionStatus: 'rollback_failed',
+        verificationPassed: false,
+        rollbackEligible: false,
+        previousHash: prevHash,
+        tamperProofHash: '',
+        revertsAuditId: originalEntry?.id,
+        revertsCommandId: commandId,
+      };
+      failAudit.tamperProofHash = this.computeAuditHash(failAudit);
+      this.auditLog.unshift(failAudit);
+      await this.repository.appendAuditEvent(failAudit);
+
+      return {
+        success: false,
+        verified: false,
+        message: 'This operation is not rollback eligible or command was not found.',
+        messageKu: 'ئەم کردارە لە ڕووی سیاسەتەوە توانای گەڕانەوەی بۆ دیاری نەکراوە یان فەرمانەکە نەدۆزرایەوە.',
+      };
+    }
+
+    let snapshot = this.stateSnapshots.get(commandId);
+    if (!snapshot && this.repository) {
+      const persistedSnap = await this.repository.getSnapshot(commandId);
+      if (persistedSnap) {
+        snapshot = {
+          targetPath: persistedSnap.targetPath,
+          previousData: persistedSnap.previousData,
+          timestamp: persistedSnap.createdAt || new Date().toISOString(),
+        };
+      }
+    }
+
+    let readBackVerified = false;
+    if (snapshot && typeof snapshot.previousData.content === 'string') {
+      this.managedStateStore.set(snapshot.targetPath, snapshot.previousData.content);
+      const readBack = this.managedStateStore.get(snapshot.targetPath);
+      readBackVerified = readBack === snapshot.previousData.content;
+    } else {
+      readBackVerified = true;
+    }
+
+    if (!readBackVerified) {
+      const prevHash = this.auditLog.length > 0 ? this.auditLog[0].tamperProofHash : '0000000000000000';
+      const failAudit: AuditLogEntry = {
+        id: `audit_rbfail_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        timestamp: new Date().toISOString(),
+        actor: { id: this.currentUser.id, name: this.currentUser.name, role: this.currentUser.role },
+        commandId,
+        commandText: `Rollback read-back verification failed for command [${commandId}]`,
+        actionLevel: originalEntry.actionLevel,
+        toolCategory: originalEntry.toolCategory,
+        riskScore: 80,
+        riskLevel: 'critical',
+        approvedBy: this.currentUser.name,
+        executionStatus: 'rollback_failed',
+        verificationPassed: false,
+        rollbackEligible: false,
+        previousHash: prevHash,
+        tamperProofHash: '',
+        revertsAuditId: originalEntry.id,
+        revertsCommandId: commandId,
+        snapshotId: commandId,
+      };
+      failAudit.tamperProofHash = this.computeAuditHash(failAudit);
+      this.auditLog.unshift(failAudit);
+      await this.repository.appendAuditEvent(failAudit);
+
+      return {
+        success: false,
+        verified: false,
+        message: 'Post-rollback state verification failed.',
+        messageKu: 'پشکنینی دۆخی پاش-گەڕانەوە سەرکەوتوو نەبوو.',
+      };
+    }
+
+    const registered = this.plannedCommands.get(commandId) || (await this.repository.getCommand(commandId));
+    if (registered) {
+      registered.rollbackTriggered = true;
+      registered.rollbackSuccess = true;
+      registered.currentPhase = 'learn';
+      this.plannedCommands.set(commandId, registered);
+      await this.repository.saveCommand(registered);
+    }
+    await this.coordinator.rollback(commandId);
+
+    const prevHash = this.auditLog.length > 0 ? this.auditLog[0].tamperProofHash : '0000000000000000';
+    const rollbackAuditEntry: AuditLogEntry = {
+      id: `audit_rb_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      timestamp: new Date().toISOString(),
+      actor: {
+        id: this.currentUser.id,
+        name: this.currentUser.name,
+        role: this.currentUser.role,
+      },
+      commandId,
+      commandText: `Rollback command [${commandId}]: Safely restored state to pre-execution snapshot`,
+      actionLevel: originalEntry.actionLevel,
+      toolCategory: originalEntry.toolCategory,
+      riskScore: 10,
+      riskLevel: 'low',
+      approvedBy: this.currentUser.name,
+      dualApprovedBy: originalEntry.dualApprovedBy,
+      executionStatus: 'rolled_back',
+      verificationPassed: true,
+      rollbackEligible: false,
+      previousHash: prevHash,
+      tamperProofHash: '',
+      revertsAuditId: originalEntry.id,
+      revertsCommandId: commandId,
+      snapshotId: commandId,
+    };
+    rollbackAuditEntry.tamperProofHash = this.computeAuditHash(rollbackAuditEntry);
+    this.auditLog.unshift(rollbackAuditEntry);
+    await this.repository.appendAuditEvent(rollbackAuditEntry);
+
+    return {
+      success: true,
+      verified: true,
+      message: `Command [${commandId}] safely rolled back to pre-execution snapshot. New append-only audit event recorded with hash ${rollbackAuditEntry.tamperProofHash.slice(0, 16)}.`,
+      messageKu: `فەرمانی [${commandId}] بە تەواوی گەڕێندرایەوە بۆ دۆخی پێشوو و ڕووداوێکی نوێی ئۆدیت بە هاش (${rollbackAuditEntry.tamperProofHash.slice(0, 16)}) بە شێوەی نەگۆڕ پاشەکەوت کرا.`,
     };
   }
 

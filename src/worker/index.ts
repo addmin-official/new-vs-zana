@@ -49,7 +49,6 @@ import type { AdminRole, ExecutionPlan, AdminPreferenceMemory } from "../core/br
 import { AdminCommandDO } from "../core/brain/durable/AdminCommandDO.ts";
 import {
   CloudflareDurableObjectCoordinator,
-  LocalDurableObjectCoordinator,
   type DurableObjectNamespaceLike,
 } from "../core/brain/durable/AdminCommandCoordinator.ts";
 import { AdminD1Repository, type D1DatabaseLike } from "../core/brain/storage/AdminD1Repository.ts";
@@ -472,6 +471,27 @@ async function getWorkerAuthenticatedStudentId(req: Request, env: Env): Promise<
   } catch {
     throw new Error("UNAUTHORIZED");
   }
+}
+
+function requireWorkerAdminPersistence(
+  env: Env,
+  brainService: InternalBrainService,
+  responseHeaders: Headers
+): { coordinator: CloudflareDurableObjectCoordinator; repo: AdminD1Repository } | Response {
+  if (!env.ADMIN_COMMAND_DO || !env.DB) {
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        error: "PERSISTENCE_BINDINGS_REQUIRED: ADMIN_COMMAND_DO and DB bindings are required for admin governance routes in Cloudflare Workers.",
+        errorKu: "شکستی بەستنەوەی ژێرخان: فەرمانەکانی بەڕێوەبەرایەتی پێویستیان بە هەردوو بەستنەوەی ADMIN_COMMAND_DO و DB هەیە لە سێرڤەری Cloudflare؛ لە کارکەوتنی خۆپارێز (fail-closed) چالاک کرا و ئیشکردنی مۆڵەتپێنەدراوی بیرگە لە سێرڤەر ڕێگەپێنەدراوە.",
+      }),
+      { status: 503, headers: responseHeaders }
+    );
+  }
+  const coordinator = new CloudflareDurableObjectCoordinator(env.ADMIN_COMMAND_DO);
+  const repo = new AdminD1Repository(env.DB);
+  brainService.setStorageAdapters(coordinator, repo);
+  return { coordinator, repo };
 }
 
 export default {
@@ -1767,6 +1787,10 @@ export default {
         const body = (await request.json().catch(() => ({}))) as { command?: string };
         const commandText = body.command || "";
         const brainService = InternalBrainService.getInstance();
+        const persistence = requireWorkerAdminPersistence(env, brainService, responseHeaders);
+        if (persistence instanceof Response) return persistence;
+        const { coordinator, repo } = persistence;
+
         const plan = brainService.prepareExecutionPlan(commandText);
         const perm = brainService.checkPermission(plan, {
           id: verifiedAdmin?.uid || "admin",
@@ -1775,8 +1799,21 @@ export default {
           email: verifiedAdmin?.email || "admin@example.com",
           permissions: ["*"],
         });
+
+        // Atomically create transactional state in Cloudflare Durable Object and D1 repository
+        const doPlan = await coordinator.createPlan(plan);
+        const effectivePlan = doPlan.plan || plan;
+        await repo.saveCommand(effectivePlan);
+
+        if (effectivePlan.rollbackAvailable) {
+          const snapshot = brainService.getStateSnapshot(effectivePlan.commandId);
+          if (snapshot) {
+            await repo.saveSnapshot(effectivePlan.commandId, snapshot.targetPath, snapshot.previousData);
+          }
+        }
+
         return new Response(
-          JSON.stringify({ ok: true, plan, permission: perm }),
+          JSON.stringify({ ok: true, plan: effectivePlan, permission: perm }),
           { status: 200, headers: responseHeaders }
         );
       }
@@ -1794,6 +1831,10 @@ export default {
           });
         }
         const brainService = InternalBrainService.getInstance();
+        const persistence = requireWorkerAdminPersistence(env, brainService, responseHeaders);
+        if (persistence instanceof Response) return persistence;
+        const { coordinator, repo } = persistence;
+
         const approverUser = {
           id: verifiedAdmin?.uid || "admin_uid",
           name: verifiedAdmin?.email || "Admin Approver",
@@ -1801,10 +1842,33 @@ export default {
           email: verifiedAdmin?.email || "admin@example.com",
           permissions: ["*"],
         };
-        const result = brainService.approvePlan(body.plan, approverUser, Boolean(body.isSecondarySignOff));
+
+        // Approve through Durable Object (enforcing distinct UIDs, expiration window, and D1 shadow sync)
+        const doApprRes = await coordinator.approvePlan(
+          body.plan.commandId,
+          approverUser,
+          Boolean(body.isSecondarySignOff)
+        );
+
+        if (!doApprRes.success) {
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              error: doApprRes.error || "Approval rejected",
+              errorKu: doApprRes.errorKu || "پەسەندکردن ڕەتکرایەوە.",
+              plan: body.plan,
+            }),
+            { status: 400, headers: responseHeaders }
+          );
+        }
+
+        const approvedPlan = doApprRes.plan || body.plan;
+        brainService.approvePlan(approvedPlan, approverUser, Boolean(body.isSecondarySignOff));
+        await repo.saveCommand(approvedPlan);
+
         return new Response(
-          JSON.stringify({ ok: result.success, ...result, plan: body.plan }),
-          { status: result.success ? 200 : 400, headers: responseHeaders }
+          JSON.stringify({ ok: true, isFullyApproved: doApprRes.isFullyApproved, plan: approvedPlan }),
+          { status: 200, headers: responseHeaders }
         );
       }
 
@@ -1818,8 +1882,14 @@ export default {
           });
         }
         const brainService = InternalBrainService.getInstance();
+        const persistence = requireWorkerAdminPersistence(env, brainService, responseHeaders);
+        if (persistence instanceof Response) return persistence;
+        const { repo } = persistence;
+
         const executedPlan = await brainService.executePipeline(body.plan);
         const isRejected = executedPlan.requiresApproval && !executedPlan.isApproved;
+        await repo.saveCommand(executedPlan);
+
         return new Response(
           JSON.stringify({ ok: !isRejected, plan: executedPlan }),
           { status: isRejected ? 400 : 200, headers: responseHeaders }
@@ -1836,7 +1906,10 @@ export default {
           });
         }
         const brainService = InternalBrainService.getInstance();
-        const result = brainService.rollbackExecution(body.commandId);
+        const persistence = requireWorkerAdminPersistence(env, brainService, responseHeaders);
+        if (persistence instanceof Response) return persistence;
+
+        const result = await brainService.rollbackExecutionAsync(body.commandId);
         return new Response(
           JSON.stringify({ ok: result.success, ...result }),
           { status: result.success ? 200 : 400, headers: responseHeaders }
@@ -1864,11 +1937,9 @@ export default {
       // GET /api/admin/brain/audit (Audit History & Chain Integrity)
       if (pathname === "/api/admin/brain/audit" && request.method === "GET") {
         const brainService = InternalBrainService.getInstance();
-        const coordinator = env.ADMIN_COMMAND_DO
-          ? new CloudflareDurableObjectCoordinator(env.ADMIN_COMMAND_DO)
-          : new LocalDurableObjectCoordinator({ DB: env.DB });
-        const repo = new AdminD1Repository(env.DB);
-        brainService.setStorageAdapters(coordinator, repo);
+        const persistence = requireWorkerAdminPersistence(env, brainService, responseHeaders);
+        if (persistence instanceof Response) return persistence;
+        const { repo } = persistence;
 
         const auditLog = await repo.getAuditLog();
         const integrity = brainService.verifyAuditChainIntegrity();
@@ -1887,11 +1958,8 @@ export default {
       // POST /api/admin/brain/audit/checkpoint (Cryptographic Checkpoint)
       if (pathname === "/api/admin/brain/audit/checkpoint" && request.method === "POST") {
         const brainService = InternalBrainService.getInstance();
-        const coordinator = env.ADMIN_COMMAND_DO
-          ? new CloudflareDurableObjectCoordinator(env.ADMIN_COMMAND_DO)
-          : new LocalDurableObjectCoordinator({ DB: env.DB });
-        const repo = new AdminD1Repository(env.DB);
-        brainService.setStorageAdapters(coordinator, repo);
+        const persistence = requireWorkerAdminPersistence(env, brainService, responseHeaders);
+        if (persistence instanceof Response) return persistence;
 
         const checkpoint = brainService.createAuditCheckpoint(env.AUDIT_HMAC_SECRET);
         return new Response(
@@ -1903,11 +1971,9 @@ export default {
       // GET /api/admin/brain/preferences (Admin Preference Memory)
       if (pathname === "/api/admin/brain/preferences" && request.method === "GET") {
         const brainService = InternalBrainService.getInstance();
-        const coordinator = env.ADMIN_COMMAND_DO
-          ? new CloudflareDurableObjectCoordinator(env.ADMIN_COMMAND_DO)
-          : new LocalDurableObjectCoordinator({ DB: env.DB });
-        const repo = new AdminD1Repository(env.DB);
-        brainService.setStorageAdapters(coordinator, repo);
+        const persistence = requireWorkerAdminPersistence(env, brainService, responseHeaders);
+        if (persistence instanceof Response) return persistence;
+        const { repo } = persistence;
 
         const preferences = (verifiedAdmin?.role as AdminRole) === "super_admin"
           ? await repo.getPreferences()
@@ -1922,11 +1988,9 @@ export default {
       if (pathname === "/api/admin/brain/preferences" && request.method === "POST") {
         const body = (await request.json().catch(() => ({}))) as Partial<AdminPreferenceMemory>;
         const brainService = InternalBrainService.getInstance();
-        const coordinator = env.ADMIN_COMMAND_DO
-          ? new CloudflareDurableObjectCoordinator(env.ADMIN_COMMAND_DO)
-          : new LocalDurableObjectCoordinator({ DB: env.DB });
-        const repo = new AdminD1Repository(env.DB);
-        brainService.setStorageAdapters(coordinator, repo);
+        const persistence = requireWorkerAdminPersistence(env, brainService, responseHeaders);
+        if (persistence instanceof Response) return persistence;
+        const { repo } = persistence;
 
         try {
           const updated = brainService.updatePreferenceMemory(body, verifiedAdmin?.uid || "admin_sys_01");

@@ -65,7 +65,19 @@ requireMatch(workflow, /npm run test:smoke/, 'Production smoke-test gate is miss
 requireMatch(workflow, /Verify Production Exposure Security/, 'Production security exposure gate is missing.');
 requireMatch(workflow, /Generate Release Tag & Metadata/, 'Release metadata gate is missing.');
 requireMatch(workflow, /wrangler deploy --config wrangler\.production\.json/, 'Production deployment must use Wrangler and wrangler.production.json.');
+requireMatch(workflow, /wrangler d1 migrations apply DB --remote --config wrangler\.production\.json/, 'Production deployment must run remote D1 database migrations before deploy.');
+requireMatch(wrangler, /"binding"\s*:\s*"DB"/, 'D1 database binding DB is missing from wrangler.jsonc.');
+requireMatch(wrangler, /"name"\s*:\s*"ADMIN_COMMAND_DO"/, 'Durable Object binding ADMIN_COMMAND_DO is missing from wrangler.jsonc.');
 forbidMatch(workflow, /firebase\s+deploy|hosting:|functions:/i, 'CI contains a forbidden Firebase Hosting or Functions deployment.');
+
+// Migration files & triggers contract.
+const mig01 = read('migrations/0001_initial_schema.sql');
+const mig02 = read('migrations/0002_admin_persistence.sql');
+requireMatch(mig01, /CREATE TABLE IF NOT EXISTS students/, 'Migration 0001 must create students table.');
+requireMatch(mig02, /CREATE TABLE IF NOT EXISTS admin_commands/, 'Migration 0002 must create admin_commands table.');
+requireMatch(mig02, /CREATE TABLE IF NOT EXISTS audit_log/, 'Migration 0002 must create audit_log table.');
+requireMatch(mig02, /trg_prevent_audit_log_update/, 'Migration 0002 must enforce append-only trigger trg_prevent_audit_log_update.');
+requireMatch(mig02, /trg_prevent_audit_log_delete/, 'Migration 0002 must enforce append-only trigger trg_prevent_audit_log_delete.');
 
 // Valid AI routes must stay real production checks expecting HTTP 200.
 const validRoutes = [

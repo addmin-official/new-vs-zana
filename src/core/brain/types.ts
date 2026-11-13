@@ -452,9 +452,12 @@ export interface AuditLogEntry {
   riskLevel: RiskLevel;
   approvedBy?: string;
   dualApprovedBy?: string;
-  executionStatus: 'success' | 'failure' | 'rolled_back' | 'rejected' | 'security_blocked';
+  executionStatus: 'success' | 'failure' | 'rolled_back' | 'rejected' | 'security_blocked' | 'rollback_completed' | 'rollback_failed';
   verificationPassed: boolean;
   rollbackEligible: boolean;
   tamperProofHash: string;
   previousHash: string;
+  revertsAuditId?: string;
+  revertsCommandId?: string;
+  snapshotId?: string;
 }
