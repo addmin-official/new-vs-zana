@@ -1,6 +1,7 @@
 // Test Environment Bootstrap Setup
 process.env.NODE_ENV = "test";
 process.env.ZANA_ENV = "test";
+process.env.ALLOW_TEST_AUTH_MOCK = "true";
 
 // Ensure a reliable JWT secret is available in tests
 if (!process.env.JWT_SECRET) {

@@ -47,3 +47,58 @@ export async function getInternalTelemetry() {
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
+
+export async function planAdminCommand(command: string) {
+  const res = await adminFetch("/api/admin/brain/command/plan", {
+    method: "POST",
+    body: JSON.stringify({ command }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function approveAdminCommand(plan: unknown, isSecondarySignOff = false) {
+  const res = await adminFetch("/api/admin/brain/command/approve", {
+    method: "POST",
+    body: JSON.stringify({ plan, isSecondarySignOff }),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error((errorData as { error?: string })?.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function executeAdminCommand(plan: unknown) {
+  const res = await adminFetch("/api/admin/brain/command/execute", {
+    method: "POST",
+    body: JSON.stringify({ plan }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function rollbackAdminCommand(commandId: string) {
+  const res = await adminFetch("/api/admin/brain/command/rollback", {
+    method: "POST",
+    body: JSON.stringify({ commandId }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function runAdminGoldenTest(testId?: string) {
+  const res = await adminFetch("/api/admin/brain/golden-tests/run", {
+    method: "POST",
+    body: JSON.stringify({ testId }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function getAdminAuditLog() {
+  const res = await adminFetch("/api/admin/brain/audit");
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+

@@ -23,9 +23,12 @@ import {
  Database,
  CheckSquare,
  Zap,
+ X,
+ RefreshCw,
 } from "lucide-react";
 import { InternalBrainService } from "../../core/brain/InternalBrainService";
 import { getBrainStatus, getBrainMetrics } from "../../services/adminApi.ts";
+import { useIsAdmin } from "../../hooks/useIsAdmin.ts";
 import {
  ACTION_LEVEL_DEFINITIONS,
  ActionLevel,
@@ -60,13 +63,49 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
  const [activeSubTab, setActiveSubTab] = useState<BrainSubTab>("overview");
 
  const [snapshot, setSnapshot] = useState<ObservabilitySnapshot>(brain.getObservabilitySnapshot());
- const [currentRole, setCurrentRole] = useState<AdminRole>(brain.getCurrentUser().role);
+ const adminInfo = useIsAdmin();
+ const normalizedRole: AdminRole = (() => {
+  const raw = (adminInfo.role || "").toLowerCase();
+  if (raw.includes("super")) return "super_admin";
+  if (raw.includes("sys")) return "system_admin";
+  if (raw.includes("op")) return "operator";
+  if (raw.includes("audit")) return "auditor";
+  return brain.getCurrentUser().role;
+ })();
+
+ const [currentRole, setCurrentRole] = useState<AdminRole>(normalizedRole);
  const [failures, setFailures] = useState<FailureRecord[]>(brain.getFailureRecords());
  const [fileOps] = useState<FileOperationRecord[]>(brain.getFileOperations());
  const [knowledgeGaps] = useState<KnowledgeGap[]>(brain.getKnowledgeGaps());
  const [goldenTests, setGoldenTests] = useState<GoldenTestCase[]>(brain.getGoldenTests());
  const [auditLogs, setAuditLogs] = useState(brain.getAuditLog());
  const [kpis] = useState(brain.getKPIs());
+
+ // Live Backend Synchronization State
+ const [backendSync, setBackendSync] = useState<{
+  loading: boolean;
+  error: string | null;
+  statusData: Record<string, unknown> | null;
+  metricsData: Record<string, unknown> | null;
+ }>({
+  loading: true,
+  error: null,
+  statusData: null,
+  metricsData: null,
+ });
+
+ // Toast Notification State
+ const [notification, setNotification] = useState<{
+  type: "success" | "error" | "info";
+  message: string;
+ } | null>(null);
+
+ const showNotification = (type: "success" | "error" | "info", message: string) => {
+  setNotification({ type, message });
+  setTimeout(() => {
+   setNotification((curr) => (curr?.message === message ? null : curr));
+  }, 6000);
+ };
 
  // Command Execution State (10 steps)
  const [commandInput, setCommandInput] = useState("");
@@ -91,29 +130,35 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
  return () => clearInterval(timer);
  }, [brain]);
 
- // Synchronize and verify backend admin connection
+ // Keep internal brain role in sync with verified token role
  useEffect(() => {
- let isMounted = true;
- Promise.all([getBrainStatus(), getBrainMetrics()])
- .then(([status, metrics]) => {
- if (isMounted) {
- console.log("[BrainAdminDashboard] Backend Admin Connection Verified:", { status, metrics });
- }
- })
- .catch((err) => {
- if (isMounted) {
- console.warn("[BrainAdminDashboard] Admin backend status check:", (err as Error)?.message || err);
- }
- });
- return () => {
- isMounted = false;
- };
- }, []);
+  setCurrentRole(normalizedRole);
+  brain.setAdminRole(normalizedRole);
+ }, [normalizedRole, brain]);
 
- const handleRoleChange = (newRole: AdminRole) => {
- brain.setAdminRole(newRole);
- setCurrentRole(newRole);
+ // Fetch real backend status & metrics
+ const fetchBackendStatus = async () => {
+  setBackendSync((prev) => ({ ...prev, loading: true, error: null }));
+  try {
+   const [status, metrics] = await Promise.all([getBrainStatus(), getBrainMetrics()]);
+   setBackendSync({
+    loading: false,
+    error: null,
+    statusData: status,
+    metricsData: metrics,
+   });
+  } catch (err) {
+   setBackendSync((prev) => ({
+    ...prev,
+    loading: false,
+    error: (err as Error)?.message || "شکست لە پەیوەندی بە سێرڤەر",
+   }));
+  }
  };
+
+ useEffect(() => {
+  void fetchBackendStatus();
+ }, []);
 
  const handlePlanCommand = (cmdText?: string) => {
  const textToRun = cmdText || commandInput;
@@ -167,57 +212,65 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
  };
 
  const handlePrimaryApprove = async () => {
- if (!activePlan) return;
- const res = brain.approvePlan(activePlan, brain.getCurrentUser(), false);
- if (!res.success) {
- alert(res.error);
- return;
- }
- setActivePlan({ ...activePlan });
- if (res.isFullyApproved) {
- await handleRunExecution();
- }
+  if (!activePlan) return;
+  const currentUid = adminInfo.uid || brain.getCurrentUser().id;
+  const res = brain.approvePlan(activePlan, { ...brain.getCurrentUser(), id: currentUid }, false);
+  if (!res.success) {
+   showNotification("error", res.error || "هەڵە لە پەسەندکردنی سەرەکی");
+   return;
+  }
+  setActivePlan({ ...activePlan });
+  showNotification("info", "واژۆی سەرەکی بە سەرکەوتوویی تۆمار کرا.");
+  if (res.isFullyApproved) {
+   await handleRunExecution();
+  }
  };
 
  const handleSecondaryApprove = async () => {
- if (!activePlan) return;
- const res = brain.approvePlan(activePlan, brain.getCurrentUser(), true);
- if (!res.success) {
- alert(res.error);
- return;
- }
- setActivePlan({ ...activePlan });
- if (res.isFullyApproved) {
- await handleRunExecution();
- }
+  if (!activePlan) return;
+  const currentUid = adminInfo.uid || brain.getCurrentUser().id;
+  if (activePlan.dualApproval?.primaryApproverId && activePlan.dualApproval.primaryApproverId === currentUid) {
+   showNotification("error", "سەرپێچی پەسەندکردنی دوو-قۆناغی: ناکرێت هەمان بەکارهێنەر واژۆی دووەم بکات.");
+   return;
+  }
+  const res = brain.approvePlan(activePlan, { ...brain.getCurrentUser(), id: currentUid }, true);
+  if (!res.success) {
+   showNotification("error", res.error || "هەڵە لە پەسەندکردنی دووەم");
+   return;
+  }
+  setActivePlan({ ...activePlan });
+  showNotification("info", "واژۆی دووەم بە سەرکەوتوویی تۆمار کرا.");
+  if (res.isFullyApproved) {
+   await handleRunExecution();
+  }
  };
 
  const handleRollback = (commandId: string) => {
- const res = brain.rollbackExecution(commandId);
- if (res.success) {
- alert(`${res.messageKu}\n${res.message}`);
- setAuditLogs([...brain.getAuditLog()]);
- } else {
- alert(`هەڵە: ${res.messageKu}`);
- }
+  const res = brain.rollbackExecution(commandId);
+  if (res.success) {
+   showNotification("success", `${res.messageKu} - ${res.message}`);
+   setAuditLogs([...brain.getAuditLog()]);
+  } else {
+   showNotification("error", `هەڵە لە گەڕاندنەوە: ${res.messageKu}`);
+  }
  };
 
  const handleRunGoldenTest = (testId: string) => {
- const res = brain.runGoldenTest(testId);
- setGoldenTests([...brain.getGoldenTests()]);
- alert(res.messageKu);
+  const res = brain.runGoldenTest(testId);
+  setGoldenTests([...brain.getGoldenTests()]);
+  showNotification(res.success ? "success" : "error", res.messageKu);
  };
 
  const handleRunAllGoldenTests = () => {
- const res = brain.runAllGoldenTests();
- setGoldenTests([...brain.getGoldenTests()]);
- alert(res.messageKu);
+  const res = brain.runAllGoldenTests();
+  setGoldenTests([...brain.getGoldenTests()]);
+  showNotification(res.passedCount === res.totalCount ? "success" : "error", res.messageKu);
  };
 
  const handleStagedRollout = async (failureId: string) => {
- const res = await brain.triggerStagedRollout(failureId);
- setFailures([...brain.getFailureRecords()]);
- alert(res.messageKu);
+  const res = await brain.triggerStagedRollout(failureId);
+  setFailures([...brain.getFailureRecords()]);
+  showNotification(res.success ? "success" : "error", res.messageKu);
  };
 
  const handleAskQa = (question: string) => {
@@ -299,28 +352,18 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
  </div>
 
  <div className="flex items-center gap-2 flex-wrap">
- {/* RBAC Role Switcher */}
- <div className="flex items-center bg-slate-800/90 rounded-lg p-1 border border-slate-700 text-xs">
- <span className="text-slate-400 px-2 text-[11px]">دەسەڵات (Role):</span>
- {(["super_admin", "system_admin", "operator", "auditor"] as AdminRole[]).map((r) => (
- <button
- key={r}
- onClick={() => handleRoleChange(r)}
- className={`px-2 py-1 rounded text-[11px] font-medium transition-colors ${
- currentRole === r
- ? "bg-blue-600 text-white font-bold"
- : "text-slate-400 hover:text-white"
- }`}
- >
- {r === "super_admin"
- ? "SuperAdmin"
- : r === "system_admin"
- ? "SysAdmin"
- : r === "operator"
- ? "Operator"
- : "Auditor"}
- </button>
- ))}
+ {/* Verified Admin Role Badge */}
+ <div className="flex items-center bg-slate-800/90 rounded-lg px-3 py-1.5 border border-slate-700 text-xs gap-2">
+ <ShieldCheck className="w-4 h-4 text-emerald-400" />
+ <span className="text-slate-400 text-[11px]">دەسەڵاتی پشتڕاستکراو:</span>
+ <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-blue-600/30 text-blue-400 border border-blue-500/40">
+ {adminInfo.loading ? "پشکنین..." : (adminInfo.role || currentRole)}
+ </span>
+ {adminInfo.email && (
+ <span className="text-slate-400 text-[10px] hidden sm:inline" dir="ltr">
+ ({adminInfo.email})
+ </span>
+ )}
  </div>
 
  {onBackToApp && (
@@ -367,6 +410,72 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
  </header>
 
  {/* Main Content Area */}
+ {/* Toast Notification */}
+ {notification && (
+ <div
+ role="status"
+ aria-live="polite"
+ className={`fixed bottom-6 left-6 z-50 max-w-md p-4 rounded-xl shadow-2xl border flex items-center justify-between gap-3 text-sm transition-all ${
+ notification.type === "error"
+ ? "bg-rose-950/95 border-rose-700 text-rose-200"
+ : notification.type === "success"
+ ? "bg-emerald-950/95 border-emerald-700 text-emerald-200"
+ : "bg-slate-900/95 border-blue-700 text-slate-100"
+ }`}
+ >
+ <div className="flex items-center gap-2">
+ {notification.type === "error" ? (
+ <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
+ ) : notification.type === "success" ? (
+ <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+ ) : (
+ <ShieldCheck className="w-5 h-5 text-blue-400 shrink-0" />
+ )}
+ <span>{notification.message}</span>
+ </div>
+ <button
+ onClick={() => setNotification(null)}
+ className="text-slate-400 hover:text-white p-1 rounded-md"
+ aria-label="داخستن"
+ >
+ <X className="w-4 h-4" />
+ </button>
+ </div>
+ )}
+
+ {/* Backend Live Connection Status Banner */}
+ <div className="bg-slate-900/60 border-b border-slate-800 px-4 py-2 text-xs">
+ <div className="max-w-6xl mx-auto flex items-center justify-between gap-2 flex-wrap">
+ <div className="flex items-center gap-2">
+ <span className="text-slate-400">دۆخی پەیوەندی بە سێرڤەر:</span>
+ {backendSync.loading ? (
+ <span className="flex items-center gap-1.5 text-blue-400 font-mono">
+ <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+ لە پشکنیندایە...
+ </span>
+ ) : backendSync.error ? (
+ <span className="flex items-center gap-1.5 text-rose-400">
+ <AlertTriangle className="w-3.5 h-3.5" />
+ سێرڤەر وەڵام ناداتەوە ({backendSync.error})
+ </span>
+ ) : (
+ <span className="flex items-center gap-1.5 text-emerald-400 font-mono">
+ <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+ سێرڤەر پەیوەستە ({String(backendSync.statusData?.service || "Cloudflare Worker Live")})
+ </span>
+ )}
+ </div>
+ <button
+ onClick={fetchBackendStatus}
+ disabled={backendSync.loading}
+ className="flex items-center gap-1 text-[11px] text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded border border-slate-700 transition disabled:opacity-50"
+ >
+ <RefreshCw className={`w-3 h-3 ${backendSync.loading ? "animate-spin" : ""}`} />
+ <span>نوێکردنەوەی دۆخ</span>
+ </button>
+ </div>
+ </div>
+
  <main className="max-w-6xl mx-auto w-full p-4 md:p-6 flex-1 space-y-6">
 
  {/* 1. OVERVIEW: 8 DASHBOARD CARDS & SECTION 6 ACTION LEVELS */}
@@ -390,7 +499,7 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
  <div className="mt-2 space-y-1">
  <div className="flex justify-between text-xs">
  <span className="text-slate-400">Status:</span>
- <strong className="text-emerald-400 font-mono uppercase">{snapshot.overallHealth}</strong>
+ <strong className="text-emerald-400 font-mono uppercase">{String(backendSync.statusData?.status || snapshot.overallHealth)}</strong>
  </div>
  <div className="flex justify-between text-xs">
  <span className="text-slate-400">Services:</span>
@@ -401,7 +510,7 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
  <strong className="text-emerald-400 font-mono">{snapshot.aiFailureRate}%</strong>
  </div>
  </div>
- <span className="text-[10px] text-slate-500 mt-2">سەرجەم ٦ خزمەتگوزاریی لە هێڵدان</span>
+ <span className="text-[10px] text-slate-500 mt-2">خزمەتگوزارییەکانی پارێزراو لە هێڵدان</span>
  </div>
 
  {/* Card 2: Brain Activity */}
@@ -413,18 +522,18 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
  <div className="mt-2 space-y-1">
  <div className="flex justify-between text-xs">
  <span className="text-slate-400">ژمارەی فەرمان:</span>
- <strong className="text-white font-mono">{auditLogs.length + 14}</strong>
+ <strong className="text-white font-mono">{auditLogs.length} تۆمار</strong>
  </div>
  <div className="flex justify-between text-xs">
  <span className="text-slate-400">سەرکەوتن:</span>
- <strong className="text-emerald-400 font-mono">99.4%</strong>
+ <strong className="text-emerald-400 font-mono">{auditLogs.length > 0 ? `${((auditLogs.filter(l => l.executionStatus === "success").length / auditLogs.length) * 100).toFixed(1)}%` : "داتامان نییە"}</strong>
  </div>
  <div className="flex justify-between text-xs">
  <span className="text-slate-400">شکست:</span>
  <strong className="text-amber-400 font-mono">{failures.length} تۆمار</strong>
  </div>
  </div>
- <span className="text-[10px] text-slate-500 mt-2">خێرایی بڕیاردان ~160ms</span>
+ <span className="text-[10px] text-slate-500 mt-2">خێرایی بڕیاردان: لە پشکنیندایە / بێ APM</span>
  </div>
 
  {/* Card 3: Approvals */}
@@ -442,7 +551,9 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
  </div>
  <div className="flex justify-between text-xs">
  <span className="text-slate-400">ئاستی ٤ (Single):</span>
- <strong className="text-slate-300 font-mono">0 pending</strong>
+ <strong className="text-slate-300 font-mono">
+ {activePlan && activePlan.requiresApproval && !activePlan.requiresDualApproval && !activePlan.isApproved ? "1 چاوەڕوان" : "0"}
+ </strong>
  </div>
  <div className="flex justify-between text-xs">
  <span className="text-slate-400">ئاستی ٥ (Dual):</span>
@@ -451,7 +562,7 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
  </strong>
  </div>
  </div>
- <span className="text-[10px] text-slate-500 mt-2">دوو-قۆناغی پەسەندکردن چالاکە</span>
+ <span className="text-[10px] text-slate-500 mt-2">پەسەندکردنی دوو کەسی سەربەخۆ پابەند کراوە</span>
  </div>
 
  {/* Card 4: Incidents */}
@@ -463,18 +574,18 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
  <div className="mt-2 space-y-1">
  <div className="flex justify-between text-xs">
  <span className="text-slate-400">Critical:</span>
- <strong className="text-emerald-400 font-mono">0</strong>
+ <strong className="text-rose-400 font-mono">{failures.filter(f => f.impact === "critical").length}</strong>
  </div>
  <div className="flex justify-between text-xs">
  <span className="text-slate-400">Medium/Low:</span>
- <strong className="text-amber-400 font-mono">1 (چارەسەرکراو)</strong>
+ <strong className="text-amber-400 font-mono">{failures.filter(f => f.impact !== "critical").length} تۆمار</strong>
  </div>
  <div className="flex justify-between text-xs">
  <span className="text-slate-400">MTTD / MTTR:</span>
- <strong className="text-blue-400 font-mono">28s / 190s</strong>
+ <strong className="text-slate-400 font-mono text-[11px]">بەردەست نییە (بێ APM)</strong>
  </div>
  </div>
- <span className="text-[10px] text-slate-500 mt-2">RCA + CAPA تۆمار کراوە</span>
+ <span className="text-[10px] text-slate-500 mt-2">RCA + CAPA لە شکستی نوێ تۆمار دەکرێت</span>
  </div>
 
  {/* Card 5: Knowledge Gaps */}
@@ -490,14 +601,14 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
  </div>
  <div className="flex justify-between text-xs">
  <span className="text-slate-400">تێکڕای متمانە:</span>
- <strong className="text-slate-300 font-mono">71%</strong>
+ <strong className="text-slate-300 font-mono">{knowledgeGaps.length > 0 ? `${(knowledgeGaps.reduce((acc, g) => acc + g.confidenceScore, 0) / knowledgeGaps.length).toFixed(0)}%` : "بەردەست نییە"}</strong>
  </div>
  <div className="flex justify-between text-xs">
  <span className="text-slate-400">ڕێژەی چارەسەر:</span>
- <strong className="text-emerald-400 font-mono">{kpis.knowledgeGapClosureRate}%</strong>
+ <strong className="text-emerald-400 font-mono">{kpis.knowledgeGapClosureRate ? `${kpis.knowledgeGapClosureRate}%` : "0%"}</strong>
  </div>
  </div>
- <span className="text-[10px] text-slate-500 mt-2">پاتچی خۆکار پێشنیازکراوە</span>
+ <span className="text-[10px] text-slate-500 mt-2">پاتچی ناوخۆیی لە کەلێن پێشنیاز دەکرێت</span>
  </div>
 
  {/* Card 6: File Operations */}
@@ -513,14 +624,14 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
  </div>
  <div className="flex justify-between text-xs">
  <span className="text-slate-400">کرداری هەستیار:</span>
- <strong className="text-amber-400 font-mono">1 (سڕینەوە بە باکئەپ)</strong>
+ <strong className="text-amber-400 font-mono">{fileOps.filter(f => f.operation === "delete" || f.operation === "overwrite").length} تۆمار</strong>
  </div>
  <div className="flex justify-between text-xs">
  <span className="text-slate-400">توانای گەڕانەوە:</span>
- <strong className="text-emerald-400 font-mono">100%</strong>
+ <strong className="text-emerald-400 font-mono">سناپشۆتی هەڵگیراو</strong>
  </div>
  </div>
- <span className="text-[10px] text-slate-500 mt-2">باکئەپ و سناپشۆت دروست دەکرێت</span>
+ <span className="text-[10px] text-slate-500 mt-2">باکئەپ و پێداچوونەوە پابەند کراوە</span>
  </div>
 
  {/* Card 7: Recommendations */}
@@ -531,7 +642,9 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
  </div>
  <div className="mt-2 space-y-1">
  <p className="text-[11px] text-slate-300 leading-tight">
- پێشنیازی پاککردنەوەی کەشی کاتی و پشکنینی یوونیکۆد.
+ {failures.length > 0
+   ? `پێداچوونەوە بە ${failures.length} شکستی تۆمارکراو لە تابی فێربوون.`
+   : "سیستەم جێگیرە؛ پێشنیاری پشکنینی ڕێکخستنەکان."}
  </p>
  <p className="text-[10px] text-slate-400 mt-1">
  بێ گۆڕینی کۆدی بەرهەمهێنان بێ مۆڵەت.
@@ -553,14 +666,14 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
  </div>
  <div className="flex justify-between text-xs">
  <span className="text-slate-400">زنجیرەی هاش:</span>
- <strong className="text-emerald-400 font-mono">Tamper-Proof</strong>
+ <strong className="text-emerald-400 font-mono">HMAC/SHA-256</strong>
  </div>
  <div className="flex justify-between text-xs">
- <span className="text-slate-400">تەواوی ئۆدیت:</span>
- <strong className="text-indigo-400 font-mono">100%</strong>
+ <span className="text-slate-400">دۆخی ئۆدیت:</span>
+ <strong className="text-indigo-400 font-mono">Tamper-Evident</strong>
  </div>
  </div>
- <span className="text-[10px] text-slate-500 mt-2">هەموو بڕیارەکان بە کات پاشەکەوت دەبن</span>
+ <span className="text-[10px] text-slate-500 mt-2">هەموو بڕیارەکان بە واژۆی زنجیرەیی پارێزراون</span>
  </div>
  </div>
 
@@ -1162,6 +1275,19 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
  <span className="text-[10px] text-slate-500">Retention: 365 days</span>
  </span>
  <p className="text-slate-300 text-[11px]">{brain.getDecisionMemory()[0]?.decisionRationaleKu}</p>
+ </div>
+
+ {/* 5. Preference Memory */}
+ <div className="bg-slate-950 p-3.5 rounded-lg border border-slate-800 space-y-2 md:col-span-2">
+ <span className="font-bold text-pink-400 flex items-center justify-between">
+ <span>٥. Preference Memory (بیرگەی هەڵبژاردن و ڕێکخستنی بەڕێوەبەر)</span>
+ <span className="text-[10px] text-slate-500">Retention: 365 days</span>
+ </span>
+ <p className="text-slate-300 text-[11px]">
+ {brain.getPreferenceMemory()[0]
+   ? `ڕێکخستنی ئامادەکراو: شێواز (${brain.getPreferenceMemory()[0].reportingStyle}) | سنووری مەترسی (${brain.getPreferenceMemory()[0].riskToleranceThreshold}%) | ئاگاداری (${brain.getPreferenceMemory()[0].notificationFrequency}) | زمان (${brain.getPreferenceMemory()[0].languagePreference})`
+   : "هیچ ڕێکخستنێکی تایبەت پاشەکەوت نەکراوە."}
+ </p>
  </div>
  </div>
  </div>

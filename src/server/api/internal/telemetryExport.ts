@@ -1,3 +1,5 @@
+import { verifyAdmin } from '../../../worker/adminGuard.ts';
+
 export interface TelemetryExportEnv {
   ADMIN_TELEMETRY_SECRET?: string;
   LEARNING_RECORDS_KV?: {
@@ -11,15 +13,19 @@ export async function handleTelemetryExportRoute(
   request: Request,
   env: TelemetryExportEnv | Record<string, unknown>
 ): Promise<Response> {
-  // Strict Machine-to-Machine / Admin authentication (Do NOT use student Firebase tokens here)
+  // Support both machine-to-machine secret and verified admin user ID tokens
   const authHeader = request.headers.get('Authorization');
   const secret = (env as TelemetryExportEnv)?.ADMIN_TELEMETRY_SECRET;
+  const isM2mSecret = Boolean(secret && authHeader === `Bearer ${secret}`);
 
-  if (!secret || authHeader !== `Bearer ${secret}`) {
-    return new Response(JSON.stringify({ error: 'Forbidden' }), {
-      status: 403,
-      headers: { 'Content-Type': 'application/json' },
-    });
+  if (!isM2mSecret) {
+    const adminCheck = await verifyAdmin(request, env as never);
+    if (!adminCheck.ok) {
+      return new Response(JSON.stringify({ error: 'Forbidden', detail: adminCheck.error || 'Unauthorized' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
   }
 
   try {

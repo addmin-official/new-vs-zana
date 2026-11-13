@@ -33,7 +33,7 @@ export function AdminRoute({ children }: { children: React.ReactNode }) {
  </div>
  <h2 className="text-lg font-bold text-white mb-2">دەستگەیشتن سنووردارکراوە (403 Forbidden)</h2>
  <p className="text-sm text-slate-400 mb-6">
- داشبۆردی مێشکی پۆرتاڵ تەنها بۆ بەڕێوەبەری پڕۆژە (addmin.official.idg@gmail.com) ڕێپێدراوە.
+ داشبۆردی بەڕێوەبەرایەتی تەنها بۆ بەڕێوەبەرانی ڕێپێدراوی سیستەم بەردەستە.
  </p>
  <button
  type="button"

@@ -394,10 +394,13 @@ export interface PlanStep {
 export interface DualApprovalState {
   primaryApproved: boolean;
   primaryApprover?: string;
+  primaryApproverId?: string;
   primaryTimestamp?: string;
   secondaryApproved: boolean;
   secondaryApprover?: string;
+  secondaryApproverId?: string;
   secondaryTimestamp?: string;
+  expiresAt?: string;
 }
 
 export interface ExecutionPlan {
