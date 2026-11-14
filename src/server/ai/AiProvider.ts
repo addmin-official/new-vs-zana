@@ -37,6 +37,7 @@ import {
 import { buildSystemPrompt, CurriculumPromptContext } from "../../ai/buildSystemPrompt.ts";
 import { CurriculumRetriever } from "../../curriculum/retrieval/CurriculumRetriever.ts";
 import { resolvePrimaryModel, resolveVisionModel } from "../config/aiModels.ts";
+import { gradeAndValidateAssessment, AssessmentRubric } from "./assessmentGrader.ts";
 
 function uint8ArrayToBase64(bytes: Uint8Array): string {
   let binary = "";
@@ -190,8 +191,8 @@ export class ProviderAdapter {
 ${historySummary.join("\n")}
 
 کارەکانت بەپێی وەڵامەکان:
-١. ئەگەر لیستەکە خاڵییە و هیچ وەڵامێک نییە (پرسیاری یەکەم)، تکایە پرسیارێکیزۆر بەهێزی سەرەکی لەم بابەتەدا بۆ ئاستی ${req.profile.level || "ناوەند"} پێشکەش بکە لە 'question' و بە کورت دەستپێشخەری لە 'feedback' بنووسە.
-٢. ئەگەر قوتابی وەڵامی داوەتەوە، وەڵامەکەی دوایین بەراورد بکە بە دواین پرسیار. هەڵسەنگاندن بکە ئایا وەڵامەکە ڕاستە یان هەڵەیە (isCorrect=true/false).
+١. ئەگەر لیستەکە خاڵییە و هیچ وەڵامێک نییە (پرسیاری یەکەم)، تکایە پرسیارێکی زۆر بەهێزی سەرەکی لەم بابەتەدا بۆ ئاستی ${req.profile.level || "ناوەند"} پێشکەش بکە لە 'question' و بە کورت دەستپێشخەری لە 'feedback' بنووسە.
+٢. ئەگەر قوتابی وەڵامی داوەتەوە، وەڵامەکەی دوایین بەراورد بکە بە دواین پرسیار. بەپێی ڕێسای زانستی ڕاستی وەڵامەکە دیاریبکە (isCorrect=true/false) لەگەڵ هەڵسەنگاندنی ڕێژەیی لە 'rubric' (factualAccuracy لە 0 بۆ 1، conceptualRelevance لە 0 بۆ 1، completeness لە 0 بۆ 1).
 ٣. لێدوان و فیدباکی فێرکاریی و سوقراتی میهرەبانانە لە 'feedback' دابنێ بە کوردی سۆرانی.
 ٤. ئەگەر هێشتا نەگەیشتووینەتە پرسیاری کۆتایی (واتە currentQuestion کەمترە لە ٥)، پرسیارێکی نوێی زانستیی داهاتوو لە 'question' بنووسە.
 ٥. ئەگەر ئەمە پرسیاری کۆتاییە (پرسیاری ٥)، 'question' با خاڵی بێت یان بنووسە "کۆتایی تاقیکردنەوە".
@@ -200,7 +201,12 @@ ${historySummary.join("\n")}
 {
   "question": "پرسیاری داهاتوو لێرە",
   "feedback": "فیدباکی وەڵامی پێشوو یان پێشەکی",
-  "isCorrect": true/false
+  "isCorrect": true/false,
+  "rubric": {
+    "factualAccuracy": 0.9,
+    "conceptualRelevance": 0.8,
+    "completeness": 0.8
+  }
 }
 `;
 
@@ -217,6 +223,14 @@ ${historySummary.join("\n")}
             question: { type: "STRING" },
             feedback: { type: "STRING" },
             isCorrect: { type: "BOOLEAN" },
+            rubric: {
+              type: "OBJECT",
+              properties: {
+                factualAccuracy: { type: "NUMBER" },
+                conceptualRelevance: { type: "NUMBER" },
+                completeness: { type: "NUMBER" },
+              },
+            },
           },
           required: ["question", "feedback", "isCorrect"],
         },
@@ -233,7 +247,24 @@ ${historySummary.join("\n")}
       throw new Error("Invalid provider response: invalid JSON output");
     }
 
-    return validateAssessmentResponse(json);
+    const validatedBase = validateAssessmentResponse(json);
+
+    // Apply objective answer key and secondary rubric validation
+    const lastStudentAnswer = (req.state.answers && req.state.answers.length > 0)
+      ? req.state.answers[req.state.answers.length - 1]
+      : "";
+
+    const secondaryEval = gradeAndValidateAssessment(
+      lastStudentAnswer,
+      validatedBase.isCorrect,
+      (json as Record<string, unknown>)?.rubric as Partial<AssessmentRubric> | undefined
+    );
+
+    return {
+      question: validatedBase.question,
+      feedback: validatedBase.feedback,
+      isCorrect: secondaryEval.isCorrect,
+    };
   }
 
   static async report(apiKey: string | undefined, req: ReportRequest, env?: unknown): Promise<ReportResponse> {

@@ -54,6 +54,7 @@ import {
 } from "../core/brain/durable/AdminCommandCoordinator.ts";
 import { AdminD1Repository, type D1DatabaseLike } from "../core/brain/storage/AdminD1Repository.ts";
 import { enforceAiRateLimit } from "../server/middleware/rateLimiter.ts";
+import { verifyAuthWorker } from "../server/middleware/authMiddleware.ts";
 import { applySecurityHeaders } from "../server/middleware/security.ts";
 import { validateProductionEnv } from "../server/config/envValidator.ts";
 
@@ -832,6 +833,10 @@ export default {
 
       // POST /api/chat
       if (pathname === "/api/chat" && request.method === "POST") {
+        const authResult = await verifyAuthWorker(request, env, responseHeaders);
+        if (authResult instanceof Response) return authResult;
+        const studentId = authResult.user.uid;
+
         let chatReq: ChatRequest;
         try {
           const body = await request.json().catch(() => ({}));
@@ -843,17 +848,8 @@ export default {
           });
         }
 
-        const authHeader = request.headers.get("Authorization");
-        const studentId = (authHeader && authHeader.startsWith("Bearer "))
-          ? authHeader.split("Bearer ")[1].slice(0, 32)
-          : (request.headers.get("CF-Connecting-IP") || "anonymous");
-
         try {
-          if (env.CI_MODE === "true" || request.headers.get("X-CI-Test") === "true") {
-            // Skip rate limiting in CI
-          } else {
-            await enforceAiRateLimit(env, studentId);
-          }
+          await enforceAiRateLimit(env, studentId);
         } catch (rlError: unknown) {
           if ((rlError as Error)?.message === "RATE_LIMIT_EXCEEDED") {
             return new Response(
@@ -876,38 +872,18 @@ export default {
           throw new Error("GEMINI_API_KEY is required.");
         }
 
-        let userId: string | null = null;
-        if (authHeader && authHeader.startsWith("Bearer ")) {
-          const token = authHeader.substring(7).trim();
-          if (token && token !== "null" && token !== "undefined") {
-            try {
-              const claims = await AuthService.verifyFirebaseIdToken(token, env.FIREBASE_PROJECT_ID || "gen-lang-client-0009572581");
-              userId = claims.uid || null;
-            } catch {
-              if (
-                request.headers.get("X-CI-Test") === "true" ||
-                (typeof process !== "undefined" && (process.env?.NODE_ENV === "test" || process.env?.ZANA_ENV === "test"))
-              ) {
-                userId = token;
-              }
+        const sub = await checkSubscription(env, studentId);
+        if (sub.status === "expired") {
+          return new Response(
+            JSON.stringify({
+              error: "TRIAL_EXPIRED",
+              message: "تکایە بەشداری بکە بۆ بەردەوامبوون",
+            }),
+            {
+              status: 403,
+              headers: responseHeaders,
             }
-          }
-        }
-
-        if (userId) {
-          const sub = await checkSubscription(env, userId);
-          if (sub.status === "expired") {
-            return new Response(
-              JSON.stringify({
-                error: "TRIAL_EXPIRED",
-                message: "تکایە بەشداری بکە بۆ بەردەوامبوون",
-              }),
-              {
-                status: 403,
-                headers: responseHeaders,
-              }
-            );
-          }
+          );
         }
 
         const chatResult = await ProviderAdapter.chat(env.GEMINI_API_KEY, chatReq, env);
@@ -923,6 +899,10 @@ export default {
 
       // POST /api/assessment
       if (pathname === "/api/assessment" && request.method === "POST") {
+        const authResult = await verifyAuthWorker(request, env, responseHeaders);
+        if (authResult instanceof Response) return authResult;
+        const studentId = authResult.user.uid;
+
         let assessReq: AssessmentRequest;
         try {
           const body = await request.json().catch(() => ({}));
@@ -932,6 +912,26 @@ export default {
             status: 400,
             headers: responseHeaders,
           });
+        }
+
+        try {
+          await enforceAiRateLimit(env, studentId);
+        } catch (rlError: unknown) {
+          if ((rlError as Error)?.message === "RATE_LIMIT_EXCEEDED") {
+            return new Response(
+              JSON.stringify({
+                error: "گەیشتیتە سنوری دیاریکراوی بەکارهێنان بۆ ئەم کاتژمێرە. تکایە دواتر هەوڵبدەرەوە.",
+              }),
+              {
+                status: 429,
+                headers: {
+                  ...responseHeaders,
+                  "Retry-After": "3600",
+                },
+              }
+            );
+          }
+          throw rlError;
         }
 
         if (!env.GEMINI_API_KEY || !env.GEMINI_API_KEY.trim()) {
@@ -964,6 +964,10 @@ export default {
 
       // POST /api/report & /api/reports
       if ((pathname === "/api/report" || pathname === "/api/reports") && request.method === "POST") {
+        const authResult = await verifyAuthWorker(request, env, responseHeaders);
+        if (authResult instanceof Response) return authResult;
+        const studentId = authResult.user.uid;
+
         let reportReq: ReportRequest;
         try {
           const body = await request.json().catch(() => ({}));
@@ -973,6 +977,26 @@ export default {
             status: 400,
             headers: responseHeaders,
           });
+        }
+
+        try {
+          await enforceAiRateLimit(env, studentId);
+        } catch (rlError: unknown) {
+          if ((rlError as Error)?.message === "RATE_LIMIT_EXCEEDED") {
+            return new Response(
+              JSON.stringify({
+                error: "گەیشتیتە سنوری دیاریکراوی بەکارهێنان بۆ ئەم کاتژمێرە. تکایە دواتر هەوڵبدەرەوە.",
+              }),
+              {
+                status: 429,
+                headers: {
+                  ...responseHeaders,
+                  "Retry-After": "3600",
+                },
+              }
+            );
+          }
+          throw rlError;
         }
 
         if (!env.GEMINI_API_KEY || !env.GEMINI_API_KEY.trim()) {
@@ -991,6 +1015,10 @@ export default {
 
       // POST /api/study/ask
       if (pathname === "/api/study/ask" && request.method === "POST") {
+        const authResult = await verifyAuthWorker(request, env, responseHeaders);
+        if (authResult instanceof Response) return authResult;
+        const studentId = authResult.user.uid;
+
         let askReq: AskRequest;
         try {
           const body = await request.json().catch(() => ({}));
@@ -1000,6 +1028,26 @@ export default {
             status: 400,
             headers: responseHeaders,
           });
+        }
+
+        try {
+          await enforceAiRateLimit(env, studentId);
+        } catch (rlError: unknown) {
+          if ((rlError as Error)?.message === "RATE_LIMIT_EXCEEDED") {
+            return new Response(
+              JSON.stringify({
+                error: "گەیشتیتە سنوری دیاریکراوی بەکارهێنان بۆ ئەم کاتژمێرە. تکایە دواتر هەوڵبدەرەوە.",
+              }),
+              {
+                status: 429,
+                headers: {
+                  ...responseHeaders,
+                  "Retry-After": "3600",
+                },
+              }
+            );
+          }
+          throw rlError;
         }
 
         if (!env.GEMINI_API_KEY || !env.GEMINI_API_KEY.trim()) {
@@ -1019,6 +1067,30 @@ export default {
 
       // POST /api/study/vision
       if (pathname === "/api/study/vision" && request.method === "POST") {
+        const authResult = await verifyAuthWorker(request, env, responseHeaders);
+        if (authResult instanceof Response) return authResult;
+        const studentId = authResult.user.uid;
+
+        try {
+          await enforceAiRateLimit(env, studentId);
+        } catch (rlError: unknown) {
+          if ((rlError as Error)?.message === "RATE_LIMIT_EXCEEDED") {
+            return new Response(
+              JSON.stringify({
+                error: "گەیشتیتە سنوری دیاریکراوی بەکارهێنان بۆ ئەم کاتژمێرە. تکایە دواتر هەوڵبدەرەوە.",
+              }),
+              {
+                status: 429,
+                headers: {
+                  ...responseHeaders,
+                  "Retry-After": "3600",
+                },
+              }
+            );
+          }
+          throw rlError;
+        }
+
         const formData = await request.formData();
         const file = formData.get("image") as File | null;
 

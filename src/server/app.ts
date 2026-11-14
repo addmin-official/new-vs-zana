@@ -30,6 +30,7 @@ import { handleTelemetryExportRoute } from "./api/internal/telemetryExport.ts";
 import { handleHealthRoute, handleCurriculumHealthRoute } from "./api/health.ts";
 import { handleStudyRoomsRoute } from "./api/studyRooms.ts";
 import { verifyAdmin, type AdminVerifyResult } from "../worker/adminGuard.ts";
+import { verifyAuthExpress } from "./middleware/authMiddleware.ts";
 import { InternalBrainService } from "../core/brain/InternalBrainService.ts";
 import type { AdminRole, ExecutionPlan, AdminPreferenceMemory } from "../core/brain/types.ts";
 
@@ -210,85 +211,106 @@ async function getAuthenticatedStudentId(req: Request): Promise<string> {
 }
 
 // 1. CHAT ENDPOINT
-app.post("/api/chat", rateLimitMiddleware(60, 60 * 1000), async (req: Request, res: Response) => {
-  try {
-    const chatReq = parseChatRequest(req.body);
-    const result = await ProviderAdapter.chat(process.env.GEMINI_API_KEY || "", chatReq);
-    res.json({
-      text: result.text,
-      isEducational: result.isEducational,
-    });
-  } catch (err: unknown) {
-    const category = classifyError(err);
-    logMinimalError("/api/chat", category, err);
-    res.status(category === "validation" ? 400 : 500).json({ error: getClientSafeErrorMessage(category) });
+app.post(
+  "/api/chat",
+  verifyAuthExpress(process.env.FIREBASE_PROJECT_ID),
+  rateLimitMiddleware(60, 60 * 1000),
+  async (req: Request, res: Response) => {
+    try {
+      const chatReq = parseChatRequest(req.body);
+      const result = await ProviderAdapter.chat(process.env.GEMINI_API_KEY || "", chatReq);
+      res.json({
+        text: result.text,
+        isEducational: result.isEducational,
+      });
+    } catch (err: unknown) {
+      const category = classifyError(err);
+      logMinimalError("/api/chat", category, err);
+      res.status(category === "validation" ? 400 : 500).json({ error: getClientSafeErrorMessage(category) });
+    }
   }
-});
+);
 
 // 2. ASSESSMENT ENDPOINT
-app.post("/api/assessment", rateLimitMiddleware(60, 60 * 1000), async (req: Request, res: Response) => {
-  try {
-    const assessReq = parseAssessmentRequest(req.body);
-    const result = await ProviderAdapter.assessment(process.env.GEMINI_API_KEY || "", assessReq);
+app.post(
+  "/api/assessment",
+  verifyAuthExpress(process.env.FIREBASE_PROJECT_ID),
+  rateLimitMiddleware(60, 60 * 1000),
+  async (req: Request, res: Response) => {
+    try {
+      const assessReq = parseAssessmentRequest(req.body);
+      const result = await ProviderAdapter.assessment(process.env.GEMINI_API_KEY || "", assessReq);
 
-    const currentQuestionNum = assessReq.state.currentQuestion;
-    const isLast = currentQuestionNum === 5;
-    let finalLevel: string | null = null;
-    if (isLast) {
-      const correctCount = (assessReq.state.answers || []).filter(Boolean).length + (result.isCorrect ? 1 : 0);
-      if (correctCount <= 2) finalLevel = "سەرەتا";
-      else if (correctCount <= 4) finalLevel = "مامناوەند";
-      else finalLevel = "پێشکەوتوو";
+      const currentQuestionNum = assessReq.state.currentQuestion;
+      const isLast = currentQuestionNum === 5;
+      let finalLevel: string | null = null;
+      if (isLast) {
+        const correctCount = (assessReq.state.answers || []).filter(Boolean).length + (result.isCorrect ? 1 : 0);
+        if (correctCount <= 2) finalLevel = "سەرەتا";
+        else if (correctCount <= 4) finalLevel = "مامناوەند";
+        else finalLevel = "پێشکەوتوو";
+      }
+
+      res.json({
+        question: result.question,
+        feedback: result.feedback,
+        isCorrect: result.isCorrect,
+        completed: isLast,
+        finalLevel,
+      });
+    } catch (err: unknown) {
+      const category = classifyError(err);
+      logMinimalError("/api/assessment", category);
+      res.status(category === "validation" ? 400 : 500).json({ error: getClientSafeErrorMessage(category) });
     }
-
-    res.json({
-      question: result.question,
-      feedback: result.feedback,
-      isCorrect: result.isCorrect,
-      completed: isLast,
-      finalLevel,
-    });
-  } catch (err: unknown) {
-    const category = classifyError(err);
-    logMinimalError("/api/assessment", category);
-    res.status(category === "validation" ? 400 : 500).json({ error: getClientSafeErrorMessage(category) });
   }
-});
+);
 
 // 3. REPORT ENDPOINT
-app.post(["/api/report", "/api/reports"], rateLimitMiddleware(60, 60 * 1000), async (req: Request, res: Response) => {
-  try {
-    const reportReq = parseReportRequest(req.body);
-    const result = await ProviderAdapter.report(process.env.GEMINI_API_KEY || "", reportReq);
-    res.json({
-      recommendation: result.recommendation,
-    });
-  } catch (err: unknown) {
-    const category = classifyError(err);
-    logMinimalError("/api/report", category);
-    res.status(category === "validation" ? 400 : 500).json({ error: getClientSafeErrorMessage(category) });
+app.post(
+  ["/api/report", "/api/reports"],
+  verifyAuthExpress(process.env.FIREBASE_PROJECT_ID),
+  rateLimitMiddleware(60, 60 * 1000),
+  async (req: Request, res: Response) => {
+    try {
+      const reportReq = parseReportRequest(req.body);
+      const result = await ProviderAdapter.report(process.env.GEMINI_API_KEY || "", reportReq);
+      res.json({
+        recommendation: result.recommendation,
+      });
+    } catch (err: unknown) {
+      const category = classifyError(err);
+      logMinimalError("/api/report", category);
+      res.status(category === "validation" ? 400 : 500).json({ error: getClientSafeErrorMessage(category) });
+    }
   }
-});
+);
 
 // 4. STUDY ASK ENDPOINT
-app.post("/api/study/ask", rateLimitMiddleware(60, 60 * 1000), async (req: Request, res: Response) => {
-  try {
-    const askReq = parseAskRequest(req.body);
-    const result = await ProviderAdapter.ask(process.env.GEMINI_API_KEY || "", askReq);
-    res.json({
-      text: result.text,
-      isEducational: result.isEducational,
-    });
-  } catch (err: unknown) {
-    const category = classifyError(err);
-    logMinimalError("/api/study/ask", category);
-    res.status(category === "validation" ? 400 : 500).json({ error: getClientSafeErrorMessage(category) });
+app.post(
+  "/api/study/ask",
+  verifyAuthExpress(process.env.FIREBASE_PROJECT_ID),
+  rateLimitMiddleware(60, 60 * 1000),
+  async (req: Request, res: Response) => {
+    try {
+      const askReq = parseAskRequest(req.body);
+      const result = await ProviderAdapter.ask(process.env.GEMINI_API_KEY || "", askReq);
+      res.json({
+        text: result.text,
+        isEducational: result.isEducational,
+      });
+    } catch (err: unknown) {
+      const category = classifyError(err);
+      logMinimalError("/api/study/ask", category);
+      res.status(category === "validation" ? 400 : 500).json({ error: getClientSafeErrorMessage(category) });
+    }
   }
-});
+);
 
 // 5. STUDY VISION ENDPOINT
 app.post(
   "/api/study/vision",
+  verifyAuthExpress(process.env.FIREBASE_PROJECT_ID),
   rateLimitMiddleware(10, 60 * 1000),
   upload.single("image"),
   async (req: Request, res: Response) => {

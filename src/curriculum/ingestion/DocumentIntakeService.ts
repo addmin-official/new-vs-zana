@@ -123,4 +123,16 @@ export class DocumentIntakeService {
       extractionConfidence: confidence,
     };
   }
+
+  /**
+   * Verify whether an extracted page has authentic, real text content.
+   * Rejects synthetic placeholders (e.g. "لاپەڕەی فەرمی...").
+   */
+  public static isAuthenticPageText(text: string): boolean {
+    if (!text || text.trim().length < 20) return false;
+    if (/^لاپەڕەی فەرمی پۆلی/i.test(text.trim())) {
+      return false;
+    }
+    return true;
+  }
 }

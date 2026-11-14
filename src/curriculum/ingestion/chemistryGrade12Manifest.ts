@@ -23,6 +23,10 @@ import { DocumentIngestionRecord } from "./DocumentIngestionTypes";
  *   • بەندی ١٠: کاربۆن و هایدرۆکاربۆنەکان (لاپەڕە ٢٥٨)
  *   • بەندی ١١: ئاوێتەی ئەندامی تر (لاپەڕە ٢٩٤)
  *   • بەندی ١٢: کیمیای ناوکی (لاپەڕە ٣٣٠)
+ *
+ * @deprecated SYNTHETIC MANIFEST IS DEPRECATED.
+ * All curriculum grounding must use authentic document extraction from DocumentIntakeService / R2 bucket.
+ * Synthetic rawText generation is disabled for production grounding.
  */
 export const chemistryGrade12IngestionRecord: DocumentIngestionRecord = {
   manifest: {

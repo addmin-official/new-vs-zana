@@ -751,13 +751,20 @@ jobs:
           set -euo pipefail
           echo "Scanning codebase for security exposures..."
           
-          FORBIDDEN_FILES=(".env" ".env.production" "wrangler.toml" "wrangler.production.json" "firebase-service-account.json")
+          FORBIDDEN_FILES=(".env" ".env.production" ".env.local" ".env.staging" "wrangler.toml" "wrangler.production.json" "firebase-service-account.json")
           for file in "${FORBIDDEN_FILES[@]}"; do
             if [ -f "$file" ]; then
               echo "::error::Security Exposure Check Failed: Forbidden file '$file' exists in the codebase!"
               exit 1
             fi
           done
+
+          echo "Scanning for exposed environment files..."
+          if find . -maxdepth 2 -name ".env*" ! -name ".env.example" | grep -q .; then
+            echo "::error::Security Exposure Check Failed: Found committed or uncommitted .env file!"
+            find . -maxdepth 2 -name ".env*" ! -name ".env.example"
+            exit 1
+          fi
 
           echo "Scanning for private keys..."
           if grep -r -l "BEGIN PRIVATE KEY" --exclude-dir=node_modules --exclude=package.json --exclude=package-lock.json --exclude-dir=.github .; then
@@ -770,7 +777,7 @@ jobs:
   release:
     name: Generate Release Tag & Metadata
     needs: [validate, build, deploy-worker, verify-worker, smoke-tests, security-checks]
-    if: false  # Disabled: GITHUB_TOKEN cannot push workflow files
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: Production
     permissions: write-all

@@ -458,6 +458,7 @@ test("Worker - missing GEMINI_API_KEY on AI endpoint returns safe Kurdish error 
     headers: {
       Origin: "https://zana.idggov.tech",
       "Content-Type": "application/json",
+      Authorization: "Bearer test-student-token",
     },
     body: JSON.stringify({
       message: "پرسیارم هەیە",
@@ -486,6 +487,7 @@ test("Worker - missing payload on /api/chat returns 400 with correct Kurdish spe
     headers: {
       Origin: "https://zana.idggov.tech",
       "Content-Type": "application/json",
+      Authorization: "Bearer test-student-token",
     },
     body: JSON.stringify({ message: "Hello" }), // Missing profile
   });
@@ -504,6 +506,7 @@ test("Worker - missing payload on /api/study/ask returns 400 with correct Kurdis
     headers: {
       Origin: "https://zana.idggov.tech",
       "Content-Type": "application/json",
+      Authorization: "Bearer test-student-token",
     },
     body: JSON.stringify({ message: "Hello" }), // Missing context
   });
@@ -522,6 +525,7 @@ test("Worker - missing payload on /api/report returns 400 without calling AI ser
     headers: {
       Origin: "https://zana.idggov.tech",
       "Content-Type": "application/json",
+      Authorization: "Bearer test-student-token",
     },
     body: JSON.stringify({}), // Missing profile
   });
@@ -695,6 +699,7 @@ test("Worker - POST /api/assessment validates missing state", async () => {
     headers: {
       Origin: "https://zana.idggov.tech",
       "Content-Type": "application/json",
+      Authorization: "Bearer test-student-token",
     },
     body: JSON.stringify({
       profile: { grade: "12", activeSubject: "chemistry" },
@@ -1011,6 +1016,7 @@ test("Worker - Uses Firebase AI endpoint with generateContent", async () => {
       headers: {
         Origin: "https://zana.idggov.tech",
         "Content-Type": "application/json",
+        Authorization: "Bearer test-student-token",
       },
       body: JSON.stringify({
         message: "سڵاو",
@@ -1043,6 +1049,24 @@ test("Worker - Uses Firebase AI endpoint with generateContent", async () => {
   }
 });
 
+test("Worker - Strict 401 Unauthorized on student AI routes without valid token", async () => {
+  const env = createMockEnv();
+  const routes = ["/api/chat", "/api/assessment", "/api/report", "/api/study/ask"];
 
+  for (const route of routes) {
+    const req = new Request(`https://new-vs-zana.zana-platform.workers.dev${route}`, {
+      method: "POST",
+      headers: {
+        Origin: "https://zana.idggov.tech",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ message: "test" }),
+    });
 
-
+    const res = await worker.fetch(req, env);
+    assert.strictEqual(res.status, 401, `Expected 401 on ${route} without auth header`);
+    const body = (await res.json()) as { error: string };
+    assert.strictEqual(body.error, "Unauthorized");
+    assert.strictEqual(res.headers.get("www-authenticate"), 'Bearer realm="zana-ai", error="invalid_token"');
+  }
+});

@@ -75,6 +75,18 @@ const TAB_TO_PATH: Record<NavItemKey, string> = {
   settings: "/settings",
 };
 
+function resolveTabFromPath(pathname: string): NavItemKey {
+  const normalized = pathname.replace(/\/+$/, "") || "/";
+  if (PATH_TO_TAB[normalized]) return PATH_TO_TAB[normalized];
+  // Deep-linking: Match subpath prefix, e.g. /subjects/chemistry -> subjects
+  for (const [routePath, tabKey] of Object.entries(PATH_TO_TAB)) {
+    if (routePath !== "/" && (normalized === routePath || normalized.startsWith(`${routePath}/`))) {
+      return tabKey;
+    }
+  }
+  return "home";
+}
+
 export default function App() {
   const { profile, updateProfile, completeOnboarding, resetProfileOnly } = useStudentProfile();
 
@@ -88,15 +100,16 @@ export default function App() {
   });
   const [authScreen, setAuthScreen] = useState<"login" | "register" | "forgot-password">(() => {
     if (typeof window !== "undefined") {
-      if (window.location.pathname === "/register") return "register";
-      if (window.location.pathname === "/forgot-password") return "forgot-password";
-      if (window.location.pathname === "/login") return "login";
+      const p = window.location.pathname.replace(/\/+$/, "");
+      if (p === "/register") return "register";
+      if (p === "/forgot-password") return "forgot-password";
+      if (p === "/login") return "login";
     }
     return "login";
   });
   const [isAuthExplicit, setIsAuthExplicit] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
-      const p = window.location.pathname;
+      const p = window.location.pathname.replace(/\/+$/, "");
       return p === "/login" || p === "/register" || p === "/forgot-password";
     }
     return false;
@@ -116,8 +129,7 @@ export default function App() {
   // Manage active tab, plus optional "brain" mode
   const [activeTab, setActiveTabState] = useState<NavItemKey>(() => {
     if (typeof window !== "undefined") {
-      const path = window.location.pathname;
-      if (PATH_TO_TAB[path]) return PATH_TO_TAB[path];
+      return resolveTabFromPath(window.location.pathname);
     }
     return "home";
   });
@@ -166,7 +178,7 @@ export default function App() {
   useEffect(() => {
     const handlePopState = () => {
       if (typeof window !== "undefined") {
-        const path = window.location.pathname;
+        const path = window.location.pathname.replace(/\/+$/, "") || "/";
         setIsBrainActive(path.startsWith("/admin/brain"));
         if (path === "/register") {
           setAuthScreen("register");
@@ -179,9 +191,8 @@ export default function App() {
           setIsAuthExplicit(true);
         } else {
           setIsAuthExplicit(false);
-          if (PATH_TO_TAB[path]) {
-            setActiveTabState(PATH_TO_TAB[path]);
-          }
+          const resolvedTab = resolveTabFromPath(path);
+          setActiveTabState(resolvedTab);
         }
       }
     };

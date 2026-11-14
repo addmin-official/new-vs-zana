@@ -165,13 +165,28 @@ export class CurriculumRetriever {
         confidence = Math.max(confidence, evidence[0].score);
       }
 
+      // Strict grounding rule: Do NOT return GROUNDED unless actual text chunks from real documents or authentic registered curriculum content are retrieved
+      const hasRealDocChunks = realDocumentEvidence.length > 0 && realDocumentEvidence.some(
+        (e) => e.contentSnippet && e.contentSnippet.trim().length > 30 && !e.contentSnippet.includes("لاپەڕەی فەرمی پۆلی")
+      );
+      const hasRealIndexChunks = evidence.length > 0 && evidence.some(
+        (e) => e.contentSnippet && e.contentSnippet.trim().length > 30 && !e.contentSnippet.includes("لاپەڕەی فەرمی پۆلی")
+      );
+      const hasAuthenticLessonExcerpts = allowedLessons.length > 0 && allowedLessons.some(
+        (l) => l.contentExcerpts && l.contentExcerpts.some(
+          (c) => c.trim().length > 20 && !c.includes("لاپەڕەی فەرمی پۆلی")
+        )
+      );
+      const isAuthenticallyGrounded = (hasRealDocChunks || hasRealIndexChunks || hasAuthenticLessonExcerpts) && (!requireRealPdfDocument || hasRealDocChunks);
+      const groundingStatus = isAuthenticallyGrounded ? "GROUNDED" : "UNGROUNDED";
+
       return {
-        groundingStatus: "GROUNDED",
+        groundingStatus,
         matchedLessons: allowedLessons,
         matchedConcepts: Array.from(new Set(matchedConcepts)),
         excerpts,
         evidence,
-        confidence,
+        confidence: isAuthenticallyGrounded ? confidence : Math.min(confidence, 0.4),
         sourceMetadata: sourceMetadataList,
         licenseDecision: lastDecision,
         auditMetadata: {

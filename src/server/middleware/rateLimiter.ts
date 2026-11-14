@@ -4,8 +4,31 @@ export interface RateLimitKVStore {
 }
 
 export interface RateLimitEnvLike {
+  RATE_LIMIT_KV?: RateLimitKVStore;
   LEARNING_RECORDS_KV?: RateLimitKVStore;
   [key: string]: unknown;
+}
+
+// In-memory atomic promise chain to prevent race conditions during concurrent requests in edge isolates
+const activeKeyLocks = new Map<string, Promise<void>>();
+
+async function withAtomicKeyLock<T>(key: string, task: () => Promise<T>): Promise<T> {
+  const currentLock = activeKeyLocks.get(key) || Promise.resolve();
+  let release: () => void;
+  const newLock = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  activeKeyLocks.set(key, currentLock.then(() => newLock));
+
+  try {
+    await currentLock;
+    return await task();
+  } finally {
+    release!();
+    if (activeKeyLocks.get(key) === newLock) {
+      activeKeyLocks.delete(key);
+    }
+  }
 }
 
 export async function enforceAiRateLimit(
@@ -17,20 +40,23 @@ export async function enforceAiRateLimit(
 
   const key = `ratelimit:${studentId}`;
 
-  const kv = (env as RateLimitEnvLike | undefined)?.LEARNING_RECORDS_KV;
+  // Prioritize RATE_LIMIT_KV, fallback to LEARNING_RECORDS_KV for mock compatibility
+  const envLike = env as RateLimitEnvLike | undefined;
+  const kv = envLike?.RATE_LIMIT_KV || envLike?.LEARNING_RECORDS_KV;
   if (!kv) {
     return;
   }
 
-  // KV get is fast enough at edge for pilot scale
-  const currentUsageData = await kv.get(key);
-  const count = typeof currentUsageData === 'string' ? parseInt(currentUsageData, 10) : 0;
+  // Atomically serialize read-increment-write to prevent race conditions
+  return withAtomicKeyLock(key, async () => {
+    const currentUsageData = await kv.get(key);
+    const count = typeof currentUsageData === "string" ? parseInt(currentUsageData, 10) : 0;
 
-  if (count >= maxRequests) {
-    console.warn(`[Rate Limit Exceeded] Student: ${studentId}`);
-    throw new Error('RATE_LIMIT_EXCEEDED');
-  }
+    if (count >= maxRequests) {
+      console.warn(`[Rate Limit Exceeded] Student: ${studentId}`);
+      throw new Error("RATE_LIMIT_EXCEEDED");
+    }
 
-  // Increment and set TTL. Note: In a high-concurrency production V2, this should move to Durable Objects or Cloudflare Rate Limiting natively.
-  await kv.put(key, (count + 1).toString(), { expirationTtl: windowSeconds });
+    await kv.put(key, (count + 1).toString(), { expirationTtl: windowSeconds });
+  });
 }
