@@ -13,8 +13,12 @@ import {
   loginWithEmail,
   loginWithGoogle,
   loginAnonymously,
+  logoutUser,
   getErrorMessage,
 } from "../services/authService.ts";
+import { getFirestoreDb } from "../services/firebase.ts";
+import { doc, getDoc } from "firebase/firestore";
+import { getStudentProfile } from "../features/student/studentStorage.ts";
 
 interface LoginScreenProps {
   onNavigateToRegister: () => void;
@@ -35,9 +39,6 @@ export function LoginScreen({
   const [googleLoading, setGoogleLoading] = useState(false);
   const [guestLoading, setGuestLoading] = useState(false);
   const [error, setError] = useState("");
-  const [showGoogleEmailModal, setShowGoogleEmailModal] = useState(false);
-  const [googleCustomEmail, setGoogleCustomEmail] = useState("");
-  const [googleCustomName, setGoogleCustomName] = useState("");
 
   const handleEmailLogin = async (e: FormEvent) => {
     e.preventDefault();
@@ -63,32 +64,46 @@ export function LoginScreen({
     setError("");
     setGoogleLoading(true);
     try {
-      await loginWithGoogle();
+      const user = await loginWithGoogle();
+
+      // Check if this student account has already registered in Zana
+      const db = getFirestoreDb();
+      let isRegistered = false;
+
+      if (db && user?.uid) {
+        try {
+          const snap = await getDoc(doc(db, "students", user.uid));
+          if (snap.exists()) {
+            const data = snap.data();
+            if (data?.onboardingCompleted || data?.grade) {
+              isRegistered = true;
+            }
+          }
+        } catch (err) {
+          console.warn("Could not check Firestore student profile:", err);
+        }
+      }
+
+      if (!isRegistered) {
+        const localProfile = getStudentProfile();
+        if (
+          localProfile &&
+          localProfile.onboardingCompleted &&
+          (localProfile.id === user.uid || (localProfile.name && !localProfile.name.includes("default")))
+        ) {
+          isRegistered = true;
+        }
+      }
+
+      if (!isRegistered) {
+        // Enforce registration requirement: student must register first before logging in
+        await logoutUser();
+        setError("ئەم هەژمارەی گووگڵ هێشتا تۆمار نەکراوە. تکایە سەرەتا لە بەشی خۆتۆمارکردن هەژمارەکەت دروست بکە.");
+        return;
+      }
+
       onLoginSuccess?.();
     } catch (err: unknown) {
-      if ((err as Error)?.message === "NEED_CUSTOM_EMAIL") {
-        setShowGoogleEmailModal(true);
-      } else {
-        setError(getErrorMessage(err));
-      }
-    } finally {
-      setGoogleLoading(false);
-    }
-  };
-
-  const handleCustomGoogleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setError("");
-    if (!googleCustomEmail.trim()) {
-      setError("تکایە ناونیشانی ئیمەیلی خۆت بنووسە.");
-      return;
-    }
-    setGoogleLoading(true);
-    try {
-      await loginWithGoogle(googleCustomEmail, googleCustomName);
-      setShowGoogleEmailModal(false);
-      onLoginSuccess?.();
-    } catch (err) {
       setError(getErrorMessage(err));
     } finally {
       setGoogleLoading(false);
@@ -314,73 +329,6 @@ export function LoginScreen({
           </p>
         </div>
       </div>
-
-      {/* Google Email Input Modal */}
-      {showGoogleEmailModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4" dir="rtl">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 max-w-sm w-full space-y-4 border border-slate-200 dark:border-slate-800 shadow-2xl animate-in zoom-in-95 duration-150">
-            <div className="text-center space-y-1.5">
-              <div className="w-12 h-12 bg-blue-50 dark:bg-blue-950/60 rounded-2xl flex items-center justify-center mx-auto text-blue-600 mb-1">
-                <Mail className="w-6 h-6" />
-              </div>
-              <h3 className="font-sans font-bold text-base text-slate-900 dark:text-white">
-                ئیمەیلی خۆت بنووسە
-              </h3>
-              <p className="text-xs text-slate-500 font-sans leading-relaxed">
-                تکایە ناونیشانی ئیمەیلی تایبەتی خۆت دیاری بکە بۆ ئەوەی لەگەڵ پڕۆفایلەکەت و تۆمارەکانی خوێندنت بەسترێتەوە:
-              </p>
-            </div>
-
-            <form onSubmit={handleCustomGoogleSubmit} className="space-y-3.5 pt-1">
-              <div className="space-y-1 text-right">
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                  ئیمەیلی تۆ
-                </label>
-                <input
-                  type="email"
-                  value={googleCustomEmail}
-                  onChange={(e) => setGoogleCustomEmail(e.target.value)}
-                  placeholder="yourname@gmail.com"
-                  required
-                  dir="ltr"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm text-left focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-hidden"
-                  autoFocus
-                />
-              </div>
-
-              <div className="space-y-1 text-right">
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                  ناوی تەواوی تۆ (ئارەزوومەندانە)
-                </label>
-                <input
-                  type="text"
-                  value={googleCustomName}
-                  onChange={(e) => setGoogleCustomName(e.target.value)}
-                  placeholder="وەک: ئاراس کامەران"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm text-right focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-hidden"
-                />
-              </div>
-
-              <div className="flex gap-2.5 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowGoogleEmailModal(false)}
-                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
-                >
-                  پەشیمانبوونەوە
-                </button>
-                <button
-                  type="submit"
-                  disabled={googleLoading}
-                  className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold cursor-pointer shadow-xs disabled:opacity-50"
-                >
-                  {googleLoading ? "چاوەڕوان بە..." : "چوونەژوورەوە"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

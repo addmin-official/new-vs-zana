@@ -195,26 +195,24 @@ export async function registerWithEmail(
 }
 
 /**
- * Sign in with Google using popup, or custom email if offline
+ * Sign in with Google using standard Firebase Google popup
  */
-export async function loginWithGoogle(customEmail?: string, customName?: string): Promise<User> {
+export async function loginWithGoogle(): Promise<User> {
   const auth = getFirebaseAuth();
   if (!auth) {
-    if (!customEmail || !customEmail.trim()) {
-      throw new Error("NEED_CUSTOM_EMAIL");
+    if (typeof process !== "undefined" && (process.env.ALLOW_TEST_AUTH_MOCK === "true" || process.env.NODE_ENV === "test")) {
+      const mockUser = {
+        uid: "test-google-user",
+        email: "test-student@gmail.com",
+        displayName: "قوتابی تاقیکردنەوە",
+        isAnonymous: false,
+        getIdToken: async () => "mock-google-token",
+      } as unknown as User;
+      setLocalAuthUser(mockUser);
+      notifyAuthListeners(mockUser);
+      return mockUser;
     }
-    const cleanEmail = customEmail.trim().toLowerCase();
-    const cleanName = customName?.trim() || cleanEmail.split("@")[0];
-    const mockUser = {
-      uid: "usr_" + Math.random().toString(36).substring(2, 9),
-      email: cleanEmail,
-      displayName: cleanName,
-      isAnonymous: false,
-      getIdToken: async () => "mock-google-token",
-    } as unknown as User;
-    setLocalAuthUser(mockUser);
-    notifyAuthListeners(mockUser);
-    return mockUser;
+    throw new Error("سێرڤەری Firebase پەیوەست نییە. تکایە پەیوەندی ئینتەرنێتەکەت بپشکنە.");
   }
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
@@ -222,23 +220,6 @@ export async function loginWithGoogle(customEmail?: string, customName?: string)
   setLocalAuthUser(cred.user);
   notifyAuthListeners(cred.user);
   return cred.user;
-}
-
-/**
- * Update user email locally and notify listeners
- */
-export function updateUserEmailLocally(newEmail: string): void {
-  const cleanEmail = newEmail.trim().toLowerCase();
-  const current = getCurrentUser();
-  if (current) {
-    const updated = {
-      ...current,
-      email: cleanEmail,
-      displayName: current.displayName || cleanEmail.split("@")[0],
-    } as unknown as User;
-    setLocalAuthUser(updated);
-    notifyAuthListeners(updated);
-  }
 }
 
 /**

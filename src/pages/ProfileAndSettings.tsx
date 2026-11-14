@@ -18,7 +18,7 @@ import {
 import { useAppStore } from "../store/appStore.ts";
 import { useSoundEffects } from "../hooks/useSoundEffects.ts";
 import { Modal } from "../components/Modal.tsx";
-import { logoutUser, getCurrentUser, resetPassword, updateUserEmailLocally } from "../services/authService.ts";
+import { logoutUser, getCurrentUser, resetPassword } from "../services/authService.ts";
 import { deleteStudentProfile } from "../features/student/studentStorage.ts";
 import { StudentProfile } from "../features/student/studentTypes.ts";
 import { useStudentProfile } from "../features/student/useStudentProfile.ts";
@@ -130,25 +130,8 @@ export function ProfileAndSettings({
 
   // Modals
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [showEmailModal, setShowEmailModal] = useState(false);
-  const [newEmailInput, setNewEmailInput] = useState("");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [saveToast, setSaveToast] = useState<string | null>(null);
-
-  const handleUpdateEmail = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newEmailInput.trim() || !newEmailInput.includes("@")) {
-      setSaveToast("تکایە ئیمەیلێکی دروست بنووسە.");
-      return;
-    }
-    const clean = newEmailInput.trim().toLowerCase();
-    updateUserEmailLocally(clean);
-    storeUpdateProfile({ email: clean });
-    setShowEmailModal(false);
-    playSuccess();
-    setSaveToast("ئیمەیڵەکەت بە سەرکەوتوویی نوێکرایەوە.");
-    setTimeout(() => setSaveToast(null), 3000);
-  };
 
   const handleSaveProfile = () => {
     const updatedName = name.trim() || studentProfile?.name || user.name;
@@ -640,37 +623,17 @@ export function ProfileAndSettings({
           </div>
 
           <div className="space-y-3 pt-2">
-            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-sans">
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs font-sans">
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-slate-900 block">ئیمەیڵی تۆمارکراو:</span>
-                  {realEmail === "student@gmail.com" && (
-                    <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-200">
-                      ⚠️ ئیمەیلی نموونەیی
-                    </span>
-                  )}
-                </div>
-                <span className="text-slate-600 font-mono font-medium block mt-0.5">{realEmail}</span>
+                <span className="font-bold text-slate-900 block">ئیمەیڵی تۆمارکراو:</span>
+                <span className="text-slate-600 font-mono font-medium">{realEmail}</span>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNewEmailInput(realEmail === "student@gmail.com" ? "" : realEmail);
-                    setShowEmailModal(true);
-                  }}
-                  className="px-3.5 py-1.5 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold hover:bg-indigo-100 cursor-pointer shadow-2xs"
-                >
-                  گۆڕینی ئیمەیڵ
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowPasswordModal(true)}
-                  className="px-3.5 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-700 font-bold hover:bg-slate-100 cursor-pointer shadow-2xs"
-                >
-                  گۆڕینی وشەی نهێنی
-                </button>
-              </div>
+              <button
+                onClick={() => setShowPasswordModal(true)}
+                className="px-3.5 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-700 font-bold hover:bg-slate-100 cursor-pointer shadow-2xs"
+              >
+                گۆڕینی وشەی نهێنی
+              </button>
             </div>
 
             {onReRunOnboarding && (
@@ -778,46 +741,7 @@ export function ProfileAndSettings({
         </div>
       )}
 
-      {/* Change Email Modal */}
-      <Modal
-        isOpen={showEmailModal}
-        onClose={() => setShowEmailModal(false)}
-        title="گۆڕینی ناونیشانی ئیمەیڵ 📧"
-      >
-        <form onSubmit={handleUpdateEmail} className="space-y-4 text-right">
-          <p className="text-xs text-slate-500 font-sans leading-relaxed">
-            تکایە ئیمەیلی دروستی خۆت بنووسە بۆ ئەوەی هەموو نمرە، سەرچاوە و زانیارییەکانی خوێندنت بەستراوە بێت بە ناوی خۆتەوە:
-          </p>
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-700 font-sans">ئیمەیڵی نوێ:</label>
-            <input
-              type="email"
-              value={newEmailInput}
-              onChange={(e) => setNewEmailInput(e.target.value)}
-              placeholder="yourname@gmail.com"
-              required
-              dir="ltr"
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-sans text-left focus:outline-none focus:ring-2 focus:ring-indigo-600"
-              autoFocus
-            />
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={() => setShowEmailModal(false)}
-              className="text-xs px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 cursor-pointer"
-            >
-              پەشیمانبوونەوە
-            </button>
-            <button
-              type="submit"
-              className="text-xs font-bold px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer shadow-xs"
-            >
-              پاشەکەوتکردنی ئیمەیل
-            </button>
-          </div>
-        </form>
-      </Modal>
+
 
       {/* Change Password Modal */}
       <Modal
