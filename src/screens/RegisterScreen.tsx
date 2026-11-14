@@ -27,7 +27,14 @@ import {
   STREAM_LABELS,
   SUBJECT_LABELS,
 } from "../features/student/studentDefaults.ts";
-import { registerWithEmail, loginWithGoogle, getErrorMessage } from "../services/authService.ts";
+import {
+  registerWithEmail,
+  loginWithGoogle,
+  getErrorMessage,
+  startStudentTrial,
+  getCurrentUser,
+} from "../services/authService.ts";
+import { User } from "firebase/auth";
 import { getFirestoreDb } from "../services/firebase.ts";
 import { doc, getDoc } from "firebase/firestore";
 import {
@@ -46,6 +53,8 @@ interface RegisterScreenProps {
     grade: StudentGrade;
     stream: AcademicStream;
     subject: SubjectKey;
+    email?: string;
+    userId?: string;
   }) => void;
 }
 
@@ -183,14 +192,33 @@ export function RegisterScreen({
 
     setLoading(true);
     try {
+      let registeredUser: User | null = null;
       if (!isGoogleAccount) {
-        await registerWithEmail(email, password, name.trim());
+        registeredUser = await registerWithEmail(email, password, name.trim());
+      } else {
+        registeredUser = getCurrentUser();
       }
+
+      if (registeredUser?.uid) {
+        try {
+          await startStudentTrial(registeredUser.uid, {
+            name: name.trim(),
+            email: email.trim() || registeredUser.email || undefined,
+            grade,
+            stream,
+          });
+        } catch (trialErr) {
+          console.warn("Trial start error (soft fallback):", trialErr);
+        }
+      }
+
       onRegisterSuccess?.({
         name: name.trim(),
         grade,
         stream,
         subject,
+        email: email.trim() || registeredUser?.email || undefined,
+        userId: registeredUser?.uid,
       });
     } catch (err) {
       setError(getErrorMessage(err));
@@ -270,6 +298,10 @@ export function RegisterScreen({
                 <p className="text-xs text-slate-300">
                   ناوی تەواو، ئیمەیل و وشەی نهێنی خۆت دیاری بکە بۆ دەستپێکردن
                 </p>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-950/80 border border-blue-500/40 text-blue-300 text-[11px] font-bold mt-1">
+                  <span>🎁</span>
+                  <span>٣ ڕۆژی تاقیکردنەوەی خۆڕایی دەستبەجێ کارا دەبێت</span>
+                </div>
               </div>
 
               <div className="space-y-4">

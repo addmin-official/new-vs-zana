@@ -20,10 +20,10 @@ export const FIREBASE_ERRORS_KU: Record<string, string> = {
   "auth/wrong-password": "وشەی نهێنی هەڵەیە.",
   "auth/network-request-failed": "کێشەی ئینتەرنێت هەیە.",
   "auth/invalid-credential": "ئیمەیل یان وشەی نهێنی هەڵەیە.",
-  "auth/invalid-email": "ئیمەیلەکە دروست نییە.",
+  "auth/invalid-email": "ئیمەیڵەکە دروست نییە.",
   "auth/user-disabled": "ئەم هەژمارە ناچالاک کراوە.",
-  "auth/email-already-in-use": "ئەم ئیمەیلە پێشتر لە زانا تۆمارکراوە.",
-  "auth/weak-password": "وشەی نهێنی لاوازە (پێویستە لانیکەم ٨ پیت و ژمارە بێت).",
+  "auth/email-already-in-use": "ئەم ئیمەیڵە پێشتر تۆمار کراوە.",
+  "auth/weak-password": "وشەی نهێنی دەبێت لانیکەم ٦ پیت بێت.",
   "auth/too-many-requests": "هەوڵی زۆر دراوە. تکایە کەمێکی تر تاقی بکەرەوە.",
   "auth/popup-closed-by-user": "پەنجەرەی چوونەژوورەوە لەلایەن تۆوە داخرایەوە.",
   "auth/popup-blocked": "پەنجەرەی پۆپ-ئەپ بەربەست کراوە. تکایە ڕێگە بە پەنجەرەکە بدە.",
@@ -67,6 +67,15 @@ export function getErrorMessage(err: unknown): string {
   }
   if (code === "auth/wrong-password" || rawMessage.includes("wrong-password")) {
     return "وشەی نهێنی هەڵەیە.";
+  }
+  if (code === "auth/email-already-in-use" || rawMessage.includes("email-already-in-use")) {
+    return "ئەم ئیمەیڵە پێشتر تۆمار کراوە.";
+  }
+  if (code === "auth/weak-password" || rawMessage.includes("weak-password")) {
+    return "وشەی نهێنی دەبێت لانیکەم ٦ پیت بێت.";
+  }
+  if (code === "auth/invalid-email" || rawMessage.includes("invalid-email")) {
+    return "ئیمەیڵەکە دروست نییە.";
   }
   if (
     code === "auth/invalid-credential" ||
@@ -375,6 +384,48 @@ export async function getClientToken(_studentId?: string, forceRefresh?: boolean
   return null;
 }
 
+/**
+ * Start or refresh the student's 3-day trial in D1 database
+ */
+export async function startStudentTrial(
+  userId: string,
+  studentData?: { name?: string; email?: string; grade?: string; stream?: string }
+): Promise<{ ok: boolean; trial_ends_at?: number }> {
+  try {
+    const user = getCurrentUser();
+    let token = "";
+    if (user && typeof user.getIdToken === "function") {
+      try {
+        token = await user.getIdToken();
+      } catch {}
+    }
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const res = await fetch("/api/trial/start", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        userId,
+        name: studentData?.name,
+        email: studentData?.email || user?.email,
+        grade: studentData?.grade,
+        stream: studentData?.stream,
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return { ok: true, trial_ends_at: (data as { trial_ends_at?: number })?.trial_ends_at };
+    }
+  } catch (err) {
+    console.warn("startStudentTrial API failed gracefully:", err);
+  }
+  return { ok: true };
+}
+
 export const AuthService = {
   verifyFirebaseIdToken,
   getClientToken,
@@ -388,4 +439,6 @@ export const AuthService = {
   getCurrentUser,
   getErrorMessage,
   FIREBASE_ERRORS_KU,
+  startStudentTrial,
 };
+

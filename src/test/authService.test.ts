@@ -11,6 +11,7 @@ import {
   resetPassword,
   logoutUser,
   ensureAuthenticated,
+  startStudentTrial,
 } from "../services/authService.ts";
 
 describe("ZANA Auth Service & Kurdish Error Mapping", () => {
@@ -19,7 +20,9 @@ describe("ZANA Auth Service & Kurdish Error Mapping", () => {
     assert.strictEqual(FIREBASE_ERRORS_KU["auth/wrong-password"], "وشەی نهێنی هەڵەیە.");
     assert.strictEqual(FIREBASE_ERRORS_KU["auth/invalid-credential"], "ئیمەیل یان وشەی نهێنی هەڵەیە.");
     assert.strictEqual(FIREBASE_ERRORS_KU["auth/network-request-failed"], "کێشەی ئینتەرنێت هەیە.");
-    assert.strictEqual(FIREBASE_ERRORS_KU["auth/email-already-in-use"], "ئەم ئیمەیلە پێشتر لە زانا تۆمارکراوە.");
+    assert.strictEqual(FIREBASE_ERRORS_KU["auth/email-already-in-use"], "ئەم ئیمەیڵە پێشتر تۆمار کراوە.");
+    assert.strictEqual(FIREBASE_ERRORS_KU["auth/weak-password"], "وشەی نهێنی دەبێت لانیکەم ٦ پیت بێت.");
+    assert.strictEqual(FIREBASE_ERRORS_KU["auth/invalid-email"], "ئیمەیڵەکە دروست نییە.");
   });
 
   test("getErrorMessage maps error codes to Kurdish strings", () => {
@@ -54,5 +57,6 @@ describe("ZANA Auth Service & Kurdish Error Mapping", () => {
     assert.strictEqual(typeof logoutUser, "function");
     assert.strictEqual(typeof ensureAuthenticated, "function");
     assert.strictEqual(typeof getCurrentUser, "function");
+    assert.strictEqual(typeof startStudentTrial, "function");
   });
 });

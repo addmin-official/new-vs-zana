@@ -21,15 +21,21 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       outDir: 'dist/client',
+      target: 'es2022',
       rollupOptions: {
         output: {
-          manualChunks: {
-            'react-vendor': ['react', 'react-dom'],
-            'firebase-vendor': ['firebase/app', 'firebase/auth', 'firebase/firestore'],
-            'markdown-vendor': ['react-markdown'],
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('firebase')) return 'firebase-vendor';
+              if (id.includes('lucide-react')) return 'lucide-vendor';
+              if (id.includes('react-markdown') || id.includes('remark') || id.includes('unified')) return 'markdown-vendor';
+              if (id.includes('motion')) return 'motion-vendor';
+              if (id.includes('react') || id.includes('scheduler')) return 'react-vendor';
+            }
           },
         },
       },
+      chunkSizeWarningLimit: 600,
     },
     define: {
       'import.meta.env.VITE_FIREBASE_PROJECT_ID': JSON.stringify(getEnv('VITE_FIREBASE_PROJECT_ID')),

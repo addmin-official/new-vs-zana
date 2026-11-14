@@ -736,7 +736,23 @@ export default {
             }
             const indexUrl = new URL(request.url);
             indexUrl.pathname = "/index.html";
-            return await env.ASSETS.fetch(new Request(indexUrl.toString(), request));
+            const indexRes = await env.ASSETS.fetch(new Request(indexUrl.toString(), request));
+            const indexHeaders = new Headers(indexRes.headers);
+            indexHeaders.set("Cache-Control", "public, max-age=0, must-revalidate");
+            return new Response(indexRes.body, { status: indexRes.status, statusText: indexRes.statusText, headers: indexHeaders });
+          }
+          if (assetResponse.status < 400) {
+            const resHeaders = new Headers(assetResponse.headers);
+            if (pathname.startsWith("/assets/") || pathname.match(/\.(js|css|png|jpg|jpeg|webp|svg|woff2?|ico)$/i)) {
+              resHeaders.set("Cache-Control", "public, max-age=31536000, immutable");
+            } else if (pathname === "/" || pathname === "/index.html" || pathname.endsWith(".html")) {
+              resHeaders.set("Cache-Control", "public, max-age=0, must-revalidate");
+            }
+            return new Response(assetResponse.body, {
+              status: assetResponse.status,
+              statusText: assetResponse.statusText,
+              headers: resHeaders,
+            });
           }
           return assetResponse;
         } catch (err) {
@@ -1854,7 +1870,9 @@ export default {
       if (outlineMatch && request.method === "GET") {
         const subject = decodeURIComponent(outlineMatch[1]);
         const outline = getChapterOutlineForSubject(subject);
-        return new Response(JSON.stringify(outline), { status: 200, headers: responseHeaders });
+        const currHeaders = new Headers(responseHeaders);
+        currHeaders.set("Cache-Control", "public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400");
+        return new Response(JSON.stringify(outline), { status: 200, headers: currHeaders });
       }
 
       // GET /api/study/plan
@@ -2305,6 +2323,111 @@ export default {
             { status: 200, headers: responseHeaders }
           );
         } catch (dbErr: unknown) {
+          return new Response(
+            JSON.stringify({ error: "DATABASE_ERROR", detail: (dbErr as Error)?.message || String(dbErr) }),
+            { status: 500, headers: responseHeaders }
+          );
+        }
+      }
+
+      // POST /api/trial/start (and /api/students/register)
+      if ((pathname === "/api/trial/start" || pathname === "/api/students/register") && request.method === "POST") {
+        if (!env.DB) {
+          return new Response(JSON.stringify({ error: "DB binding not configured" }), {
+            status: 500,
+            headers: responseHeaders,
+          });
+        }
+        try {
+          const body = (await request.json().catch(() => ({}))) as {
+            userId?: string;
+            name?: string;
+            email?: string;
+            grade?: string;
+            stream?: string;
+          };
+
+          let studentId = body?.userId?.trim();
+          let studentEmail = body?.email?.trim();
+          let studentName = body?.name?.trim();
+          const grade = body?.grade?.trim() || "12";
+
+          // Try to obtain verified claims if token provided
+          const authHeader = request.headers.get("Authorization");
+          if (authHeader && authHeader.startsWith("Bearer ")) {
+            const token = authHeader.substring(7).trim();
+            if (token && env.FIREBASE_PROJECT_ID) {
+              try {
+                const verified = await AuthService.verifyFirebaseIdToken(token, env.FIREBASE_PROJECT_ID);
+                if (verified && verified.uid) {
+                  studentId = verified.uid;
+                  if (verified.email && !studentEmail) {
+                    studentEmail = verified.email;
+                  }
+                }
+              } catch (e) {
+                console.warn("[trial/start] Token verification soft fallback:", e);
+              }
+            }
+          }
+
+          if (!studentId) {
+            return new Response(JSON.stringify({ error: "userId or valid auth token is required" }), {
+              status: 400,
+              headers: responseHeaders,
+            });
+          }
+
+          const now = Date.now();
+          const trialDurationMs = 3 * 24 * 60 * 60 * 1000; // 3 days
+          const trialEndsAt = now + trialDurationMs;
+
+          // 1. Upsert into students table
+          try {
+            await env.DB.prepare(
+              `INSERT INTO students (id, firebase_uid, name, email, grade, created_at)
+               VALUES (?, ?, ?, ?, ?, datetime('now'))
+               ON CONFLICT(id) DO UPDATE SET
+                 name = COALESCE(excluded.name, students.name),
+                 email = COALESCE(excluded.email, students.email),
+                 grade = COALESCE(excluded.grade, students.grade)`
+            ).bind(studentId, studentId, studentName || "قوتابی", studentEmail || "", grade).run();
+          } catch (studentErr) {
+            try {
+              await env.DB.prepare(
+                `INSERT INTO students (id, firebase_uid, name, grade, created_at)
+                 VALUES (?, ?, ?, ?, datetime('now'))
+                 ON CONFLICT(id) DO UPDATE SET
+                   name = COALESCE(excluded.name, students.name),
+                   grade = COALESCE(excluded.grade, students.grade)`
+              ).bind(studentId, studentId, studentName || "قوتابی", grade).run();
+            } catch (fallbackErr) {
+              console.warn("[trial/start] Could not upsert into students table:", fallbackErr);
+            }
+          }
+
+          // 2. Start or update 3-day trial in subscriptions table
+          await env.DB.prepare(
+            `INSERT INTO subscriptions (user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at)
+             VALUES (?, 'trial', ?, ?, 'free_trial_3d', ?)
+             ON CONFLICT(user_id) DO UPDATE SET
+               status = CASE WHEN subscriptions.status = 'active' THEN 'active' ELSE 'trial' END,
+               trial_ends_at = CASE WHEN subscriptions.status = 'active' THEN subscriptions.trial_ends_at ELSE excluded.trial_ends_at END,
+               updated_at = excluded.updated_at`
+          ).bind(studentId, now, trialEndsAt, now).run();
+
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              status: "trial",
+              trial_started_at: now,
+              trial_ends_at: trialEndsAt,
+              message: "تاقیکردنەوەی خۆڕایی ٣ ڕۆژە بە سەرکەوتوویی کارا کرا.",
+            }),
+            { status: 200, headers: responseHeaders }
+          );
+        } catch (dbErr: unknown) {
+          console.error("[trial/start error]", dbErr);
           return new Response(
             JSON.stringify({ error: "DATABASE_ERROR", detail: (dbErr as Error)?.message || String(dbErr) }),
             { status: 500, headers: responseHeaders }

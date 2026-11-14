@@ -1,8 +1,6 @@
 import { useState, useEffect, lazy, Suspense } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { AppShell } from "./components/AppShell.tsx";
-import { OnboardingScreen } from "./screens/OnboardingScreen.tsx";
-import { LoginScreen } from "./screens/LoginScreen.tsx";
 import { LoadingScreen } from "./screens/LoadingScreen.tsx";
 import { useStudentProfile } from "./features/student/useStudentProfile.ts";
 import { SubjectKey } from "./features/student/studentTypes.ts";
@@ -30,6 +28,9 @@ const AdminRoute = lazy(() => import("./routes/AdminRoute.tsx").then((m) => ({ d
 const RegisterScreen = lazy(() => import("./screens/RegisterScreen.tsx").then((m) => ({ default: m.RegisterScreen })));
 const ForgotPasswordScreen = lazy(() => import("./screens/ForgotPasswordScreen.tsx").then((m) => ({ default: m.ForgotPasswordScreen })));
 const PedagogicalHubScreen = lazy(() => import("./screens/PedagogicalHubScreen.tsx"));
+const OnboardingScreen = lazy(() => import("./screens/OnboardingScreen.tsx").then((m) => ({ default: m.OnboardingScreen })));
+const LoginScreen = lazy(() => import("./screens/LoginScreen.tsx").then((m) => ({ default: m.LoginScreen })));
+const WelcomeScreen = lazy(() => import("./screens/WelcomeScreen.tsx").then((m) => ({ default: m.WelcomeScreen })));
 
 function ScreenLoadingFallback() {
   return (
@@ -98,19 +99,20 @@ export default function App() {
     if (!auth) return false;
     return auth.currentUser === null;
   });
-  const [authScreen, setAuthScreen] = useState<"login" | "register" | "forgot-password">(() => {
+  const [authScreen, setAuthScreen] = useState<"welcome" | "login" | "register" | "forgot-password">(() => {
     if (typeof window !== "undefined") {
       const p = window.location.pathname.replace(/\/+$/, "");
       if (p === "/register") return "register";
       if (p === "/forgot-password") return "forgot-password";
       if (p === "/login") return "login";
+      if (p === "/welcome") return "welcome";
     }
-    return "login";
+    return "welcome";
   });
   const [isAuthExplicit, setIsAuthExplicit] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
       const p = window.location.pathname.replace(/\/+$/, "");
-      return p === "/login" || p === "/register" || p === "/forgot-password";
+      return p === "/login" || p === "/register" || p === "/forgot-password" || p === "/welcome";
     }
     return false;
   });
@@ -189,6 +191,9 @@ export default function App() {
         } else if (path === "/login") {
           setAuthScreen("login");
           setIsAuthExplicit(true);
+        } else if (path === "/welcome") {
+          setAuthScreen("welcome");
+          setIsAuthExplicit(true);
         } else {
           setIsAuthExplicit(false);
           const resolvedTab = resolveTabFromPath(path);
@@ -249,11 +254,12 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  const navigateAuth = (screen: "login" | "register" | "forgot-password") => {
+  const navigateAuth = (screen: "welcome" | "login" | "register" | "forgot-password") => {
     setAuthScreen(screen);
     setIsAuthExplicit(true);
     if (typeof window !== "undefined") {
-      window.history.pushState(null, "", `/${screen}`);
+      const targetUrl = screen === "welcome" ? "/" : `/${screen}`;
+      window.history.pushState(null, "", targetUrl);
     }
   };
 
@@ -327,6 +333,19 @@ export default function App() {
   // 2. Unauthenticated User Flows or Explicit Auth Route (/login, /register, /forgot-password)
   const showAuthFlow = isAuthExplicit || (!isPermanentUser && !isGuestBypassed);
   if (showAuthFlow) {
+    if (authScreen === "welcome") {
+      return (
+        <ThemeProvider>
+          <Suspense fallback={<ScreenLoadingFallback />}>
+            <WelcomeScreen
+              onGetStarted={() => navigateAuth("register")}
+              onNavigateToLogin={() => navigateAuth("login")}
+            />
+          </Suspense>
+        </ThemeProvider>
+      );
+    }
+
     if (authScreen === "register") {
       return (
         <ThemeProvider>
@@ -337,7 +356,7 @@ export default function App() {
                 setIsAuthExplicit(false);
                 if (typeof window !== "undefined") {
                   sessionStorage.setItem("zana_guest_bypassed", "true");
-                  window.history.replaceState(null, "", "/");
+                  window.history.replaceState(null, "", "/chat");
                 }
                 setIsGuestBypassed(true);
                 handleOnboardingComplete(
@@ -347,6 +366,7 @@ export default function App() {
                   "intermediate",
                   regData.stream
                 );
+                setActiveTab("chat");
               }}
             />
           </Suspense>
@@ -368,19 +388,21 @@ export default function App() {
 
     return (
       <ThemeProvider>
-        <LoginScreen
-          onNavigateToRegister={() => navigateAuth("register")}
-          onNavigateToForgotPassword={() => navigateAuth("forgot-password")}
-          onLoginSuccess={() => {
-            setIsAuthExplicit(false);
-            if (typeof window !== "undefined") {
-              sessionStorage.setItem("zana_guest_bypassed", "true");
-              const target = isBrainActive ? "/admin/brain" : "/";
-              window.history.replaceState(null, "", target);
-            }
-            setIsGuestBypassed(true);
-          }}
-        />
+        <Suspense fallback={<ScreenLoadingFallback />}>
+          <LoginScreen
+            onNavigateToRegister={() => navigateAuth("register")}
+            onNavigateToForgotPassword={() => navigateAuth("forgot-password")}
+            onLoginSuccess={() => {
+              setIsAuthExplicit(false);
+              if (typeof window !== "undefined") {
+                sessionStorage.setItem("zana_guest_bypassed", "true");
+                const target = isBrainActive ? "/admin/brain" : "/";
+                window.history.replaceState(null, "", target);
+              }
+              setIsGuestBypassed(true);
+            }}
+          />
+        </Suspense>
       </ThemeProvider>
     );
   }
@@ -410,12 +432,14 @@ export default function App() {
     return (
       <ThemeProvider>
         <div className="min-h-screen w-full bg-[#071927] flex flex-col items-center py-4 sm:py-8 px-2 sm:px-4 overflow-y-auto overflow-x-hidden transition-colors duration-300">
-          <OnboardingScreen
-            onComplete={(...args) => {
-              handleOnboardingComplete(...args);
-              setIsForcedOnboarding(false);
-            }}
-          />
+          <Suspense fallback={<ScreenLoadingFallback />}>
+            <OnboardingScreen
+              onComplete={(...args) => {
+                handleOnboardingComplete(...args);
+                setIsForcedOnboarding(false);
+              }}
+            />
+          </Suspense>
         </div>
       </ThemeProvider>
     );
