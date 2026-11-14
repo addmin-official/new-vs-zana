@@ -70,6 +70,19 @@ export function useDailySpark() {
     };
   }, [profile, refreshDailySpark]);
 
+  // Automatic midnight refresh (00:00:05 AM)
+  useEffect(() => {
+    const now = new Date();
+    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5);
+    const msUntilMidnight = tomorrow.getTime() - now.getTime();
+
+    const midnightTimer = setTimeout(() => {
+      refreshDailySpark();
+    }, msUntilMidnight);
+
+    return () => clearTimeout(midnightTimer);
+  }, [refreshDailySpark]);
+
   return {
     snapshot,
     isLoading,

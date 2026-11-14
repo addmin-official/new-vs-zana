@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { StudentProfile, StudentProfileDraft, StudentGrade, AcademicStream, SubjectKey, StudentLevel, VerifiedIdentity } from "./studentTypes.ts";
-import { getStudentProfile, deleteStudentProfile, createStudentProfile, createVerifiedStudentProfile, updateStudentProfile, saveStudentProfile, parseServerProfileDocument } from "./studentStorage.ts";
+import { getStudentProfile, deleteStudentProfile, createStudentProfile, createVerifiedStudentProfile, updateStudentProfile, saveStudentProfile, parseServerProfileDocument, syncStudentProgressToFirestore } from "./studentStorage.ts";
 import { getValidatedGrade, getValidatedStream, getValidatedSubject, getValidatedLevel, sanitizeStudentName } from "./studentDefaults.ts";
 import { ZanaStorage } from "../../services/storage.ts";
 import { getFirestoreDb, getFirebaseAuth, isFirebaseConfigured } from "../../services/firebase.ts";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
+import { useAppStore } from "../../store/appStore.ts";
+import { PracticeStorage } from "../practice/practiceStorage.ts";
 
 export function useStudentProfile() {
   const [isOfflineFallback, setIsOfflineFallback] = useState<boolean>(
@@ -22,7 +24,7 @@ export function useStudentProfile() {
       name: "",
       grade: "12",
       stream: "scientific",
-      activeSubject: "math",
+      activeSubject: "chemistry",
       level: "intermediate",
       onboardingCompleted: false,
       createdAt: new Date().toISOString(),
@@ -72,10 +74,85 @@ export function useStudentProfile() {
               email: user.email,
             };
             const cloudProfile = createVerifiedStudentProfile(identity, serverDraft);
+
+            // Extract Firestore progress data
+            const cloudScore = typeof rawData.totalScore === "number" ? rawData.totalScore : (typeof rawData.xp === "number" ? rawData.xp : 0);
+            const cloudStreak = typeof rawData.streak === "number" ? rawData.streak : 1;
+            const cloudLessons = typeof rawData.completedLessons === "number" ? rawData.completedLessons : 0;
+            const cloudMinutes = typeof rawData.todayStudyMinutes === "number" ? rawData.todayStudyMinutes : 0;
+            const cloudCompletion = typeof rawData.completionPercentage === "number" ? rawData.completionPercentage : 0;
+            const cloudBadges: string[] = Array.isArray(rawData.unlockedBadgeIds) ? rawData.unlockedBadgeIds : [];
+            const cloudModules: string[] = Array.isArray(rawData.completedModuleIds) ? rawData.completedModuleIds : [];
+
+            // Merge with local progress (take highest scores so no study progress is lost)
+            const currentLocalStore = useAppStore.getState().userProgress;
+            const localPractice = PracticeStorage.getProgress();
+            const mergedTotalScore = Math.max(cloudScore, currentLocalStore.totalScore || 0, localPractice.totalXp || 0);
+            const mergedStreak = Math.max(cloudStreak, currentLocalStore.streak || 1, localPractice.currentStreak || 1);
+            const mergedLessons = Math.max(cloudLessons, currentLocalStore.lessonsCompleted || 0, localPractice.completedModuleIds?.length || 0);
+            const mergedBadges = Array.from(new Set([...cloudBadges, ...(localPractice.unlockedBadgeIds || [])]));
+            const mergedModules = Array.from(new Set([...cloudModules, ...(localPractice.completedModuleIds || [])]));
+
+            cloudProfile.totalScore = mergedTotalScore;
+            cloudProfile.streak = mergedStreak;
+            cloudProfile.completedLessons = mergedLessons;
+            cloudProfile.todayStudyMinutes = cloudMinutes;
+            cloudProfile.completionPercentage = cloudCompletion;
+            cloudProfile.unlockedBadgeIds = mergedBadges;
+            cloudProfile.completedModuleIds = mergedModules;
+
             saveStudentProfile(cloudProfile);
             setProfileState(cloudProfile);
+
+            // Synchronize directly into global app store
+            useAppStore.setState({
+              userProgress: {
+                streak: mergedStreak,
+                lessonsCompleted: mergedLessons,
+                totalScore: mergedTotalScore,
+              },
+              user: {
+                ...useAppStore.getState().user,
+                id: user.uid,
+                name: cloudProfile.name,
+                email: user.email || "",
+                grade: cloudProfile.grade,
+                stream: cloudProfile.stream,
+                activeSubject: cloudProfile.activeSubject,
+                streakDays: mergedStreak,
+                completedLessons: mergedLessons,
+                totalScore: mergedTotalScore,
+              },
+            });
+
+            // Synchronize PracticeStorage
+            PracticeStorage.saveProgress({
+              totalXp: mergedTotalScore,
+              completedModuleIds: mergedModules,
+              unlockedBadgeIds: mergedBadges.length > 0 ? mergedBadges : ["badge_math_solver"],
+              currentStreak: mergedStreak,
+              lastPracticeDate: typeof rawData.lastStudyDate === "string" ? rawData.lastStudyDate : new Date().toISOString().split("T")[0],
+              moduleScores: rawData.moduleScores || {},
+            });
+
+            // If local device had higher progress, push merged authoritative data back to Firestore
+            if (mergedTotalScore > cloudScore || mergedLessons > cloudLessons || mergedStreak > cloudStreak) {
+              void syncStudentProgressToFirestore({
+                totalScore: mergedTotalScore,
+                streak: mergedStreak,
+                completedLessons: mergedLessons,
+                unlockedBadgeIds: mergedBadges,
+                completedModuleIds: mergedModules,
+              }, user.uid);
+            }
           } else {
             const saved = getStudentProfile();
+            const currentStore = useAppStore.getState().userProgress;
+            const practice = PracticeStorage.getProgress();
+            const initScore = Math.max(currentStore.totalScore || 0, practice.totalXp || 0);
+            const initStreak = Math.max(currentStore.streak || 1, practice.currentStreak || 1);
+            const initLessons = Math.max(currentStore.lessonsCompleted || 0, practice.completedModuleIds?.length || 0);
+
             if (saved && saved.onboardingCompleted) {
               const identity: VerifiedIdentity = {
                 verifiedUid: user.uid,
@@ -89,7 +166,7 @@ export function useStudentProfile() {
                 activeSubject: saved.activeSubject,
                 level: saved.level,
               };
-              // Write only allowed profile fields to Firestore
+              // Write full profile and initial progress to Firestore
               await setDoc(docRef, {
                 id: user.uid,
                 name: draftToUpload.name,
@@ -97,11 +174,21 @@ export function useStudentProfile() {
                 stream: draftToUpload.stream,
                 activeSubject: draftToUpload.activeSubject,
                 level: draftToUpload.level,
+                totalScore: initScore,
+                streak: initStreak,
+                completedLessons: initLessons,
+                todayStudyMinutes: 0,
+                completionPercentage: 0,
+                unlockedBadgeIds: practice.unlockedBadgeIds || ["badge_math_solver"],
+                completedModuleIds: practice.completedModuleIds || [],
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
               });
-              // Only after setDoc succeeds do we grant authority
+              // Grant authority
               const verifiedProfile = createVerifiedStudentProfile(identity, draftToUpload);
+              verifiedProfile.totalScore = initScore;
+              verifiedProfile.streak = initStreak;
+              verifiedProfile.completedLessons = initLessons;
               saveStudentProfile(verifiedProfile);
               setProfileState(verifiedProfile);
             }
@@ -160,21 +247,25 @@ export function useStudentProfile() {
       if (updates.name !== undefined) mappedUpdates.name = sanitizeStudentName(updates.name);
 
       let nextGrade = prev.grade;
-      if (updates.grade !== undefined) {
+      // Grade is locked once onboarding is completed
+      if (updates.grade !== undefined && !prev.onboardingCompleted) {
         nextGrade = getValidatedGrade(updates.grade);
         mappedUpdates.grade = nextGrade;
       }
 
-      let stream = updates.stream !== undefined ? updates.stream : prev.stream;
-
-      if (nextGrade === "9") {
-        stream = "general";
-      } else {
-        if (stream !== "scientific" && stream !== "literary") {
-          throw new TypeError(`Invalid academic stream "${stream}" for Grade ${nextGrade}: stream must be either "scientific" or "literary"`);
+      // Stream is locked once onboarding is completed
+      let stream = prev.stream;
+      if (updates.stream !== undefined && !prev.onboardingCompleted) {
+        stream = updates.stream;
+        if (nextGrade === "9") {
+          stream = "general";
+        } else {
+          if (stream !== "scientific" && stream !== "literary") {
+            throw new TypeError(`Invalid academic stream "${stream}" for Grade ${nextGrade}: stream must be either "scientific" or "literary"`);
+          }
         }
+        mappedUpdates.stream = stream;
       }
-      mappedUpdates.stream = stream;
 
       const rawSubject = updates.activeSubject !== undefined ? updates.activeSubject : updates.subject;
       if (rawSubject !== undefined) mappedUpdates.activeSubject = getValidatedSubject(rawSubject);
@@ -194,7 +285,7 @@ export function useStudentProfile() {
       name: "",
       grade: "12",
       stream: "scientific",
-      activeSubject: "math",
+      activeSubject: "chemistry",
       level: "intermediate",
       onboardingCompleted: false,
       createdAt: new Date().toISOString(),
@@ -212,7 +303,7 @@ export function useStudentProfile() {
       name: "",
       grade: "12",
       stream: "scientific",
-      activeSubject: "math",
+      activeSubject: "chemistry",
       level: "intermediate",
       onboardingCompleted: false,
       createdAt: new Date().toISOString(),
@@ -232,11 +323,15 @@ export function useStudentProfile() {
   };
 
   const setGrade = (grade: StudentGrade) => {
-    updateProfile({ grade });
+    if (!profile.onboardingCompleted) {
+      updateProfile({ grade });
+    }
   };
 
   const setStream = (stream: AcademicStream) => {
-    updateProfile({ stream });
+    if (!profile.onboardingCompleted) {
+      updateProfile({ stream });
+    }
   };
 
   const completeOnboarding = (name: string, grade: string, subject: string, level: string, stream?: string) => {
@@ -264,7 +359,7 @@ export function useStudentProfile() {
       name: "",
       grade: "12",
       stream: "scientific",
-      activeSubject: "math",
+      activeSubject: "chemistry",
       level: "intermediate",
       onboardingCompleted: false,
       createdAt: new Date().toISOString(),

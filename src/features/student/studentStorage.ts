@@ -1,7 +1,7 @@
-import { StudentProfile, StudentProfileDraft, VerifiedIdentity } from "./studentTypes.ts";
+import { StudentProfile, StudentProfileDraft, VerifiedIdentity, StudentProgressData } from "./studentTypes.ts";
 import { getValidatedGrade, getValidatedStream, getValidatedSubject, getValidatedLevel } from "./studentDefaults.ts";
 import { getFirestoreDb, getFirebaseAuth, isFirebaseConfigured } from "../../services/firebase.ts";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, setDoc, getDoc } from "firebase/firestore";
 
 const PROFILE_KEY = "zana.profile.v1";
 
@@ -93,6 +93,15 @@ export function migrateStudentProfile(raw: unknown): StudentProfile {
   const source: "guest-local" | "server-authoritative" = rawRecord.source === "server-authoritative" ? "server-authoritative" : "guest-local";
   const isStale = typeof rawRecord.isStale === "boolean" ? rawRecord.isStale : undefined;
 
+  const totalScore = typeof rawRecord.totalScore === "number" ? rawRecord.totalScore : (typeof rawRecord.xp === "number" ? rawRecord.xp : undefined);
+  const streak = typeof rawRecord.streak === "number" ? rawRecord.streak : undefined;
+  const todayStudyMinutes = typeof rawRecord.todayStudyMinutes === "number" ? rawRecord.todayStudyMinutes : undefined;
+  const completedLessons = typeof rawRecord.completedLessons === "number" ? rawRecord.completedLessons : undefined;
+  const completionPercentage = typeof rawRecord.completionPercentage === "number" ? rawRecord.completionPercentage : undefined;
+  const unlockedBadgeIds = Array.isArray(rawRecord.unlockedBadgeIds) ? (rawRecord.unlockedBadgeIds as string[]) : undefined;
+  const completedModuleIds = Array.isArray(rawRecord.completedModuleIds) ? (rawRecord.completedModuleIds as string[]) : undefined;
+  const lastStudyDate = typeof rawRecord.lastStudyDate === "string" ? rawRecord.lastStudyDate : undefined;
+
   const migrated: StudentProfile = {
     id,
     name,
@@ -106,6 +115,14 @@ export function migrateStudentProfile(raw: unknown): StudentProfile {
     authoritative,
     source,
     isStale,
+    totalScore,
+    streak,
+    todayStudyMinutes,
+    completedLessons,
+    completionPercentage,
+    unlockedBadgeIds,
+    completedModuleIds,
+    lastStudyDate,
   };
 
   if (isBrowser) {
@@ -164,13 +181,68 @@ export function saveStudentProfile(profile: StudentProfile): void {
       const auth = getFirebaseAuth();
       const db = getFirestoreDb();
       if (auth && db && auth.currentUser && !auth.currentUser.isAnonymous && profile.id === auth.currentUser.uid) {
-        setDoc(doc(db, "students", profile.id), profileToSave).catch((e) => {
+        setDoc(doc(db, "students", profile.id), profileToSave, { merge: true }).catch((e) => {
           console.warn("Firestore profile backup unavailable:", e);
         });
       }
     }
   } catch (error) {
     console.error("Error saving student profile to localStorage:", error);
+  }
+}
+
+export async function syncStudentProgressToFirestore(
+  progress: Partial<StudentProgressData>,
+  userId?: string
+): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  try {
+    const auth = getFirebaseAuth();
+    const db = getFirestoreDb();
+    if (!auth || !db) return;
+
+    const targetUid = userId || (auth.currentUser && !auth.currentUser.isAnonymous ? auth.currentUser.uid : null);
+    if (!targetUid) return;
+
+    const payload: Record<string, unknown> = {
+      ...progress,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const docRef = doc(db, "students", targetUid);
+    await setDoc(docRef, payload, { merge: true });
+  } catch (err) {
+    console.warn("Failed to sync student progress to Firestore:", err);
+  }
+}
+
+export async function fetchStudentProgressFromFirestore(
+  uid: string
+): Promise<StudentProgressData | null> {
+  if (!isFirebaseConfigured()) return null;
+  try {
+    const db = getFirestoreDb();
+    if (!db || !uid) return null;
+
+    const docRef = doc(db, "students", uid);
+    const snap = await getDoc(docRef);
+    if (!snap.exists()) return null;
+
+    const d = snap.data();
+    return {
+      totalScore: typeof d.totalScore === "number" ? d.totalScore : (typeof d.xp === "number" ? d.xp : 0),
+      streak: typeof d.streak === "number" ? d.streak : 1,
+      todayStudyMinutes: typeof d.todayStudyMinutes === "number" ? d.todayStudyMinutes : 0,
+      completedLessons: typeof d.completedLessons === "number" ? d.completedLessons : 0,
+      completionPercentage: typeof d.completionPercentage === "number" ? d.completionPercentage : 0,
+      unlockedBadgeIds: Array.isArray(d.unlockedBadgeIds) ? d.unlockedBadgeIds : [],
+      completedModuleIds: Array.isArray(d.completedModuleIds) ? d.completedModuleIds : [],
+      lastStudyDate: typeof d.lastStudyDate === "string" ? d.lastStudyDate : undefined,
+      updatedAt: typeof d.updatedAt === "string" ? d.updatedAt : undefined,
+    };
+  } catch (err) {
+    console.warn("Failed to fetch student progress from Firestore:", err);
+    return null;
   }
 }
 

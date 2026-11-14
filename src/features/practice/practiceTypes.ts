@@ -1,6 +1,13 @@
-export type PracticeModuleType = "step_solver" | "interactive_diagram" | "virtual_lab" | "gamified_quiz";
+import { AnyInteractiveExercise } from "./components/InteractiveExerciseRenderer.tsx";
 
-export type SubjectType = "math" | "physics" | "chemistry" | "english" | "biology";
+export type PracticeModuleType =
+  | "step_solver"
+  | "interactive_diagram"
+  | "virtual_lab"
+  | "gamified_quiz"
+  | "interactive_exercise";
+
+export type SubjectType = "math" | "physics" | "chemistry" | "english" | "biology" | "kurdish" | "arabic" | "sports" | "history" | "economy" | "geography";
 
 export type GradeLevel = "9" | "10" | "11" | "12";
 
@@ -140,6 +147,7 @@ export interface PracticeModule {
   diagramData?: InteractiveDiagramPayload;
   virtualLabData?: VirtualLabPayload;
   gamifiedQuizData?: GamifiedQuizPayload;
+  interactiveExerciseData?: AnyInteractiveExercise;
 }
 
 // --- Practice Progress Persistence ---

@@ -41,15 +41,18 @@ export function useTutorChat(profile: StudentProfile, academicContext?: Academic
             ? `\n\n📌 **تەوەری چالاکی ئەمڕۆمان:** ${academicContext.lessonTitle}${academicContext.conceptTitle ? ` (${academicContext.conceptTitle})` : ""}`
             : "";
 
-          const welcomeMessage: ChatMessage = {
-            id: "welcome",
-            sender: "zana",
-            text: `بەخێربێیت قوتابی خۆشەویست **${profile.name}**! من مامۆستا **زانا**م. 
+          const welcomeText = `بەخێربێیت قوتابی خۆشەویست **${profile.name}**! من مامۆستا **زانا**م. 
 خۆشحاڵم کە ئەمڕۆ بەیەکەوە پڕۆگرامی **${subjectKu}**ی پۆلی **${profile.grade}**ی پڕۆگرامی خوێندنی فەرمی دەخوێنین.${lessonContextText}
 
 ئاستی فێربوونت دانراوە وەک ئاستی **${profile.level}**. وەک ڕێبەری فێرکاریت، بە شێوازی سوقراتی و پرسیار و ڕاهێنان چەمکەکانت بۆ شی دەکەمەوە تا بە تەواوی لێی تێبگەیت.
 
-ئامادەی دەستپێ بکەین؟ پرسیارەکەت بنووسە یان داوای ڕاهێنان بکە.`,
+ئامادەی دەستپێ بکەین؟ پرسیارەکەت بنووسە یان داوای ڕاهێنان بکە.`;
+
+          const welcomeMessage: ChatMessage = {
+            id: "welcome",
+            sender: "zana",
+            content: welcomeText,
+            text: welcomeText,
             timestamp: new Date().toLocaleTimeString("ku-IQ", { hour: "2-digit", minute: "2-digit" }),
             isEducational: true
           };
@@ -74,6 +77,7 @@ export function useTutorChat(profile: StudentProfile, academicContext?: Academic
     const userMsg: ChatMessage = {
       id: Math.random().toString(36).substring(7),
       sender: "user",
+      content: text,
       text,
       timestamp: new Date().toLocaleTimeString("ku-IQ", { hour: "2-digit", minute: "2-digit" })
     };
@@ -93,6 +97,7 @@ export function useTutorChat(profile: StudentProfile, academicContext?: Academic
       const zanaMsg: ChatMessage = {
         id: Math.random().toString(36).substring(7),
         sender: "zana",
+        content: response.text,
         text: response.text,
         timestamp: new Date().toLocaleTimeString("ku-IQ", { hour: "2-digit", minute: "2-digit" }),
         isEducational: response.isEducational

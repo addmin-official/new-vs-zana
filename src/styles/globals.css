@@ -1,18 +1,20 @@
-@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@400;500;600;700&family=Vazirmatn:wght@300;400;500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --font-sans: "Vazirmatn", "Inter", "Noto Naskh Arabic", "Tahoma", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Noto Kufi Arabic", "Vazirmatn", "Segoe UI", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   
   --color-bg: #F8FAFC;
   --color-surface: #FFFFFF;
-  --color-primary-blue: #2563EB;
-  --color-primary-dark: #1E40AF;
-  --color-success-green: #10B981;
+  --color-primary-indigo: #4F46E5;
+  --color-primary-indigo-dark: #4338CA;
+  --color-success-green: #059669;
+  --color-streak-amber: #D97706;
   --color-warning-gold: #F59E0B;
+  --color-error-red: #DC2626;
   --color-text-dark: #0F172A;
   --color-muted-gray: #64748B;
   --color-border-slate: #E2E8F0;
@@ -20,11 +22,27 @@
 
 @layer base {
   html, body {
+    min-height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
     background-color: #F8FAFC;
     color: #0F172A;
-    font-family: "Vazirmatn", "Inter", "Noto Naskh Arabic", "Tahoma", ui-sans-serif, system-ui, sans-serif;
+    font-family: "Noto Kufi Arabic", "Vazirmatn", "Segoe UI", system-ui, sans-serif;
+    font-variant-numeric: tabular-nums lining-nums;
     direction: rtl;
     -webkit-tap-highlight-color: transparent;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #root {
+    min-height: 100%;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   html.dark, html.dark body {
@@ -32,3 +50,4 @@
     color: #F8FAFC;
   }
 }
+

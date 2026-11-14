@@ -1,291 +1,476 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { AppShell } from "./components/AppShell.tsx";
 import { OnboardingScreen } from "./screens/OnboardingScreen.tsx";
-import { DailySparkScreen } from "./screens/DailySparkScreen.tsx";
-import { SubjectsScreen } from "./screens/SubjectsScreen.tsx";
-import { StudyWorkspaceScreen } from "./screens/StudyWorkspaceScreen.tsx";
-import { AssessmentScreen } from "./screens/AssessmentScreen.tsx";
-import { ParentReportScreen } from "./screens/ParentReportScreen.tsx";
-import { ProfileScreen } from "./screens/ProfileScreen.tsx";
-import { PracticeScreen } from "./screens/PracticeScreen.tsx";
-import { StudyRoomScreen } from "./screens/StudyRoomScreen.tsx";
-import { StudentStudyPathDashboard } from "./features/student/planning/StudentStudyPathDashboard.tsx";
-import { BrainAdminDashboard } from "./features/brain/BrainAdminDashboard.tsx";
-import { AdminRoute } from "./routes/AdminRoute.tsx";
 import { LoginScreen } from "./screens/LoginScreen.tsx";
-import { RegisterScreen } from "./screens/RegisterScreen.tsx";
-import { ForgotPasswordScreen } from "./screens/ForgotPasswordScreen.tsx";
 import { LoadingScreen } from "./screens/LoadingScreen.tsx";
 import { useStudentProfile } from "./features/student/useStudentProfile.ts";
 import { SubjectKey } from "./features/student/studentTypes.ts";
-import { NavTab } from "./components/BottomNavigation.tsx";
+import { ThemeProvider } from "./context/ThemeContext.tsx";
 import { getFirebaseAuth, isFirebaseConfigured } from "./services/firebase.ts";
-import { getCurrentUser } from "./services/authService.ts";
+import { getCurrentUser, logoutUser, subscribeToAuthChanges } from "./services/authService.ts";
+import { deleteStudentProfile } from "./features/student/studentStorage.ts";
+import { useAppStore } from "./store/appStore.ts";
+import { NavItemKey } from "./components/Sidebar.tsx";
+import { DevQuickToolbar } from "./components/DevQuickToolbar.tsx";
+
+// Lazy-loaded routes for code-splitting and performance (LCP/FCP < 2s)
+const Home = lazy(() => import("./pages/Home.tsx").then((m) => ({ default: m.Home })));
+const Chat = lazy(() => import("./pages/Chat.tsx").then((m) => ({ default: m.Chat })));
+const PracticeLab = lazy(() => import("./pages/PracticeLab.tsx").then((m) => ({ default: m.PracticeLab })));
+const VirtualScienceLab = lazy(() => import("./pages/VirtualScienceLab.tsx").then((m) => ({ default: m.VirtualScienceLab })));
+const AdaptiveAssessment = lazy(() => import("./pages/AdaptiveAssessment.tsx").then((m) => ({ default: m.AdaptiveAssessment })));
+const StudyPathManager = lazy(() => import("./pages/StudyPathManager.tsx").then((m) => ({ default: m.StudyPathManager })));
+const StudyRooms = lazy(() => import("./pages/StudyRooms.tsx").then((m) => ({ default: m.StudyRooms })));
+const ParentReport = lazy(() => import("./pages/ParentReport.tsx").then((m) => ({ default: m.ParentReport })));
+const ProfileAndSettings = lazy(() => import("./pages/ProfileAndSettings.tsx").then((m) => ({ default: m.ProfileAndSettings })));
+const SubjectsScreen = lazy(() => import("./screens/SubjectsScreen.tsx").then((m) => ({ default: m.SubjectsScreen })));
+const BrainAdminDashboard = lazy(() => import("./features/brain/BrainAdminDashboard.tsx").then((m) => ({ default: m.BrainAdminDashboard })));
+const AdminRoute = lazy(() => import("./routes/AdminRoute.tsx").then((m) => ({ default: m.AdminRoute })));
+const RegisterScreen = lazy(() => import("./screens/RegisterScreen.tsx").then((m) => ({ default: m.RegisterScreen })));
+const ForgotPasswordScreen = lazy(() => import("./screens/ForgotPasswordScreen.tsx").then((m) => ({ default: m.ForgotPasswordScreen })));
+const PedagogicalHubScreen = lazy(() => import("./screens/PedagogicalHubScreen.tsx"));
+
+function ScreenLoadingFallback() {
+  return (
+    <div
+      className="flex flex-col items-center justify-center min-h-[50vh] p-8 gap-4"
+      role="status"
+      aria-label="چاوەڕوان بە... بارکردنی پەڕە"
+    >
+      <div className="w-10 h-10 border-3 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+      <span className="text-sm font-medium text-slate-500">چاوەڕوان بە... بارکردنی زانیارییەکان</span>
+    </div>
+  );
+}
 
 export default function App() {
- const { profile, updateProfile, completeOnboarding, resetProfile, isOfflineFallback, authError } = useStudentProfile();
+  const { profile, updateProfile, completeOnboarding, resetProfileOnly } = useStudentProfile();
 
- // Authentication State
- const [currentUser, setCurrentUser] = useState<User | null>(() => getCurrentUser());
- const [authLoading, setAuthLoading] = useState<boolean>(() => {
- if (!isFirebaseConfigured()) return false;
- const auth = getFirebaseAuth();
- if (!auth) return false;
- return auth.currentUser === null;
- });
- const [authScreen, setAuthScreen] = useState<"login" | "register" | "forgot-password">(() => {
- if (typeof window !== "undefined") {
- if (window.location.pathname === "/register") return "register";
- if (window.location.pathname === "/forgot-password") return "forgot-password";
- }
- return "login";
- });
+  // Authentication State
+  const [currentUser, setCurrentUser] = useState<User | null>(() => getCurrentUser());
+  const [authLoading, setAuthLoading] = useState<boolean>(() => {
+    if (!isFirebaseConfigured()) return false;
+    const auth = getFirebaseAuth();
+    if (!auth) return false;
+    return auth.currentUser === null;
+  });
+  const [authScreen, setAuthScreen] = useState<"login" | "register" | "forgot-password">(() => {
+    if (typeof window !== "undefined") {
+      if (window.location.pathname === "/register") return "register";
+      if (window.location.pathname === "/forgot-password") return "forgot-password";
+    }
+    return "login";
+  });
 
- // Manage active tab, plus optional "assessment" and "brain" modes
- const [activeTab, setActiveTab] = useState<NavTab>("daily");
- const [isAssessmentMode, setIsAssessmentMode] = useState(false);
- const [isBrainActive, setIsBrainActive] = useState(() => {
- if (typeof window !== "undefined") {
- return window.location.pathname.startsWith("/admin/brain");
- }
- return false;
- });
+  // Manage active tab, plus optional "brain" mode
+  const [activeTab, setActiveTab] = useState<NavItemKey>("home");
+  const [isForcedOnboarding, setIsForcedOnboarding] = useState(false);
+  const [isBrainActive, setIsBrainActive] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.location.pathname.startsWith("/admin/brain");
+    }
+    return false;
+  });
 
- // Firebase Auth State Listener
- useEffect(() => {
- const auth = getFirebaseAuth();
- if (!auth) {
- return;
- }
+  // Auth State Listeners
+  useEffect(() => {
+    const unsubCustom = subscribeToAuthChanges((u) => {
+      setCurrentUser(u);
+      setAuthLoading(false);
+    });
 
- const unsub = onAuthStateChanged(auth, (u) => {
- setCurrentUser(u);
- setAuthLoading(false);
- });
+    const auth = getFirebaseAuth();
+    let unsubFirebase = () => {};
+    if (auth) {
+      unsubFirebase = onAuthStateChanged(auth, (u) => {
+        setCurrentUser(u || getCurrentUser());
+        setAuthLoading(false);
+      });
+    }
 
- return () => unsub();
- }, []);
+    return () => {
+      unsubCustom();
+      unsubFirebase();
+    };
+  }, []);
 
- // Listen to popstate for browser history navigation
- useEffect(() => {
- const handlePopState = () => {
- if (typeof window !== "undefined") {
- const path = window.location.pathname;
- setIsBrainActive(path.startsWith("/admin/brain"));
- if (path === "/register") setAuthScreen("register");
- else if (path === "/forgot-password") setAuthScreen("forgot-password");
- else if (path === "/login") setAuthScreen("login");
- }
- };
- window.addEventListener("popstate", handlePopState);
- return () => window.removeEventListener("popstate", handlePopState);
- }, []);
+  // Listen to popstate for browser history navigation
+  useEffect(() => {
+    const handlePopState = () => {
+      if (typeof window !== "undefined") {
+        const path = window.location.pathname;
+        setIsBrainActive(path.startsWith("/admin/brain"));
+        if (path === "/register") setAuthScreen("register");
+        else if (path === "/forgot-password") setAuthScreen("forgot-password");
+        else if (path === "/login") setAuthScreen("login");
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
- // Clean URL when logged in from auth routes
- useEffect(() => {
- if (currentUser && typeof window !== "undefined") {
- const path = window.location.pathname;
- if (path === "/login" || path === "/register" || path === "/forgot-password") {
- window.history.replaceState(null, "", "/");
- }
- }
- }, [currentUser]);
+  // Clean URL when logged in from auth routes
+  useEffect(() => {
+    if (currentUser && typeof window !== "undefined") {
+      const path = window.location.pathname;
+      if (path === "/login" || path === "/register" || path === "/forgot-password") {
+        window.history.replaceState(null, "", "/");
+      }
+    }
+  }, [currentUser]);
 
- // Admin secret keyboard shortcut (Ctrl + Shift + B)
- useEffect(() => {
- const handleKeyDown = (e: KeyboardEvent) => {
- if (e.ctrlKey && e.shiftKey && (e.key === "B" || e.key === "b")) {
- e.preventDefault();
- setIsBrainActive((prev) => {
- const next = !prev;
- if (next) {
- window.history.pushState(null, "", "/admin/brain");
- } else {
- window.history.pushState(null, "", "/");
- }
- return next;
- });
- }
- };
- window.addEventListener("keydown", handleKeyDown);
- return () => window.removeEventListener("keydown", handleKeyDown);
- }, []);
+  // Synchronize authenticated student profile with global app store
+  useEffect(() => {
+    if (profile && profile.onboardingCompleted) {
+      const curUser = useAppStore.getState().user;
+      if (
+        curUser.id !== profile.id ||
+        curUser.name !== profile.name ||
+        curUser.grade !== profile.grade ||
+        curUser.stream !== profile.stream ||
+        curUser.activeSubject !== profile.activeSubject
+      ) {
+        useAppStore.setState({
+          user: {
+            ...curUser,
+            id: profile.id,
+            name: profile.name,
+            grade: profile.grade,
+            stream: profile.stream as "scientific" | "literary" | "general",
+            activeSubject: profile.activeSubject,
+            email: currentUser?.email || curUser.email || "",
+          },
+        });
+        if (profile.activeSubject) {
+          void useAppStore.getState().fetchChapters(profile.activeSubject);
+        }
+      }
+    }
+  }, [profile, currentUser]);
 
- const navigateAuth = (screen: "login" | "register" | "forgot-password") => {
- setAuthScreen(screen);
- if (typeof window !== "undefined") {
- const path = screen === "login" ? "/" : `/${screen}`;
- window.history.pushState(null, "", path);
- }
- };
+  // Admin secret keyboard shortcut (Ctrl + Shift + B)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && (e.key === "B" || e.key === "b")) {
+        e.preventDefault();
+        setIsBrainActive((prev) => {
+          const next = !prev;
+          if (next) {
+            window.history.pushState(null, "", "/admin/brain");
+          } else {
+            window.history.pushState(null, "", "/");
+          }
+          return next;
+        });
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
- const handleSelectSubject = (subjectId: SubjectKey) => {
- updateProfile({ activeSubject: subjectId });
- };
+  const navigateAuth = (screen: "login" | "register" | "forgot-password") => {
+    setAuthScreen(screen);
+    if (typeof window !== "undefined") {
+      const path = screen === "login" ? "/" : `/${screen}`;
+      window.history.pushState(null, "", path);
+    }
+  };
 
- const handleStartAssessment = () => {
- setIsBrainActive(false);
- setIsAssessmentMode(true);
- };
+  const handleLogout = async () => {
+    try {
+      await logoutUser();
+    } catch (e) {
+      console.warn("Logout error:", e);
+    }
+    deleteStudentProfile();
+    resetProfileOnly();
+    useAppStore.getState().logout();
+    setCurrentUser(null);
+    setAuthScreen("login");
+    setActiveTab("home");
+  };
 
- const handleFinishAssessment = () => {
- setIsAssessmentMode(false);
- setActiveTab("daily");
- };
+  const handleOnboardingComplete = (
+    name: string,
+    grade: string,
+    subject: string,
+    level: string,
+    stream?: string
+  ) => {
+    const newProf = completeOnboarding(name, grade, subject, level, stream);
+    const curProgress = useAppStore.getState().userProgress;
+    useAppStore.setState({
+      user: {
+        id: newProf.id,
+        name: newProf.name,
+        grade: newProf.grade,
+        stream: newProf.stream,
+        email: currentUser?.email || "student@zana.krd",
+        avatar: "",
+        streakDays: curProgress.streak || 1,
+        completedLessons: curProgress.lessonsCompleted || 0,
+        totalScore: curProgress.totalScore || 0,
+      },
+    });
+  };
 
- // 1. Initial Authentication Loading State
- if (authLoading) {
- return (
- <LoadingScreen message="چاوەڕوان بە... بارکردنی پلاتفۆڕمی زانا" />
- );
- }
+  const handleSelectSubject = (subjectId: SubjectKey) => {
+    updateProfile({ activeSubject: subjectId });
+    useAppStore.getState().setActiveSubject(subjectId);
+  };
 
- // 2. Unauthenticated User Flows (Login, Register, Forgot Password)
- // If Firebase is configured and user is not signed in
- if (isFirebaseConfigured() && !currentUser) {
- if (authScreen === "register") {
- return (
- <RegisterScreen
- onNavigateToLogin={() => navigateAuth("login")}
- onRegisterSuccess={(regData) => {
- completeOnboarding(
- regData.name,
- regData.grade,
- regData.subject,
- "intermediate",
- regData.stream
- );
- }}
- />
- );
- }
+  const _handleStartAssessment = () => {
+    setIsBrainActive(false);
+    setActiveTab("assessment");
+  };
 
- if (authScreen === "forgot-password") {
- return (
- <ForgotPasswordScreen
- onNavigateToLogin={() => navigateAuth("login")}
- />
- );
- }
+  const handleFinishAssessment = () => {
+    setActiveTab("home");
+  };
 
- return (
- <LoginScreen
- onNavigateToRegister={() => navigateAuth("register")}
- onNavigateToForgotPassword={() => navigateAuth("forgot-password")}
- onLoginSuccess={() => {
- if (isBrainActive && typeof window !== "undefined") {
- window.history.replaceState(null, "", "/admin/brain");
- }
- }}
- />
- );
- }
+  // 1. Initial Authentication Loading State
+  if (authLoading) {
+    return (
+      <ThemeProvider>
+        <LoadingScreen message="چاوەڕوان بە... بارکردنی پلاتفۆڕمی زانا" />
+      </ThemeProvider>
+    );
+  }
 
- // 3. Admin Route Direct Access (if admin is authenticated)
- if (isBrainActive) {
- return (
- <AdminRoute>
- <BrainAdminDashboard
- onBackToApp={() => {
- if (typeof window !== "undefined" && window.location.pathname.startsWith("/admin")) {
- window.history.pushState(null, "", "/");
- }
- setIsBrainActive(false);
- }}
- />
- </AdminRoute>
- );
- }
+  // 2. Unauthenticated User Flows (Login, Register, Forgot Password)
+  if (!currentUser) {
+    if (authScreen === "register") {
+      return (
+        <ThemeProvider>
+          <Suspense fallback={<ScreenLoadingFallback />}>
+            <RegisterScreen
+              onNavigateToLogin={() => navigateAuth("login")}
+              onRegisterSuccess={(regData) => {
+                handleOnboardingComplete(
+                  regData.name,
+                  regData.grade,
+                  regData.subject,
+                  "intermediate",
+                  regData.stream
+                );
+              }}
+            />
+          </Suspense>
+        </ThemeProvider>
+      );
+    }
 
- // 4. Authenticated Student Onboarding Flow
- if (!profile.onboardingCompleted) {
- return (
- <div className="min-h-screen bg-slate-50 flex flex-col justify-center px-4 transition-colors">
- <OnboardingScreen onComplete={completeOnboarding} />
- </div>
- );
- }
+    if (authScreen === "forgot-password") {
+      return (
+        <ThemeProvider>
+          <Suspense fallback={<ScreenLoadingFallback />}>
+            <ForgotPasswordScreen
+              onNavigateToLogin={() => navigateAuth("login")}
+            />
+          </Suspense>
+        </ThemeProvider>
+      );
+    }
 
- // 5. Main App Screens
- const renderScreen = () => {
- if (isAssessmentMode) {
- return (
- <AssessmentScreen
- profile={profile}
- onProfileUpdate={updateProfile}
- onNavigate={(tab) => {
- handleFinishAssessment();
- if (tab !== "daily") {
- setActiveTab(tab as NavTab);
- }
- }}
- />
- );
- }
+    return (
+      <ThemeProvider>
+        <LoginScreen
+          onNavigateToRegister={() => navigateAuth("register")}
+          onNavigateToForgotPassword={() => navigateAuth("forgot-password")}
+          onLoginSuccess={() => {
+            if (isBrainActive && typeof window !== "undefined") {
+              window.history.replaceState(null, "", "/admin/brain");
+            }
+          }}
+        />
+      </ThemeProvider>
+    );
+  }
 
- switch (activeTab) {
- case "daily":
- return <DailySparkScreen profile={profile} onNavigate={(tab) => setActiveTab(tab as NavTab)} onStartAssessment={handleStartAssessment} />;
- case "rooms":
- return <StudyRoomScreen profile={profile} />;
- case "practice":
- return <PracticeScreen profile={profile} />;
- case "plan":
- return <StudentStudyPathDashboard studentId={profile.id} onNavigateToTask={() => setActiveTab("practice")} />;
- case "subjects":
- return (
- <SubjectsScreen
- profile={profile}
- onSelectSubject={handleSelectSubject}
- onNavigate={(tab) => {
- setIsAssessmentMode(false);
- setActiveTab(tab as NavTab);
- }}
- />
- );
- case "chat":
- return <StudyWorkspaceScreen profile={profile} onNavigate={(tab) => setActiveTab(tab as NavTab)} />;
- case "report":
- return <ParentReportScreen profile={profile} />;
- case "profile":
- return (
- <ProfileScreen
- profile={profile}
- onUpdateProfile={updateProfile}
- onResetAll={resetProfile}
- />
- );
- default:
- return <DailySparkScreen profile={profile} onNavigate={(tab) => setActiveTab(tab as NavTab)} onStartAssessment={handleStartAssessment} />;
- }
- };
+  // 3. Admin Route Direct Access (if admin is authenticated)
+  if (isBrainActive) {
+    return (
+      <ThemeProvider>
+        <Suspense fallback={<ScreenLoadingFallback />}>
+          <AdminRoute>
+            <BrainAdminDashboard
+              onBackToApp={() => {
+                if (typeof window !== "undefined" && window.location.pathname.startsWith("/admin")) {
+                  window.history.pushState(null, "", "/");
+                }
+                setIsBrainActive(false);
+              }}
+            />
+          </AdminRoute>
+        </Suspense>
+      </ThemeProvider>
+    );
+  }
 
- return (
- <AppShell
- profile={profile}
- activeTab={isAssessmentMode ? ("daily" as NavTab) : activeTab} // Keep highlight appropriate
- onTabChange={(tab) => {
- setIsBrainActive(false);
- setIsAssessmentMode(false);
- setActiveTab(tab);
- }}
- isOfflineFallback={isOfflineFallback}
- authError={authError}
- onOpenBrain={() => {
- setIsBrainActive((prev) => {
- const next = !prev;
- if (next) {
- window.history.pushState(null, "", "/admin/brain");
- } else {
- window.history.pushState(null, "", "/");
- }
- return next;
- });
- }}
- isBrainActive={isBrainActive}
- >
- {renderScreen()}
- </AppShell>
- );
+  // 4. Authenticated Student Onboarding Flow
+  if (!profile.onboardingCompleted || isForcedOnboarding) {
+    return (
+      <ThemeProvider>
+        <div className="min-h-screen w-full bg-[#071927] flex flex-col items-center py-4 sm:py-8 px-2 sm:px-4 overflow-y-auto overflow-x-hidden transition-colors duration-300">
+          <OnboardingScreen
+            onComplete={(...args) => {
+              handleOnboardingComplete(...args);
+              setIsForcedOnboarding(false);
+            }}
+          />
+        </div>
+      </ThemeProvider>
+    );
+  }
+
+  // 5. Main App Screens (9 Screens specification)
+  const renderScreen = () => {
+    switch (activeTab) {
+      case "home":
+        return (
+          <Home
+            profile={profile}
+            onNavigateToChat={(subject) => {
+              if (subject) handleSelectSubject(subject as SubjectKey);
+              setActiveTab("chat");
+            }}
+            onNavigateToSubjects={() => setActiveTab("subjects")}
+            onNavigateToAssessment={() => setActiveTab("assessment")}
+            onNavigateToPractice={() => setActiveTab("practice")}
+            onNavigateToPedagogy={() => setActiveTab("pedagogy")}
+          />
+        );
+      case "chat":
+        return (
+          <Chat
+            profile={profile}
+            onSelectSubject={handleSelectSubject}
+            onNavigateToSubjects={() => setActiveTab("subjects")}
+          />
+        );
+      case "subjects":
+        return (
+          <SubjectsScreen
+            profile={profile}
+            onSelectSubject={handleSelectSubject}
+            onNavigate={(tab) => {
+              if (tab === "chat") setActiveTab("chat");
+              else if (tab === "practice") setActiveTab("practice");
+              else setActiveTab("home");
+            }}
+          />
+        );
+      case "practice":
+        return (
+          <PracticeLab
+            onNavigateToPedagogy={() => setActiveTab("pedagogy")}
+            onNavigateToSubjects={() => setActiveTab("subjects")}
+          />
+        );
+      case "pedagogy":
+        return (
+          <Suspense fallback={<ScreenLoadingFallback />}>
+            <PedagogicalHubScreen
+              onNavigateToHome={() => setActiveTab("home")}
+              onNavigateToPractice={() => setActiveTab("practice")}
+            />
+          </Suspense>
+        );
+      case "labs":
+        return <VirtualScienceLab />;
+      case "assessment":
+        return (
+          <AdaptiveAssessment
+            onFinish={handleFinishAssessment}
+            onNavigateToPractice={() => setActiveTab("practice")}
+            onNavigateToSubjects={() => setActiveTab("subjects")}
+          />
+        );
+      case "plan":
+        return (
+          <StudyPathManager
+            onNavigateToChat={(subject) => {
+              if (subject) handleSelectSubject(subject as SubjectKey);
+              setActiveTab("chat");
+            }}
+            onNavigateToPractice={() => setActiveTab("practice")}
+            onNavigateToLabs={() => setActiveTab("labs")}
+            onNavigateToAssessment={() => setActiveTab("assessment")}
+          />
+        );
+      case "rooms":
+        return <StudyRooms />;
+      case "report":
+        return <ParentReport profile={profile} />;
+      case "profile":
+      case "settings":
+        return (
+          <ProfileAndSettings
+            profile={profile}
+            onUpdateProfile={updateProfile}
+            onLogout={handleLogout}
+            onReRunOnboarding={() => setIsForcedOnboarding(true)}
+          />
+        );
+      default:
+        return (
+          <Home
+            profile={profile}
+            onNavigateToChat={(subject) => {
+              if (subject) handleSelectSubject(subject as SubjectKey);
+              setActiveTab("chat");
+            }}
+            onNavigateToSubjects={() => setActiveTab("subjects")}
+            onNavigateToAssessment={() => setActiveTab("assessment")}
+          />
+        );
+    }
+  };
+
+  const pageTitleMap: Record<NavItemKey, string> = {
+    home: "چروسکەی ڕۆژانە 🌟",
+    chat: "ژینگەی خوێندنی سۆکراتی (Workspace)",
+    subjects: "مەنهەجی خوێندن (Subjects)",
+    practice: "تاقیگەی ڕاهێنان (Practice Lab)",
+    pedagogy: "تاقیگەی نایابی پێداگۆجی 🎓",
+    labs: "تاقیگەی زانستیی مەجازی (Virtual Science Lab)",
+    assessment: "تاقیکردنەوەی ئەداپتیڤ (Assessment)",
+    plan: "پلانی خوێندن (Study Path)",
+    rooms: "ژووری خوێندنی بەکۆمەڵ (Study Rooms)",
+    report: "ڕاپۆرتی هوشیاری باوان (Parent Report)",
+    profile: "پڕۆفایل و ڕێکخستنەکان 👤",
+    settings: "ڕێکخستنەکان",
+  };
+
+  const pageTitle = pageTitleMap[activeTab] || "پلاتفۆرمی زانا 🎓";
+
+  return (
+    <ThemeProvider>
+      <AppShell
+        activeTab={activeTab}
+        onTabChange={(tab) => {
+          setIsBrainActive(false);
+          setActiveTab(tab);
+        }}
+        pageTitle={pageTitle}
+      >
+        <Suspense fallback={<ScreenLoadingFallback />}>
+          {renderScreen()}
+        </Suspense>
+      </AppShell>
+      {import.meta.env.DEV && (
+        <DevQuickToolbar
+          activeTab={activeTab}
+          onSelectTab={(tab) => {
+            setIsBrainActive(false);
+            setActiveTab(tab);
+          }}
+          onTriggerOnboarding={() => setIsForcedOnboarding(true)}
+          onLogout={handleLogout}
+        />
+      )}
+    </ThemeProvider>
+  );
 }
+

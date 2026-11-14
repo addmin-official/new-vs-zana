@@ -1,0 +1,174 @@
+import React from "react";
+import { User, Menu, Cpu, Award, ArrowLeftRight } from "lucide-react";
+import { UserProfile } from "../store/appStore.ts";
+import { SoundToggle } from "./SoundToggle.tsx";
+import { ThemeToggle } from "./ThemeToggle.tsx";
+import { useIsAdmin } from "../hooks/useIsAdmin.ts";
+
+export const SUBJECT_HEADER_METADATA: Record<string, { label: string; icon: string }> = {
+  chemistry: { label: "کیمیا", icon: "⚗️" },
+  physics: { label: "فیزیا", icon: "⚡" },
+  math: { label: "بیرکاری", icon: "📐" },
+  biology: { label: "زیندەزانی", icon: "🧬" },
+  english: { label: "ئینگلیزی", icon: "📖" },
+  kurdish: { label: "زمان و ئەدەبی کوردی", icon: "📚" },
+  arabic: { label: "زمانی عەرەبی", icon: "📜" },
+  sports: { label: "پەروەردەی وەرزشی", icon: "⚽" },
+  history: { label: "مێژوو", icon: "🏛️" },
+  economy: { label: "ئابووری", icon: "📊" },
+  geography: { label: "جوگرافیا", icon: "🌍" },
+};
+
+export interface HeaderProps {
+  title?: string;
+  user: UserProfile;
+  activeSubject?: string;
+  onNavigateToSubjects?: () => void;
+  onOpenMobileNav?: () => void;
+  onOpenNotifications?: () => void;
+  onOpenBrain?: () => void;
+}
+
+export function Header({
+  title = "پلاتفۆرمی زانا",
+  user,
+  activeSubject,
+  onNavigateToSubjects,
+  onOpenMobileNav,
+  onOpenBrain,
+}: HeaderProps) {
+  const { isAdmin } = useIsAdmin();
+
+  const handleOpenBrain = () => {
+    if (onOpenBrain) {
+      onOpenBrain();
+    } else {
+      window.history.pushState(null, "", "/admin/brain");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    }
+  };
+  const effSubj = (activeSubject || user.activeSubject || "chemistry").toLowerCase();
+  const currentSubjectMeta = SUBJECT_HEADER_METADATA[effSubj] || {
+    label: effSubj,
+    icon: "📚",
+  };
+
+  return (
+    <header
+      className="h-[60px] bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-40 px-3 sm:px-6 flex items-center justify-between shadow-2xs"
+      dir="rtl"
+    >
+      {/* Brand & Text-Only Logo */}
+      <div className="flex items-center gap-2 sm:gap-3">
+        {onOpenMobileNav && (
+          <button
+            onClick={onOpenMobileNav}
+            className="lg:hidden p-1.5 sm:p-2 text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+            aria-label="کردنەوەی مینیو"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        )}
+
+        <div className="flex items-center gap-2">
+          {/* ZANA text-only logo */}
+          <span className="font-sans font-black text-2xl tracking-tight text-indigo-600">
+            زانا
+          </span>
+          <div className="hidden sm:block border-r border-slate-200 dark:border-slate-700 pr-2">
+            <p className="font-sans font-bold text-xs text-slate-800 dark:text-slate-200 leading-tight">
+              پلاتفۆرمی زانا
+            </p>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 font-sans">
+              پۆلی {user.grade} • {user.stream === "scientific" ? "زانستی" : "وێژەیی (بەمنزیکانە ⏳)"}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Center: Page Title & Prominent Active Subject Pill */}
+      <div className="flex items-center justify-center gap-2 sm:gap-4 flex-1 min-w-0 px-2 sm:px-4">
+        <h1 className="font-sans font-bold text-xs sm:text-base text-slate-800 dark:text-slate-100 truncate max-w-[130px] sm:max-w-xs">
+          {title}
+        </h1>
+
+        {/* Prominent Active Subject & Change Button */}
+        {onNavigateToSubjects && (
+          <button
+            type="button"
+            onClick={onNavigateToSubjects}
+            title="گۆڕینی وانە (کلیک بکە بۆ هەڵبژاردنی وانەی تر لە مەنهەج)"
+            className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/70 dark:hover:bg-indigo-900/80 border border-indigo-200 dark:border-indigo-800/80 text-indigo-700 dark:text-indigo-300 transition-all shadow-2xs cursor-pointer group shrink-0"
+          >
+            <span className="text-sm sm:text-base">{currentSubjectMeta.icon}</span>
+            <div className="text-right hidden sm:block">
+              <span className="text-[9px] text-indigo-500 dark:text-indigo-400 font-bold block leading-none">وانە:</span>
+              <span className="text-xs font-black text-slate-900 dark:text-white leading-tight block">
+                {currentSubjectMeta.label}
+              </span>
+            </div>
+            <span className="text-xs font-black text-slate-900 dark:text-white sm:hidden">
+              {currentSubjectMeta.label}
+            </span>
+            <span className="mr-0.5 sm:mr-1 px-1.5 sm:px-2 py-0.5 rounded-lg bg-indigo-600 group-hover:bg-indigo-700 text-white font-bold text-[10px] sm:text-[11px] flex items-center gap-1 transition shadow-xs">
+              <span className="hidden sm:inline">گۆڕین</span>
+              <ArrowLeftRight className="w-3 h-3" />
+            </span>
+          </button>
+        )}
+      </div>
+
+      {/* User Actions: Admin Brain + Theme + Sound + Student Mini Badge + Avatar */}
+      <div className="flex items-center gap-1.5 sm:gap-2">
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={handleOpenBrain}
+            title="مێشکی زیرەکی ناوخۆی پلاتفۆرم"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200"
+          >
+            <Cpu className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
+            <span className="hidden sm:inline text-[11px]">مێشک</span>
+          </button>
+        )}
+
+        <SoundToggle className="!w-9 !h-9 !rounded-lg" />
+        <ThemeToggle showMenu={false} className="!w-9 !h-9 !rounded-lg" />
+
+        {/* Student Mini Badge */}
+        <div className="hidden lg:flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 rounded-xl px-2.5 py-1">
+          <Award className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+          <div className="text-right">
+            <p className="font-sans text-[11px] font-bold text-slate-800 leading-none truncate max-w-[80px]">
+              {user.name}
+            </p>
+            <p className="font-sans text-[9px] text-slate-400 mt-0.5 leading-none">
+              پۆلی {user.grade} • {user.stream === "scientific" ? "زانستی" : "وێژەیی (بەمنزیکانە ⏳)"}
+            </p>
+          </div>
+        </div>
+
+        {/* User Avatar */}
+        <div className="flex items-center gap-2 pr-1.5">
+          {user.avatar ? (
+            <img
+              src={user.avatar}
+              alt={user.name}
+              className="w-8 h-8 rounded-full object-cover border border-indigo-600"
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold text-xs border border-indigo-200">
+              <User className="w-4 h-4" />
+            </div>
+          )}
+          <span className="font-sans text-xs font-bold text-slate-800 hidden md:inline truncate max-w-[100px]">
+            {user.name}
+          </span>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+export default Header;
+

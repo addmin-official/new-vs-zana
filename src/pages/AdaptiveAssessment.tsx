@@ -1,0 +1,1366 @@
+import React, { useState, useEffect, useMemo } from "react";
+import {
+  Clock,
+  Target,
+  CheckCircle2,
+  ArrowLeft,
+  ArrowRight,
+  RotateCcw,
+  ArrowLeftRight,
+} from "lucide-react";
+import { useSoundEffects } from "../hooks/useSoundEffects.ts";
+import { useAppStore } from "../store/appStore.ts";
+
+export type QuestionType = "mcq" | "true_false" | "numeric";
+
+export interface AssessmentQuestion {
+  id: string;
+  topic: string;
+  type?: QuestionType;
+  question: string;
+  options: string[];
+  correctIndex?: number;
+  correctNumeric?: number;
+  tolerance?: number;
+  explanation: string;
+}
+
+export const SUBJECT_ASSESSMENT_METADATA: Record<string, { label: string; icon: string }> = {
+  chemistry: { label: "کیمیا", icon: "⚗️" },
+  physics: { label: "فیزیا", icon: "⚡" },
+  math: { label: "بیرکاری", icon: "📐" },
+  biology: { label: "زیندەزانی", icon: "🧬" },
+  english: { label: "ئینگلیزی", icon: "📖" },
+  kurdish: { label: "زمان و ئەدەبی کوردی", icon: "📚" },
+  arabic: { label: "زمانی عەرەبی", icon: "📜" },
+  sports: { label: "پەروەردەی وەرزشی", icon: "⚽" },
+  history: { label: "مێژوو", icon: "🏛️" },
+  economy: { label: "ئابووری", icon: "📊" },
+  geography: { label: "جوگرافیا", icon: "🌍" },
+};
+
+export const SUBJECT_ASSESSMENT_QUESTIONS: Record<string, AssessmentQuestion[]> = {
+  chemistry: [
+    {
+      id: "chem-q1",
+      type: "mcq",
+      topic: "ترش و تفتەکان",
+      question: "لە کارلێکی: NH₃ + H₂O ⇌ NH₄⁺ + OH⁻ ، جووتی هاوجوتی ئاو (H₂O) کامەیە؟",
+      options: ["OH⁻", "NH₄⁺", "NH₃", "H₃O⁺"],
+      correctIndex: 0,
+      explanation: "ئاو پرۆتۆنێک دەبەخشێت و دەگۆڕێت بۆ OH⁻، کەواتە OH⁻ تفتی هاوجوتی ئاوە.",
+    },
+    {
+      id: "chem-q2",
+      type: "mcq",
+      topic: "پێوەری pH",
+      question: "ئەگەر خەستی ئایۆنی هایدرۆنیۆم [H₃O⁺] = 1.0 × 10⁻⁴ M بێت لە پلەی 25°C، بەهای pH چەندە؟",
+      options: ["4.0", "10.0", "7.0", "14.0"],
+      correctIndex: 0,
+      explanation: "بەپێی یاسای pH = -log[H₃O⁺] دەبێتە: -log(10⁻⁴) = 4.0.",
+    },
+    {
+      id: "chem-q3",
+      type: "mcq",
+      topic: "ئەلیکترۆکیمیا",
+      question: "لە خانەی گالڤانیدا، کرداری ئۆکسان لەسەر کام جەمسەر ڕوودەدات؟",
+      options: ["ئانۆد (Anode)", "کاسۆد (Cathode)", "پردی خوێ", "پێوەری ڤۆڵت"],
+      correctIndex: 0,
+      explanation: "لە تەواوی خانە کارۆکیمیاییەکاندا، ئۆکسان (لەدەستدانی ئەلیکترۆن) هەمیشە لەسەر ئانۆد ڕوودەدات.",
+    },
+    {
+      id: "chem-q4",
+      type: "true_false",
+      topic: "ترشە بەهێزەکان",
+      question: "هەموو ترشە بەهێزەکان لە ئاودا بە تەواوی ئایۆن دەبن و کارلێکەکەیان لە هاوکێشەی کیمیاییدا تەنها بە یەک تیر (→) دەنووسرێت.",
+      options: ["ڕاستە", "هەڵەیە"],
+      correctIndex: 0,
+      explanation: "ڕاستە؛ ترشە بەهێزەکان ئەلیکترۆلیتی بەهێزن و ١٠٠٪ هەڵدەوەشێنەوە بۆ ئایۆنەکانیان.",
+    },
+    {
+      id: "chem-q5",
+      type: "numeric",
+      topic: "پێوەری pH و pOH",
+      question: "لە پلەی گەرمی 25°C دا، ئەگەر [OH⁻] = 1.0 × 10⁻⁷ M بێت، بەهای pOH چەندە؟ (ژمارەکە بنووسە)",
+      options: [],
+      correctNumeric: 7,
+      tolerance: 0.1,
+      explanation: "بەپێی یاسای pOH = -log[OH⁻] دەبێتە: -log(10⁻⁷) = 7.0.",
+    },
+    {
+      id: "chem-q6",
+      type: "mcq",
+      topic: "کیمیای ئەندامی",
+      question: "هاوکێشەی گشتی ئەلکانی هایدرۆکاربۆنەکان چییە؟",
+      options: ["CₙH₂ₙ₊₂", "CₙH₂ₙ", "CₙH₂ₙ₋₂", "CₙHₙ"],
+      correctIndex: 0,
+      explanation: "ئەلکانەکان هایدرۆکاربۆنی تێربوون و فۆرمولای گشتییان CₙH₂ₙ₊₂ یە.",
+    },
+    {
+      id: "chem-q7",
+      type: "mcq",
+      topic: "خێرایی کارلێک",
+      question: "زیادکردنی هاندەر (Catalyst) چ کاریگەرییەکی هەیە لەسەر کارلێکی کیمیایی؟",
+      options: [
+        "وزەی چالاککردن کەمدەکاتەوە و خێرایی زیاد دەکات",
+        "خێرایی کارلێک کەم دەکاتەوە",
+        "پلەی گەرمی سارد دەکاتەوە",
+        "بەرهەمی کارلێک دەگۆڕێت",
+      ],
+      correctIndex: 0,
+      explanation: "هاندەر ڕێڕەوێکی جێگرەوە بە وزەی چالاککردنی کەمتر دابین دەکات بەبێ ئەوەی خۆی مەسرەف ببێت.",
+    },
+  ],
+
+  math: [
+    {
+      id: "math-q1",
+      type: "mcq",
+      topic: "داتاشراوەی نەخشە سێگۆشەییەکان",
+      question: "داتاشراوی نەخشەی f(x) = sin(x) یەکسانە بە کام نەخشە؟",
+      options: ["cos(x)", "-cos(x)", "-sin(x)", "sec²(x)"],
+      correctIndex: 0,
+      explanation: "بەپێی یاسای بنەڕەتی جیاکاری، داتاشراوی نەخشەی ساین بریتییە لە کۆساین: d/dx[sin(x)] = cos(x).",
+    },
+    {
+      id: "math-q2",
+      type: "mcq",
+      topic: "ئامانجەکان (Limits)",
+      question: "ئەنجامی lim (x² - 4)/(x - 2) کاتێک x بەرەو 2 دەچێت چەند دەبێت؟",
+      options: ["4", "0", "2", "بێپایان (∞)"],
+      correctIndex: 0,
+      explanation: "بە شیکردنەوەی سەرەوە: (x-2)(x+2)/(x-2) = x + 2. بە دانانی x = 2 ئەنجام دەبێتە 4.",
+    },
+    {
+      id: "math-q3",
+      type: "numeric",
+      topic: "لێژی هێڵی لێکەوت",
+      question: "لێژی هێڵی لێکەوتی چەماوەی f(x) = x² لە خاڵی x = 3 دا چەندە؟ (ژمارەکە بنووسە)",
+      options: [],
+      correctNumeric: 6,
+      tolerance: 0.1,
+      explanation: "داتاشراوی f(x) = x² یەکسانە بە f'(x) = 2x. بۆ x = 3 لێژییەکە دەبێتە 2 × 3 = 6.",
+    },
+    {
+      id: "math-q4",
+      type: "true_false",
+      topic: "بەردەوامی و داتاشراوە",
+      question: "ئەگەر نەخشەیەک لە خاڵێکدا داتاشراوی هەبێت، ئەوا بە دڵنیایی لەو خاڵەدا بەردەوامە (Continuous).",
+      options: ["ڕاستە", "هەڵەیە"],
+      correctIndex: 0,
+      explanation: "تیۆرمی بنەڕەتی بیرکاری دەڵێت هەر نەخشەیەک داتاشراوی هەبێت، بەردەوامیشە لەو خاڵەدا.",
+    },
+    {
+      id: "math-q5",
+      type: "mcq",
+      topic: "تەواوکاری (Integration)",
+      question: "ئەنجامی تەواوکاریی نادیاری ∫ 2x dx چییە؟",
+      options: ["x² + C", "2x² + C", "x + C", "2 + C"],
+      correctIndex: 0,
+      explanation: "بەپێی یاسای تەواوکاریی توان: ∫ 2x dx = 2(x²/2) + C = x² + C.",
+    },
+    {
+      id: "math-q6",
+      type: "mcq",
+      topic: "خاڵەکانی وەرگەڕان",
+      question: "خاڵی وەرگەڕان (Inflection Point) لەسەر چەماوەی نەخشەیەک لە کام شوێندا دەدۆزرێتەوە؟",
+      options: [
+        "لەو خاڵەی f''(x) = 0 و نیشانەی قۆقزی دەگۆڕێت",
+        "لەو خاڵەی f'(x) = 0 بێت",
+        "لە شوێنی بڕینی تەوەری y",
+        "لە بەرزترین خاڵی چەماوە تەنها",
+      ],
+      correctIndex: 0,
+      explanation: "خاڵی وەرگەڕان بە داتاشراوەی دووەم دیاری دەکرێت کاتێک f''(x) = 0 و قۆقزی لە بەرەو سەرەوە دەگۆڕێت بۆ بەرەو خوارەوە.",
+    },
+    {
+      id: "math-q7",
+      type: "mcq",
+      topic: "داتاشراوی نەخشەی توانی",
+      question: "داتاشراوی نەخشەی f(x) = e^(3x) چییە؟",
+      options: ["3e^(3x)", "e^(3x)", "(1/3)e^(3x)", "3x e^(3x)"],
+      correctIndex: 0,
+      explanation: "بەپێی ڕێسای زنجیرە: d/dx[e^(3x)] = e^(3x) × d/dx(3x) = 3e^(3x).",
+    },
+  ],
+
+  physics: [
+    {
+      id: "phys-q1",
+      type: "mcq",
+      topic: "یاسای لێنز",
+      question: "بەپێی یاسای لێنز، تەزووی کارۆڕاکێشاو هەمیشە ئاراستەکەی بە چ شێوەیەک دەبێت؟",
+      options: [
+        "دژایەتی ئەو گۆڕانە دەکات لە لێشاوی موگناتیسی کە دروستی کردووە",
+        "هاوئاراستەی گۆڕانی لێشاوی موگناتیسی دەبێت",
+        "تەنها لە کاتی زیادبوونی لێشاو بوونی دەبێت",
+        "پەیوەندی بە هێڵەکانی بواری موگناتیسییەوە نییە",
+      ],
+      correctIndex: 0,
+      explanation: "یاسای لێنز پەیڕەوی پاراستنی وزە دەکات و هەمیشە کایەی موگناتیسی دژایەتی ئەو گۆڕانە دەکات کە دروستی کردووە.",
+    },
+    {
+      id: "phys-q2",
+      type: "mcq",
+      topic: "جووڵەی خولاوە",
+      question: "هاوکێشەی تاودانی چەقەهێز (Centripetal Acceleration) بۆ تەنێک کە بە بازنەیەکدا دەسووڕێتەوە چییە؟",
+      options: ["a_c = v² / r", "a_c = v / r²", "a_c = v × r", "a_c = m × v²"],
+      correctIndex: 0,
+      explanation: "تاودانی چەقەکێش بە a_c = v² / r دەدۆزرێتەوە کە تێیدا v خێرایی هێڵی و r نیوەتیرەی بازنەکەیە.",
+    },
+    {
+      id: "phys-q3",
+      type: "numeric",
+      topic: "تاودانی چەقەکێش",
+      question: "ئۆتۆمبێلێک بە خێرایی 10 m/s بە دەوری پێچێکی بازنەیی بە نیوەتیرەی 5 m دا دەسووڕێتەوە. تاودانی چەقەکێش چەند m/s² ە؟",
+      options: [],
+      correctNumeric: 20,
+      tolerance: 0.1,
+      explanation: "a_c = v² / r = 10² / 5 = 100 / 5 = 20 m/s².",
+    },
+    {
+      id: "phys-q4",
+      type: "true_false",
+      topic: "کارۆڕاکێشانی فارادای",
+      question: "لە دیاردەی کارۆڕاکێشانی کارۆموگناتیسیدا، گەورەیی هێزی بزوێنەری کارەبایی ڕاستەوانە دەگۆڕێت لەگەڵ خێرایی گۆڕانی لێشاوی موگناتیسی.",
+      options: ["ڕاستە", "هەڵەیە"],
+      correctIndex: 0,
+      explanation: "ڕاستە؛ یاسای فارادای دەڵێت: emf = -N (ΔΦ / Δt).",
+    },
+    {
+      id: "phys-q5",
+      type: "mcq",
+      topic: "تەوژمی هێز (Torque)",
+      question: "یەکەی نێودەوڵەتی پێوانەکردنی تەوژمی هێز (Torque) لە فیزیادا چییە؟",
+      options: ["N · m (نیوتن · مەتر)", "J (جووڵ)", "N / m", "Watt (وات)"],
+      correctIndex: 0,
+      explanation: "تەوژم یەکسانە بە هێز لێکدانی باڵی هێز: τ = F × d، بۆیە یەکەکەی دەبێتە نیوتن لە مەتر (N · m).",
+    },
+    {
+      id: "phys-q6",
+      type: "mcq",
+      topic: "تیشکی کارۆموگناتیسی",
+      question: "دیاردەی دەرپەڕاندنی فۆتۆئەلیکتریک لەسەر ڕووی کانزاکان دەیسەلمێنێت کە ڕووناکی خاوەنی چ سروشتێکە؟",
+      options: ["سروشتی تەنۆلکەیی (فۆتۆن)", "تەنها سروشتی شەپۆلی", "سروشتی پەستان", "سروشتی موگناتیسی نەگۆڕ"],
+      correctIndex: 0,
+      explanation: "ئاینشتاین سەلماندی کە ڕووناکی لە گورزەی وزە بە ناوی فۆتۆن پێکهاتووە و توانای دەرهێنانی ئەلیکترۆنی هەیە لە کانزاکان.",
+    },
+    {
+      id: "phys-q7",
+      type: "mcq",
+      topic: "گەردیلەی هایدرۆجین",
+      question: "بەپێی مۆدێلی بۆر بۆ گەردیلەی هایدرۆجین، کاتێک ئەلیکترۆن لە ئاستێکی بەرزی وزەوە دەگەڕێتەوە بۆ ئاستی یەکەم (n=1)، کام زنجیرە تیشک پەیدا دەبێت؟",
+      options: ["زنجیرەی لایمان (تیشکی سەروو بنەوشەیی)", "زنجیرەی باڵمەر (ڕووناکی بینراو)", "زنجیرەی پاشن (ژێر سوور)", "تیشکی ئێکس"],
+      correctIndex: 0,
+      explanation: "گەڕانەوەی ئەلیکترۆن بۆ ئاستی n=1 دەبێتە هۆی دەرچوونی تیشکی زنجیرەی لایمان لە مەودای سەروو بنەوشەییدا.",
+    },
+  ],
+
+  biology: [
+    {
+      id: "bio-q1",
+      type: "mcq",
+      topic: "ترشە ناوەکییەکان",
+      question: "کام لەم بێرمانە تەنها لەناو گەردی DNA دا هەیە و لە RNA دا بە یوراسیل (U) جێگۆڕکێی پێکراوە؟",
+      options: ["تیمیین (T)", "ئەدەنین (A)", "گوانین (G)", "سایتۆسین (C)"],
+      correctIndex: 0,
+      explanation: "لە پێکهاتەی گەردی DNA دا تیمیین (T) هەیە کە بە دوو بەندی هایدرۆجینی دەبەسترێت بە ئەدەنین، بەڵام لە RNA دا دەبێتە یوراسیل (U).",
+    },
+    {
+      id: "bio-q2",
+      type: "mcq",
+      topic: "دابەشبوونی خانە",
+      question: "لە کام بەشی دابەشبوونی دەزوولەییدا (Mitosis) کرۆمۆسۆمەکان لەسەر هێڵی ناوەڕاستی خانە ڕیز دەبن؟",
+      options: ["بەشی کەمەرەیی (Metaphase)", "بەشی سەرەتایی (Prophase)", "بەشی جیابوونەوە (Anaphase)", "بەشی کۆتایی (Telophase)"],
+      correctIndex: 0,
+      explanation: "لە بەشی کەمەرەییدا سپیندڵەکان کرۆمۆسۆمەکان لەسەر تەختەی کەمەرەیی ناوەڕاستی خانەکەدا ڕێکدەخەن.",
+    },
+    {
+      id: "bio-q3",
+      type: "numeric",
+      topic: "کرۆمۆسۆمەکانی مرۆڤ",
+      question: "مرۆڤی ئاسایی چەند جووت کرۆمۆسۆمی لەناو ناوکی خانەی لەشیدا هەیە؟ (ژمارەکە بنووسە)",
+      options: [],
+      correctNumeric: 23,
+      tolerance: 0.1,
+      explanation: "خانەی لەشی مرۆڤ ٤٦ کرۆمۆسۆمی هەیە کە دەکاتە ٢٣ جووت (٢٢ جووتی لەشی و ١ جووتی ڕەگەزی).",
+    },
+    {
+      id: "bio-q4",
+      type: "true_false",
+      topic: "بۆماوەزانی",
+      question: "کرداری کۆپیبوونی DNA بە شێوازی نیمچەپارێزراو (Semi-conservative) ئەنجام دەدرێت کە تێیدا یەک تاڵی کۆن و یەک تاڵی نوێ پێکدەهێنن.",
+      options: ["ڕاستە", "هەڵەیە"],
+      correctIndex: 0,
+      explanation: "ڕاستە؛ دوو گەردی نوێی DNA هەریەکەیان خاوەنی یەک تاڵی کۆنی دایک و یەک تاڵی نوێن.",
+    },
+    {
+      id: "bio-q5",
+      type: "mcq",
+      topic: "هەناسەدانی خانەیی",
+      question: "زۆرترین بڕی گەردی وزە (ATP) لە کام قۆناغەی هەناسەدانی خانەییدا لەناو مایتۆکۆندریادا بەرهەم دێت؟",
+      options: ["زنجیرەی گواستنەوەی ئەلیکترۆن", "شیکارکردنی گلوکۆز (Glycolysis)", "خولگەی کرێبس", "تخمیربوون"],
+      correctIndex: 0,
+      explanation: "زنجیرەی گواستنەوەی ئەلیکترۆن بە کێمیۆئۆسمۆسیس زۆرترین بەشی ATP کە لە دەوروبەری ٣٢ بۆ ٣٤ گەردە بەرهەم دەهێنێت.",
+    },
+    {
+      id: "bio-q6",
+      type: "mcq",
+      topic: "کۆئەندامی دەمار",
+      question: "ئەو بەشەی خانەی دەمار (Neuron) کە بەرپرسە لە وەرگرتنی سیگناڵ و پەیامە دەمارییەکان لە خانەکانی تر کامەیە؟",
+      options: ["چڵە دەمارەکان (Dendrites)", "تەوەرە (Axon)", "تۆوی مایەلین", "گرێی ڕانڤیەر"],
+      correctIndex: 0,
+      explanation: "چڵە دەمارە پەلەکان سیگناڵ وەردەگرن و ئاراستەی لەشی خانەی دەماری دەکەن.",
+    },
+    {
+      id: "bio-q7",
+      type: "mcq",
+      topic: "یاساکانی مێندڵ",
+      question: "یاسای یەکەمی مێندڵ لە بۆماوەزانیدا بە چی ناسراوە؟",
+      options: ["یاسای جیاکردنەوەی سیفەتەکان (Segregation)", "یاسای دابەشبوونی سەربەخۆ", "یاسای بەستنەوەی جینەکان", "یاسای باڵادەستی ناتەواو"],
+      correctIndex: 0,
+      explanation: "یاسای جیاکردنەوەی مێندڵ دەڵێت هەردوو ئەلیلی سیفەتێک لە کاتی دروستبوونی گامێتەکاندا لە یەکتر جیا دەبنەوە.",
+    },
+  ],
+
+  english: [
+    {
+      id: "eng-q1",
+      type: "mcq",
+      topic: "Third Conditional",
+      question: "Complete the sentence correctly: 'If Jim _____ the pirates earlier, he would have warned the captain.'",
+      options: ["had discovered", "discovered", "has discovered", "would discover"],
+      correctIndex: 0,
+      explanation: "The Third Conditional uses: If + Past Perfect (had + V3), would have + V3 to express past hypothetical situations.",
+    },
+    {
+      id: "eng-q2",
+      type: "mcq",
+      topic: "Passive Voice",
+      question: "Which of the following is the correct Passive form of: 'The students are cleaning the science lab now.'?",
+      options: [
+        "The science lab is being cleaned by the students now.",
+        "The science lab was cleaned by the students.",
+        "The science lab has been cleaned by the students.",
+        "The science lab is cleaned by the students now.",
+      ],
+      correctIndex: 0,
+      explanation: "Present Continuous Passive is formed with: Subject + is/are + being + Past Participle (V3).",
+    },
+    {
+      id: "eng-q3",
+      type: "mcq",
+      topic: "Unit 1: To New York",
+      question: "In Sunrise 12 Unit 1, where are Azad and his friends preparing to travel to from the airport?",
+      options: ["To New York", "To London", "To Paris", "To Tokyo"],
+      correctIndex: 0,
+      explanation: "Unit 1 of Sunrise 12 is titled 'To New York' and focuses on international travel procedures and airports.",
+    },
+    {
+      id: "eng-q4",
+      type: "true_false",
+      topic: "Relative Clauses",
+      question: "Non-defining relative clauses provide extra non-essential information and MUST be placed between commas.",
+      options: ["True", "False"],
+      correctIndex: 0,
+      explanation: "True; non-defining relative clauses use commas and cannot use the relative pronoun 'that'.",
+    },
+    {
+      id: "eng-q5",
+      type: "mcq",
+      topic: "Treasure Island",
+      question: "Who is the young narrator and main protagonist in the novel 'Treasure Island'?",
+      options: ["Jim Hawkins", "Long John Silver", "Billy Bones", "Dr. Livesey"],
+      correctIndex: 0,
+      explanation: "Jim Hawkins is the young boy whose first-person perspective tells the story of Treasure Island.",
+    },
+    {
+      id: "eng-q6",
+      type: "mcq",
+      topic: "Expressing Purpose",
+      question: "Choose the correct connector: 'Azad took detailed notes _____ forget important examination formulas.'",
+      options: ["so as not to", "in order to", "so that", "because"],
+      correctIndex: 0,
+      explanation: "'So as not to' expresses negative purpose with an infinitive: so as not to + base verb.",
+    },
+    {
+      id: "eng-q7",
+      type: "mcq",
+      topic: "Reported Speech",
+      question: "Turn into reported speech: '\"I will call you tomorrow,\" she said.'",
+      options: [
+        "She said that she would call me the next day.",
+        "She said that she will call me tomorrow.",
+        "She said that she called me yesterday.",
+        "She asked me if she would call.",
+      ],
+      correctIndex: 0,
+      explanation: "In reported speech, 'will' changes to 'would', pronouns adjust, and 'tomorrow' becomes 'the next day'.",
+    },
+  ],
+
+  kurdish: [
+    {
+      id: "kurd-q1",
+      type: "mcq",
+      topic: "ڕێزمانی کوردی: جێناوەکان",
+      question: "لە ڕستەی (کتێبەکەم بۆ مامۆستاکەم خوێندەوە)، جێناوی کەسی لکاوی (ـم) لە وشەی (کتێبەکەم) چی دەگەیەنێت؟",
+      options: [
+        "جێناوی لکاوی خاوەندارێتی (دیارخەری ناوی)",
+        "جێناوی کەسی بکەر",
+        "جێناوی نادیار",
+        "جێناوی ئاماژە",
+      ],
+      correctIndex: 0,
+      explanation: "کاتێک جێناوی لکاو بە ناوەوە دەلکێت (وەک کتێبەکەم)، دەبێتە دیارخەری ناو و مانای خاوەندارێتی دەبەخشێت.",
+    },
+    {
+      id: "kurd-q2",
+      type: "mcq",
+      topic: "مێژووی ئەدەب و ڕۆژنامەگەری",
+      question: "یەکەمین ڕۆژنامەی فەرمی کوردی بە ناوی (کوردستان) لەلایەن کێ و لە چ شارێکدا دەرچوو؟",
+      options: [
+        "میقداد مەدحەت بەدرخان - قاهیرە (١٨٩٨)",
+        "جەلادەت بەدرخان - دیمەشق (١٩٣٢)",
+        "پیرەمێرد - سلێمانی (١٩٢٦)",
+        "مەحموود بەردەوام - بەغدا (١٩٢٠)",
+      ],
+      correctIndex: 0,
+      explanation: "ڕۆژنامەی کوردستان لە ٢٢ی نیسانی ١٨٩٨ لە قاهیرە لەسەر دەستی میقداد مەدحەت بەدرخان دەرچوو کە بووە ڕۆژی ڕۆژنامەگەری کوردی.",
+    },
+    {
+      id: "kurd-q3",
+      type: "mcq",
+      topic: "ئەدەبی کلاسیک",
+      question: "شاعیری مەزنی کورد (نالی) پێشەنگی کام قوتابخانە و شێوەزاری ئەدەبی بوو لە شیعردا؟",
+      options: [
+        "قوتابخانەی شیعری بابان - شێوەزاری سۆرانی",
+        "قوتابخانەی گۆران - شیعری نوێ",
+        "قوتابخانەی جزیری - شێوەزاری کرمانجی سەروو",
+        "قوتابخانەی هێمن - شیعری سەردەم",
+      ],
+      correctIndex: 0,
+      explanation: "نالی بە داهێنەر و سەردەستەی قوتابخانەی شیعری بابان بە شێوەزاری سۆرانی دادەنرێت لە سەدەی نۆزدەهەمدا.",
+    },
+    {
+      id: "kurd-q4",
+      type: "true_false",
+      topic: "ڕەوانبێژی: کینایە",
+      question: "لە زانستی ڕەوانبێژیدا، کینایە بریتییە لە هێنانی دەستەواژەیەک کە مەبەست لێی واتایەکی شاراوەی پێویست بێت، بەبێ ئەوەی واتای ڕاستەقینەکە قەدەغە بکات.",
+      options: ["ڕاستە", "هەڵەیە"],
+      correctIndex: 0,
+      explanation: "ڕاستە؛ کینایە پێچەوانەی مەجاز و ئیستعارەیە و ڕێگری لە واتا سەرەکییەکە ناکات، وەک دەستکراوە بۆ بەخشندەیی.",
+    },
+    {
+      id: "kurd-q5",
+      type: "mcq",
+      topic: "ڕێبازی ڕومانتیکی",
+      question: "شاکاری شیعری نوێ و ڕێبازی ڕومانتیکی لە ئەدەبی کوردیدا زیاتر لە دیوان و بەرهەمەکانی کام شاعیردا بەرجەستە بووە؟",
+      options: ["عەبدوڵڵا پەشێو و گۆران", "نالی و سالم", "مەحوی و حەمدی", "مەولەوی"],
+      correctIndex: 0,
+      explanation: "گۆران بە باوکی شیعری نوێ و ڕابەری ڕێبازی ڕومانتیکی لە ئەدەبی نوێی کوردیدا دادەنرێت.",
+    },
+    {
+      id: "kurd-q6",
+      type: "mcq",
+      topic: "ئەدەبی داستانی",
+      question: "شاکاری داستانی کلاسیکی (مەم و زین) لە لایەن کام بیرمەند و شاعیری نەتەوەیی کوردەوە نووسراوە؟",
+      options: ["ئەحمەدی خانی", "مەلای جزیری", "فەقێی تەیران", "شەرەفخانی بەدلیسی"],
+      correctIndex: 0,
+      explanation: "ئەحمەدی خانی لە ساڵی ١٦٩٢ شاکاری مەم و زینی وەک فەلسەفە و داستانی نەتەوەیی گەلی کورد هۆنییەوە.",
+    },
+    {
+      id: "kurd-q7",
+      type: "mcq",
+      topic: "ڕێزمانی کوردی: ئاوەڵناو و ئاوەڵکار",
+      question: "لە ڕستەی (قوتابییە زیرەکەکە بە خێرایی پرسیارەکەی شیکار کرد)، وشەی (بە خێرایی) چییە؟",
+      options: ["ئاوەڵکار (Adverb)", "ئاوەڵناو (Adjective)", "بکەر", "جێناو"],
+      correctIndex: 0,
+      explanation: "(بە خێرایی) چۆنیەتی ئەنجامدانی کرداری شیکارکردنەکە ڕوون دەکاتەوە، بۆیە ئاوەڵکاری چۆنیەتییە.",
+    },
+  ],
+
+  arabic: [
+    {
+      id: "arab-q1",
+      type: "mcq",
+      topic: "قواعد اللغة: الممنوع من الصرف",
+      question: "ما هي علامة إعراب الاسم الممنوع من الصرف في حالة الجر إذا تجرد من (أل) والإضافة؟",
+      options: [
+        "الفتحة نيابة عن الكسرة",
+        "الكسرة الظاهرة",
+        "الضمة المقدرة",
+        "السكون",
+      ],
+      correctIndex: 0,
+      explanation: "يُجر الاسم الممنوع من الصرف بالفتحة نيابة عن الكسرة ما لم يُعرّف بأل أو يُضَف، مثل: مررتُ بمساجدَ كثيرةٍ.",
+    },
+    {
+      id: "arab-q2",
+      type: "mcq",
+      topic: "الأدب الأندلسي: الموشحات",
+      question: "من هو الشاعر الأندلسي القرطبي الشهير برائد الموشحات وصاحب نونية: 'أضحى التنائي بديلاً من تدانينا'؟",
+      options: ["ابن زيدون", "لسان الدين بن الخطيب", "ابن هانئ الأندلسي", "المتنبي"],
+      correctIndex: 0,
+      explanation: "ابن زيدون هو شاعر قرطبة وأحد أعظم شعراء الأندلس، اشتهر بقصائده ونونيته في ولاّدة بنت المستكفي.",
+    },
+    {
+      id: "arab-q3",
+      type: "mcq",
+      topic: "النحو العربي: إنّ وأخواتها",
+      question: "في جملة 'إنّ العلمَ نورٌ'، ما هو الإعراب الصحيح لكلمة 'نورٌ'؟",
+      options: [
+        "خبر إنّ مرفوع وعلامة رفعه الضمة الظاهرة",
+        "اسم إنّ منصوب",
+        "مبتدأ مؤخر مرفوع",
+        "نعت مرفوع",
+      ],
+      correctIndex: 0,
+      explanation: "إنّ حرف ناسخ ينصب المبتدأ اسماً له ويرفع الخبر خبراً له؛ لذلك 'نورٌ' هو خبر إنّ مرفوع.",
+    },
+    {
+      id: "arab-q4",
+      type: "true_false",
+      topic: "البلاغة: الاستعارة المكنية",
+      question: "الاستعارة المكنية هي تشبيه بليغ حُذِف منه المشبه به ورُمِز له بشيء من لوازمه للدلالة عليه.",
+      options: ["صحيح", "خطأ"],
+      correctIndex: 0,
+      explanation: "صحيح؛ الاستعارة المكنية يُحذف فيها المشبه به ويبقى ما يدل عليه، مثل: 'واشتعل الرأس شيباً'.",
+    },
+    {
+      id: "arab-q5",
+      type: "mcq",
+      topic: "الأدب العربي الحديث: الرومنسية",
+      question: "ما هي المدرسة الأدبية الحديثة التي دعت إلى التعبير عن الوجدان الصادق والهروب إلى الطبيعة وعالم الغاب؟",
+      options: [
+        "المدرسة الرومنسية (أبولو وجماعة المهجر)",
+        "مدرسة الإحياء والبعث الكلاسيكية",
+        "المدرسة الواقعية الجديدة",
+        "المدرسة الرمزية",
+      ],
+      correctIndex: 0,
+      explanation: "المدرسة الرومنسية وجماعة المهجر تميزت بتمجيد الذات والعاطفة الصادقة والامتزاج بالطبيعة.",
+    },
+    {
+      id: "arab-q6",
+      type: "mcq",
+      topic: "قواعد اللغة: تقديم الخبر وجوباً",
+      question: "يجب تقديم الخبر على المبتدأ في إحدى الحالات الآتية:",
+      options: [
+        "إذا كان الخبر شبه جملة والمبتدأ نكرة محضة غير مخصصة",
+        "إذا كان المبتدأ معرفاً بأل",
+        "إذا كان الخبر اسماً مفرداً",
+        "في جميع الجمل الاسمية",
+      ],
+      correctIndex: 0,
+      explanation: "يجب تقديم الخبر إذا كان شبه جملة (جار ومجرور أو ظرف) والمبتدأ نكرة غير موصوفة ولا مضافة، مثل: 'في الصفِّ طالبٌ'.",
+    },
+    {
+      id: "arab-q7",
+      type: "mcq",
+      topic: "الأدب والنثر الأندلسي",
+      question: "من هو مؤلف الرسالة الفلسفية والأدبية الشهيرة 'طوق الحمامة في الألفة والألاّف'؟",
+      options: ["ابن حزم الأندلسي", "ابن رشد", "ابن طفيل", "ابن عبد ربه"],
+      correctIndex: 0,
+      explanation: "كتاب طوق الحمامة من أشهر مؤلفات الإمام والأديب ابن حزم الأندلسي في فلسفة الحب وأعراضه.",
+    },
+  ],
+
+  history: [
+    {
+      id: "hist-q1",
+      type: "mcq",
+      topic: "پەیماننامەی سایکس-پیکۆ",
+      question: "پەیماننامەی نهێنی سایکس-پیکۆ لە چ ساڵێکدا و لە نێوان کام دوو وڵاتی ئیستعماری ئەوروپادا واژۆ کرا؟",
+      options: [
+        "١٩١٦ - بەریتانیا و فەرەنسا (بە ڕەزامەندی ڕووسیا)",
+        "١٩٢٠ - ئەڵمانیا و ئیتاڵیا",
+        "١٩٢٣ - ئەمریکا و دەوڵەتی عوسمانی",
+        "١٩١٤ - بەریتانیا و یۆنان",
+      ],
+      correctIndex: 0,
+      explanation: "لە ئایاری ١٩١٦ بەریتانیا و فەرەنسا بە نهێنی خاکی ڕۆژهەڵاتی ناوەڕاست و نیشتمانی عەرەبیان لە نێوان خۆیاندا دابەش کرد.",
+    },
+    {
+      id: "hist-q2",
+      type: "mcq",
+      topic: "پەیمانی سێڤر ١٩٢٠",
+      question: "پەیمانی ئاشتی سێڤر لە ساڵی ١٩٢٠ لە کام بەندەکانیدا بە فەرمی مافی ئۆتۆنۆمی و چارەی خۆنووسینی کوردی تۆمار کرد؟",
+      options: ["بەندەکانی ٦٢، ٦٣ و ٦٤", "بەندەکانی ١، ٢ و ٣", "بەندەکانی ٨٠ و ٨١", "بەندی ١٠٠"],
+      correctIndex: 0,
+      explanation: "لە بەشە پەیوەندیدارەکانی پەیمانی سێڤردا (بەندەکانی ٦٢ تا ٦٤) دان بە دروستکردنی دەوڵەتێکی سەربەخۆ یان حوکمڕانی سەربەخۆ بۆ کورد نرا.",
+    },
+    {
+      id: "hist-q3",
+      type: "mcq",
+      topic: "حکومەتی شێخ مەحموودی حەفید",
+      question: "لە ساڵی ١٩١٩ شێخ مەحموودی حەفید لە سلێمانی دژی کام داگیرکاری ڕاپەڕینی بەرپا کرد و دەوڵەتی کوردستانی ڕاگەیاند؟",
+      options: ["داگیرکاری بەریتانیا", "داگیرکاری ڕووسیا", "دەوڵەتی سەفەوی", "فەرەنسییەکان"],
+      correctIndex: 0,
+      explanation: "شێخ مەحموود وەک حوکمداری کوردستان دژی دەسەڵاتی ئیستعماری بەریتانیا لە دەربەندی بازیان و سلێمانی جەنگا.",
+    },
+    {
+      id: "hist-q4",
+      type: "true_false",
+      topic: "پەیمانی لۆزان ١٩٢٣",
+      question: "پەیمانی لۆزان لە ساڵی ١٩٢٣ لە سویسرا واژۆ کرا و بە تەواوی مافەکانی کوردی کە لە پەیمانی سێڤردا هاتبوو هەڵوەشاندەوە.",
+      options: ["ڕاستە", "هەڵەیە"],
+      correctIndex: 0,
+      explanation: "ڕاستە؛ کەمالییەکان و هاوپەیمانان لە لۆزان ڕێککەوتن و بووە هۆی دابەشکردنی کوردستان بەسەر چوار دەوڵەتدا.",
+    },
+    {
+      id: "hist-q5",
+      type: "numeric",
+      topic: "مێژووی ڕۆژنامەگەری",
+      question: "یەکەمین ڕۆژنامەی فەرمی کوردی بە ناوی (کوردستان) لە چ ساڵێکدا لە شاری قاهیرە دەرچوو؟ (ساڵەکە بنووسە)",
+      options: [],
+      correctNumeric: 1898,
+      tolerance: 0,
+      explanation: "لە ٢٢ی نیسانی ١٨٩٨ یەکەم ژمارەی ڕۆژنامەی کوردستان بڵاوکرایەوە.",
+    },
+    {
+      id: "hist-q6",
+      type: "mcq",
+      topic: "شۆڕشی بیستی عێراق",
+      question: "شۆڕشی بیست لە ساڵی ١٩٢٠ لە عێراق بە فەرمی چ ئامانجێکی هەبوو و کاریگەری چی بوو؟",
+      options: [
+        "ڕزگاربوون لە ئینتیدابی بەریتانی و دامەزراندنی دەوڵەتی سەربەخۆی عێراق",
+        "گەڕانەوەی دەسەڵاتی عوسمانی",
+        "بەستنەوەی عێراق بە ئێرانەوە",
+        "تەنها شەڕێکی ناوخۆیی خێڵەکی بوو",
+      ],
+      correctIndex: 0,
+      explanation: "شۆڕشی بیست فشارێکی توند بوو لەسەر بەریتانیا کە ناچاری کرد لە ١٩٢١ پاشایەتی و حکومەتی دەوڵەتی عێراق دابمەزرێنێت.",
+    },
+    {
+      id: "hist-q7",
+      type: "mcq",
+      topic: "بەیاننامەی ١١ی ئاداری ١٩٧٠",
+      question: "ڕێککەوتننامەی مێژوویی ١١ی ئاداری ١٩٧٠ لە نێوان سەرکردایەتی شۆڕشی کورد و دەسەڵاتی بەغدا دانپێدانانی چی بوو؟",
+      options: [
+        "مافی ئۆتۆنۆمی (حوکمی زاتی) بۆ گەلی کورد لە باشووری کوردستان",
+        "تەنها ئاگربەستی کاتی شەڕ",
+        "دابەشکردنی سامانی نەوت تەنها",
+        "پاشەکشەی تەواوی کورد لە شارەکان",
+      ],
+      correctIndex: 0,
+      explanation: "بەیاننامەی ١١ی ئازار گرنگترین بەڵگەنامەی فەرمی بوو لە مێژوودا کە تێیدا دەسەڵاتی عێراق دانی بە مافی ئۆتۆنۆمی گەلی کورددا نا.",
+    },
+  ],
+
+  economy: [
+    {
+      id: "econ-q1",
+      type: "mcq",
+      topic: "داهاتی نەتەوەیی",
+      question: "داهاتی نەتەوەیی (National Income) لە زانستی ئابووریدا بە چ واتا دێت؟",
+      options: [
+        "کۆی ئەو داهات و پاداشتانەی دەست بنەماکانی بەرهەمهێنان دەکەوێت لە ماوەی ساڵێکدا",
+        "تەنها داهاتی هەناردەکردنی نەوت",
+        "کۆی ئەو باجەی کە دەوڵەت کۆیدەکاتەوە",
+        "پارەی یەدەگی بانکی ناوەندی تەنها",
+      ],
+      correctIndex: 0,
+      explanation: "داهاتی نەتەوەیی بریتییە لە بەهای کۆی پاداشتی بنەماکانی بەرهەمهێنان (کرێ، سوود، قازانج و کرێی زەوی) لە ماوەی ساڵێکدا.",
+    },
+    {
+      id: "econ-q2",
+      type: "mcq",
+      topic: "بازرگانی نێودەوڵەتی",
+      question: "تیۆری سوودی ڕەها (Absolute Advantage) لە بازرگانی نێودەوڵەتیدا لەلایەن کام زانای ئابوورییەوە داڕێژرا؟",
+      options: ["ئادەم سمیس", "دەیڤید ڕیکاردۆ", "جۆن مەینارد کینز", "مایکل تۆدارۆ"],
+      correctIndex: 0,
+      explanation: "ئادەم سمیس باوکی ئابووری کلاسیک سەلماندی کە دەوڵەتان پێویستە ئەو کەلوپەلانە بەرهەم بهێنن کە تێچووی ڕەهایان کەمترە.",
+    },
+    {
+      id: "econ-q3",
+      type: "mcq",
+      topic: "دارایی گشتی: باج",
+      question: "جیاوازی سەرەکی نێوان باجی ڕاستەوخۆ و باجی ناڕاستەوخۆ چییە؟",
+      options: [
+        "باجی ڕاستەوخۆ ناکرێت بارگرانییەکەی بگوازرێتەوە بۆ سەر کەسێکی تر (وەک باجی داهات)",
+        "باجی ڕاستەوخۆ لەسەر کڕینی شتومەک دادەنرێت",
+        "باجی ناڕاستەوخۆ دادپەروەرانەترە بۆ هەژاران",
+        "هیچ جیاوازییەکیان نییە لە جێبەجێکردندا",
+      ],
+      correctIndex: 0,
+      explanation: "باجی ڕاستەوخۆ ڕاستەوخۆ لەسەر داهات یان سەرمایەی کەسەکە دادەنرێت و ناتوانێت باری بداتە سەر کەسێکی تر.",
+    },
+    {
+      id: "econ-q4",
+      type: "true_false",
+      topic: "خولگەی ئابووری",
+      question: "لە خولگەی ئابووریدا، قۆناغی بووژانەوە (Recovery) بە زیادبوونی قەبارەی وەبەرهێنان و دابەزینی ڕێژەی بێکاری دەناسرێتەوە.",
+      options: ["ڕاستە", "هەڵەیە"],
+      correctIndex: 0,
+      explanation: "ڕاستە؛ لە کاتی بووژانەوەدا چالاکی ئابووری گەشە دەکات و دەرفەتی کار زیاد دەکات.",
+    },
+    {
+      id: "econ-q5",
+      type: "numeric",
+      topic: "داهاتی بەردەست",
+      question: "ئەگەر داهاتی کەسی کەسێک 1000 دۆلار بێت و بڕی باجی داهاتی ڕاستەوخۆ 150 دۆلار بێت، داهاتی بەردەست بۆ خەرجکردن و پاشەکەوت چەند دۆلارە؟",
+      options: [],
+      correctNumeric: 850,
+      tolerance: 0,
+      explanation: "داهاتی بەردەست = داهاتی کەسی - باجی ڕاستەوخۆ = 1000 - 150 = 850 دۆلار.",
+    },
+    {
+      id: "econ-q6",
+      type: "mcq",
+      topic: "ڕێکخراوە ئابوورییە نێودەوڵەتییەکان",
+      question: "ئەرکی سەرەکی سندوقی نەختی نێودەوڵەتی (IMF) چییە؟",
+      options: [
+        "دەستەبەرکردنی جێگیری لە سیستەمی دراوی نێودەوڵەتی و پێدانی قەرز بۆ هاوسەنگی پارەدان",
+        "بەرهەمهێنانی نەوت و گاز",
+        "دیاریکردنی یاسای مافی مرۆڤ",
+        "سەرپەرشتیکردنی هێڵەکانی فڕۆکەوانی",
+      ],
+      correctIndex: 0,
+      explanation: "سندوقی نەختی نێودەوڵەتی (IMF) چاودێری سەقامگیری نرخی ئاڵوگۆڕ و یارمەتیدانی وڵاتان دەکات لە کاتی کورتهێنانی تەرازووی پارەدان.",
+    },
+    {
+      id: "econ-q7",
+      type: "mcq",
+      topic: "ئۆپیک (OPEC)",
+      question: "ڕێکخراوی وڵاتانی هەناردەکاری نەوت (OPEC) بە چ ئامانجێکی ستراتیژی دامەزرا؟",
+      options: [
+        "هەماهەنگی و یەکخستنی سیاسەتی نەوتی ئەندامەکان و پاراستنی سەقامگیری نرخی نەوت",
+        "ڕێگریکردن لە فرۆشتنی نەوت بە جیهان",
+        "دابەزاندنی نرخی نەوت بۆ کەمترین ئاست",
+        "دروستکردنی بازاڕی هاوبەشی ئەوروپا",
+      ],
+      correctIndex: 0,
+      explanation: "ئۆپیک لە ١٩٦٠ دامەزرا تا کۆنترۆڵی پشکی بەرهەمهێنان بکات و بەرژەوەندی وڵاتانی خاوەن نەوت بپارێزێت.",
+    },
+  ],
+
+  geography: [
+    {
+      id: "geog-q1",
+      type: "mcq",
+      topic: "کشتوکاڵ لە کوردستان",
+      question: "دەغڵودانی سەرەکی و ستراتیژی لە بەرهەمهێنانی خۆراکدا لە دەشتەکانی کوردستان کامەیە؟",
+      options: ["گەنم و جۆ", "برنج و پەتاتە", "لۆکە و تووتن", "چەوەندەر"],
+      correctIndex: 0,
+      explanation: "گەنم و جۆ سەرەکیترین بەرهەمی زستانەی دەشتەکانی هەولێر، شارەزوور و گەرمیانن بەهۆی گونجاوی کەشوهەوا و باران.",
+    },
+    {
+      id: "geog-q2",
+      type: "mcq",
+      topic: "سەرچاوەکانی وزە: نەوت",
+      question: "کێڵگەی بەناوبانگی نەوتی (بابەگوڕگوڕ) کە لە ساڵی ١٩٢٧ دۆزرایەوە، دەکەوێتە کام پارێزگا؟",
+      options: ["کەرکووک", "بەسرە", "دهۆک", "نەینەوا"],
+      correctIndex: 0,
+      explanation: "بابەگوڕگوڕ یەکێک لە دێرینترین و دەوڵەمەندترین کێڵگە نەوتییەکانی کەرکووک و عێراقە لە مێژوودا.",
+    },
+    {
+      id: "geog-q3",
+      type: "mcq",
+      topic: "ڕێگاکانی گواستنەوەی نێودەوڵەتی",
+      question: "کەناڵی سوێس کام دوو دەریای سەرەکی لە جیهاندا بەیەکەوە دەبەستێتەوە؟",
+      options: [
+        "دەریای ناوەڕاست و دەریای سوور",
+        "دەریای ڕەش و دەریای قەزوین",
+        "زەریای هێمن و زەریای ئەتڵەسی",
+        "دەریای عەرەب و کەنداوی عەرەبی",
+      ],
+      correctIndex: 0,
+      explanation: "کەناڵی سوێس لە میسر کورتترین ڕێگای ئاویی نێوان ئاسیا و ئەوروپایە بە بەیەکبەستنی دەریای ناوەڕاست و دەریای سوور.",
+    },
+    {
+      id: "geog-q4",
+      type: "true_false",
+      topic: "وزەی نوێبووەوە",
+      question: "وزەی کارۆئاوی (Hydroelectric) و وزەی خۆر لە پۆلێنبەندی سەرچاوە تەواونەبووەکان (نوێبووەوەکان) دادەنرێن کە دۆستی ژینگەن.",
+      options: ["ڕاستە", "هەڵەیە"],
+      correctIndex: 0,
+      explanation: "ڕاستە؛ سەرچاوە نوێبووەوەکان نابنە هۆی پیسبوونی ژینگە و تەواو نابن.",
+    },
+    {
+      id: "geog-q5",
+      type: "mcq",
+      topic: "کانزاکان و کانزاکاری",
+      question: "کام لەم کانزایانە لە پۆلێنبەندی کانزا نائاسنینەکان (Non-ferrous) دادەنرێت لە پیشەسازیدا؟",
+      options: ["مس (Copper) و ئەلەمنیۆم", "ئاسن و مەنگەنیز", "خەڵووزی بەردین", "گۆگرد"],
+      correctIndex: 0,
+      explanation: "مس و ئەلەمنیۆم کانزای نائاسنینن و توانای بەرزی گەیاندنی کارەبایان هەیە.",
+    },
+    {
+      id: "geog-q6",
+      type: "mcq",
+      topic: "نیشتەجێبوونی پیشەسازی",
+      question: "گرنگترین مەرج بۆ نیشتەجێبوونی پیشەسازی پترۆکیمیایی لە جوگرافیای ئابووریدا چییە؟",
+      options: [
+        "نزیکی لە سەرچاوەی ماددەی خاوی نەوت و گازی سروشتی",
+        "تەنها نزیکی لە کەشوهەوای سارد",
+        "نزیکی لە دارستانەکان",
+        "بوونی دەستی کاری کشتوکاڵی",
+      ],
+      correctIndex: 0,
+      explanation: "پیشەسازی پترۆکیمیایی پشت بە ماددەی هایدرۆکاربۆنی نەوت دەبەستێت، بۆیە هەمیشە لە نزیک پاڵاوگە و کێڵگە نەوتییەکان دادەمەزرێت.",
+    },
+    {
+      id: "geog-q7",
+      type: "mcq",
+      topic: "تەرازووی بازرگانی",
+      question: "تەرازووی بازرگانی دەوڵەتێک لە کام باردا بە (زیادە - Surplus) دادەنرێت؟",
+      options: [
+        "کاتێک بەهای هەناردەکردن لە هاوردەکردن زیاتر بێت",
+        "کاتێک هاوردەکردن لە هەناردەکردن زیاتر بێت",
+        "کاتێک هیچ کاڵایەک هەناردە نەکرێت",
+        "کاتێک دراوی بیانی نەمێنێت",
+      ],
+      correctIndex: 0,
+      explanation: "تەرازووی بازرگانی ئەوکاتە ئەرێنییە کە دەوڵەت فرۆشی (هەناردەی) زیاتر بێت لە کڕینی (هاوردەی) لە دەرەوە.",
+    },
+  ],
+
+  sports: [
+    {
+      id: "sport-q1",
+      type: "mcq",
+      topic: "یاساکانی فیفا: ئۆفساید",
+      question: "بەپێی یاساکانی فەرمی فیفا، یاریزان لە باری ئۆفساید (Offside) دایە کاتێک:",
+      options: [
+        "لە کاتی دەرچوونی تۆپەکە لە تۆپ و لە دوا بەرگریکار نزیکتر بێت لە هێڵی گۆڵی بەرامبەر لە نیوەی یاریگای ڕکابەردا",
+        "لە کاتی لێدانی کۆڕنەر لە پێش هەمووان بێت",
+        "لە کاتی هاویشتنی تۆپی دەست لە پێش بێت",
+        "لە نیوەی یاریگای خۆیدا بێت",
+      ],
+      correctIndex: 0,
+      explanation: "یاسای ١١ی فیفا دەڵێت یاریزان نابێت لە پێش تۆپ و دوا بەرگریکار بێت لە کاتی پاسپێدان لە نیوەی بەرامبەر.",
+    },
+    {
+      id: "sport-q2",
+      type: "numeric",
+      topic: "تۆپی پێی ناو هۆڵ (فوتساڵ)",
+      question: "لە یاری فوتساڵدا، هەر تیمێک لەناو یاریگادا بە چەند یاریزان بە گۆڵپارێزەوە بەشداری یاری دەکات؟ (ژمارەکە بنووسە)",
+      options: [],
+      correctNumeric: 5,
+      tolerance: 0,
+      explanation: "تیمی فوتساڵ پێکدێت لە ٥ یاریزان (٤ یاریزانی ناو یاریگا و ١ گۆڵپارێز).",
+    },
+    {
+      id: "sport-q3",
+      type: "mcq",
+      topic: "کاتی فەرمی یاری",
+      question: "کاتی فەرمی یارییەکی تۆپی پێی ئاسایی چەند خولەکە و چۆن دابەش دەبێت؟",
+      options: [
+        "٩٠ خولەک بە دوو گێمی ٤٥ خولەکی لەگەڵ ١٥ خولەک پشوو",
+        "٨٠ خولەک بە دوو گێمی ٤٠ خولەکی",
+        "١٠٠ خولەک بە بێ پشوو",
+        "٦٠ خولەک بە چوار کاتژمێری ١٥ خولەکی",
+      ],
+      correctIndex: 0,
+      explanation: "یاسای فەرمی یاری تۆپی پێ لە ٩٠ خولەک پێکدێت بە دوو نیوەی ٤٥ خولەکی.",
+    },
+    {
+      id: "sport-q4",
+      type: "true_false",
+      topic: "ناوبژیوانی",
+      question: "ناوبژیوانی یاریدەدەر دەسەڵاتی دەرکردنی کارتی سووری ڕاستەوخۆی هەیە بۆ یاریزان بەبێ گەڕانەوە بۆ ناوبژیوانی سەرەکی.",
+      options: ["ڕاستە", "هەڵەیە"],
+      correctIndex: 1,
+      explanation: "هەڵەیە؛ ناوبژیوانی سەرەکی تەواوی دەسەڵاتی کۆتایی بڕیاردان و سزادانی یاریزانانی لەدەستە.",
+    },
+    {
+      id: "sport-q5",
+      type: "mcq",
+      topic: "گەرمکردنەوە (Warm-up)",
+      question: "ئەنجامدانی ڕاهێنانی گەرمکردنەوە (Warm-up) پێش وەرزش چ سوودێکی زانستی هەیە؟",
+      options: [
+        "پلەی گەرمی ماسوولکە و لێدانی دڵ بەرزدەکاتەوە و مەترسی پێکان کەمدەکاتەوە",
+        "تەنها بۆ کات بەسەربردنە",
+        "ماسوولکە سست و شەکەت دەکات",
+        "پەستانی خوێن نزم دەکاتەوە بۆ خوار ئاسایی",
+      ],
+      correctIndex: 0,
+      explanation: "گەرمکردنەوە جووڵەی خوێن بۆ ماسوولکەکان خێرا دەکات و گرژی ماسوولکە لە کاتی جووڵەی لەناکاو کەم دەکاتەوە.",
+    },
+    {
+      id: "sport-q6",
+      type: "mcq",
+      topic: "سزاکانی ناوبژیوان",
+      question: "ئەگەر یاریزانێک لە یەک یاریدا دوو کارتی زەردی ئاگادارکردنەوە وەربگرێت، سزاکەی چی دەبێت؟",
+      options: [
+        "کارتی سوور و دەرکردن لە یاری بەبێ جێگرتنەوە",
+        "تەنها لێدانی سزا لەسەری هەژمار دەکرێت",
+        "دەتوانرێت یاریزانێکی تر لە شوێنی دابنرێت",
+        "ئاگادارکردنەوەی زارەکی سێیەم",
+      ],
+      correctIndex: 0,
+      explanation: "وەرگرتنی دوو کارتی زەرد دەگۆڕێت بۆ کارتی سوور و تیمی پەیوەندیدار دەبێت بە یەک یاریزان کەمتر یاری بکات.",
+    },
+    {
+      id: "sport-q7",
+      type: "numeric",
+      topic: "گۆڕانکاری یاریزانان",
+      question: "لە یارییە فەرمییەکانی تۆپی پێی ئێستادا، هەر تیمێک ڕێگەی پێدراوە چەند یاریزان بگۆڕێت لە سێ وەستانی یاری؟ (ژمارەکە بنووسە)",
+      options: [],
+      correctNumeric: 5,
+      tolerance: 0,
+      explanation: "بەپێی نوێکردنەوەکانی فیفا و IFAB، ڕێگە بە پێنج (٥) گۆڕانکاری دراوە لە سێ وەستاندا لە ماوەی ٩٠ خولەکدا.",
+    },
+  ],
+};
+
+export interface AdaptiveAssessmentProps {
+  onFinish?: () => void;
+  onNavigateToPractice?: () => void;
+  onNavigateToSubjects?: () => void;
+}
+
+export function AdaptiveAssessment({
+  onFinish,
+  onNavigateToPractice: _onNavigateToPractice,
+  onNavigateToSubjects,
+}: AdaptiveAssessmentProps) {
+  const { playSuccess } = useSoundEffects();
+  const user = useAppStore((state) => state.user);
+
+  // Derive active subject questions and metadata strictly for the active subject
+  const rawSubj = (user.activeSubject || "chemistry").toLowerCase();
+  const activeSubjKey = SUBJECT_ASSESSMENT_QUESTIONS[rawSubj] ? rawSubj : "chemistry";
+  const activeSubjectMeta = SUBJECT_ASSESSMENT_METADATA[activeSubjKey] || { label: "کیمیا", icon: "⚗️" };
+  const questions = useMemo(() => {
+    return SUBJECT_ASSESSMENT_QUESTIONS[activeSubjKey] || SUBJECT_ASSESSMENT_QUESTIONS.chemistry;
+  }, [activeSubjKey]);
+
+  const [phase, setPhase] = useState<"intro" | "testing" | "results">("intro");
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
+  const [numericAnswers, setNumericAnswers] = useState<Record<number, string>>({});
+  const [timeLeft, setTimeLeft] = useState(300); // 5 minutes = 300s
+  const [isTimerActive, setIsTimerActive] = useState(false);
+
+  // Reset state if active subject changes
+  useEffect(() => {
+    setCurrentIndex(0);
+    setSelectedAnswers({});
+    setNumericAnswers({});
+    setTimeLeft(300);
+    setIsTimerActive(false);
+    setPhase("intro");
+  }, [activeSubjKey]);
+
+  // Timer countdown without setting state in effect body
+  useEffect(() => {
+    if (!isTimerActive) return;
+    const interval = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          setIsTimerActive(false);
+          setPhase("results");
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isTimerActive]);
+
+  const handleStart = () => {
+    setPhase("testing");
+    setCurrentIndex(0);
+    setSelectedAnswers({});
+    setNumericAnswers({});
+    setTimeLeft(300);
+    setIsTimerActive(true);
+  };
+
+  const handleSelectOption = (optIdx: number) => {
+    setSelectedAnswers((prev) => ({ ...prev, [currentIndex]: optIdx }));
+  };
+
+  const handleNumericInput = (val: string) => {
+    setNumericAnswers((prev) => ({ ...prev, [currentIndex]: val }));
+  };
+
+  // Calculate score and weakness analysis strictly from active subject questions
+  const score = questions.reduce((acc, q, idx) => {
+    if (q.type === "numeric") {
+      const userNum = parseFloat(numericAnswers[idx] || "");
+      if (!isNaN(userNum) && q.correctNumeric !== undefined) {
+        const tol = q.tolerance ?? 0.1;
+        return Math.abs(userNum - q.correctNumeric) <= tol ? acc + 1 : acc;
+      }
+      return acc;
+    } else {
+      return selectedAnswers[idx] === q.correctIndex ? acc + 1 : acc;
+    }
+  }, 0);
+
+  const percentage = Math.round((score / questions.length) * 100);
+
+  // Identify missed questions for personalized pedagogy review
+  const missedQuestions = questions.filter((q, idx) => {
+    if (q.type === "numeric") {
+      const userNum = parseFloat(numericAnswers[idx] || "");
+      if (!isNaN(userNum) && q.correctNumeric !== undefined) {
+        const tol = q.tolerance ?? 0.1;
+        return Math.abs(userNum - q.correctNumeric) > tol;
+      }
+      return true;
+    } else {
+      return selectedAnswers[idx] !== q.correctIndex;
+    }
+  });
+  const missedTopics = Array.from(new Set(missedQuestions.map((q) => q.topic)));
+
+  const handleNext = () => {
+    if (currentIndex < questions.length - 1) {
+      setCurrentIndex((prev) => prev + 1);
+    } else {
+      // Complete test
+      setIsTimerActive(false);
+      setPhase("results");
+      playSuccess();
+      const earnedXp = score * 20;
+      if (earnedXp > 0) {
+        useAppStore.getState().addProgressScore(earnedXp, 1);
+      }
+    }
+  };
+
+  const handlePrevious = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex((prev) => prev - 1);
+    }
+  };
+
+  const formatTimer = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  const currentQ = questions[currentIndex];
+  const isCurrentAnswered =
+    currentQ?.type === "numeric"
+      ? Boolean(numericAnswers[currentIndex]?.trim())
+      : selectedAnswers[currentIndex] !== undefined;
+
+  return (
+    <div className="p-4 sm:p-6 lg:p-8 max-w-3xl mx-auto w-full min-h-full flex flex-col justify-center" dir="rtl">
+      {/* ─── GLOBAL PROMINENT SUBJECT BANNER & SWITCHER ───────────────────────── */}
+      <div className="bg-white rounded-2xl border border-indigo-100 p-4 shadow-2xs flex items-center justify-between gap-3 mb-5">
+        <div className="flex items-center gap-3">
+          <span className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 text-xl flex items-center justify-center shrink-0">
+            {activeSubjectMeta.icon}
+          </span>
+          <div className="text-right">
+            <div className="flex items-center gap-2">
+              <span className="font-sans font-bold text-slate-900 text-sm">
+                وانەی {activeSubjectMeta.label}
+              </span>
+              <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
+                تاقیکردنەوەی ئاست
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 font-sans mt-0.5">
+              پرسیارەکان بە تەواوی و تایبەت لەسەر مەنهەجی {activeSubjectMeta.label}ن
+            </p>
+          </div>
+        </div>
+        {onNavigateToSubjects && (
+          <button
+            type="button"
+            onClick={onNavigateToSubjects}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-sans text-xs font-bold transition-all cursor-pointer shadow-2xs"
+          >
+            <span>گۆڕینی وانە</span>
+            <ArrowLeftRight className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+
+      {/* 1. INTRO PRE-ASSESSMENT SCREEN */}
+      {phase === "intro" && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-xs text-center space-y-6">
+          <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto">
+            <Target className="w-8 h-8" />
+          </div>
+
+          <div className="space-y-2">
+            <h1 className="font-sans font-black text-2xl text-slate-900">
+              تاقیکردنەوەی ئەداپتیڤی {activeSubjectMeta.label} {activeSubjectMeta.icon}
+            </h1>
+            <p className="font-sans text-sm text-slate-600 max-w-md mx-auto leading-relaxed">
+              ئەم هەڵسەنگاندنە کورتە ئاستی تێگەیشتنت لە مەنهەجی فەرمی {activeSubjectMeta.label} دیاری دەکات، بەبێ تێکەڵبوونی هیچ پرسیارێکی وانەکانی تر.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 max-w-sm mx-auto text-right bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs text-slate-700">
+            <div>
+              <span className="text-slate-400 block">ژمارەی پرسیار:</span>
+              <span className="font-bold text-slate-900 text-sm">{questions.length} پرسیاری مەنهەجی</span>
+            </div>
+            <div>
+              <span className="text-slate-400 block">ماوەی پێشبینیکراو:</span>
+              <span className="font-bold text-slate-900 text-sm">~ ٥ خولەک</span>
+            </div>
+          </div>
+
+          <button
+            onClick={handleStart}
+            className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-sans font-bold text-sm transition-colors cursor-pointer shadow-xs inline-flex items-center justify-center gap-2"
+          >
+            <span>دەستپێکردنی تاقیکردنەوە</span>
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* 2. DURING ASSESSMENT SCREEN */}
+      {phase === "testing" && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-xs space-y-6">
+          {/* Header: Progress & Timer */}
+          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+            <div className="space-y-1">
+              <span className="text-xs font-bold text-indigo-600 font-sans">
+                پرسیاری {currentIndex + 1} لە {questions.length} ({activeSubjectMeta.label})
+              </span>
+              <div className="w-36 sm:w-48 h-2 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-indigo-600 rounded-full transition-all duration-300"
+                  style={{
+                    width: `${((currentIndex + 1) / questions.length) * 100}%`,
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Timer */}
+            <div
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-mono text-xs font-bold border ${
+                timeLeft < 60
+                  ? "bg-red-50 text-red-600 border-red-200 animate-pulse"
+                  : "bg-slate-50 text-slate-700 border-slate-200"
+              }`}
+            >
+              <Clock className="w-4 h-4" />
+              <span>{formatTimer(timeLeft)}</span>
+            </div>
+          </div>
+
+          {/* Question Text & Format Badge */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-md font-sans">
+                {currentQ?.topic}
+              </span>
+              <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                {currentQ?.type === "true_false"
+                  ? "ڕاست یان هەڵە"
+                  : currentQ?.type === "numeric"
+                  ? "وەڵامی ژمارەیی"
+                  : "فرەهەڵبژاردن (MCQ)"}
+              </span>
+            </div>
+            <h2 className="font-sans font-bold text-base sm:text-lg text-slate-900 leading-snug">
+              {currentQ?.question}
+            </h2>
+          </div>
+
+          {/* Question Format 1: TRUE/FALSE */}
+          {currentQ?.type === "true_false" && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => handleSelectOption(0)}
+                className={`min-h-[56px] p-4 rounded-2xl border text-center font-sans font-bold text-sm transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                  selectedAnswers[currentIndex] === 0
+                    ? "bg-emerald-50 border-emerald-600 text-emerald-900 shadow-sm ring-2 ring-emerald-500/20"
+                    : "bg-white border-slate-200 hover:bg-slate-50 text-slate-800"
+                }`}
+              >
+                <span className="text-lg">✅</span>
+                <span>ڕاستە</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSelectOption(1)}
+                className={`min-h-[56px] p-4 rounded-2xl border text-center font-sans font-bold text-sm transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                  selectedAnswers[currentIndex] === 1
+                    ? "bg-rose-50 border-rose-600 text-rose-900 shadow-sm ring-2 ring-rose-500/20"
+                    : "bg-white border-slate-200 hover:bg-slate-50 text-slate-800"
+                }`}
+              >
+                <span className="text-lg">❌</span>
+                <span>هەڵەیە</span>
+              </button>
+            </div>
+          )}
+
+          {/* Question Format 2: NUMERIC */}
+          {currentQ?.type === "numeric" && (
+            <div className="space-y-4 pt-2">
+              <div className="relative">
+                <input
+                  type="text"
+                  dir="ltr"
+                  value={numericAnswers[currentIndex] || ""}
+                  onChange={(e) => handleNumericInput(e.target.value)}
+                  placeholder="0.0"
+                  className="w-full text-center py-4 px-4 text-2xl font-mono font-bold rounded-2xl border-2 border-slate-200 focus:border-indigo-600 focus:outline-none focus:ring-4 focus:ring-indigo-100"
+                />
+                <span className="text-xs text-slate-400 block text-right mt-1.5 font-sans">
+                  تەنها ژمارە یان خاڵی دەیی بنووسە. نموونە: 7 یان 3.5
+                </span>
+              </div>
+              <div className="grid grid-cols-6 gap-1.5 max-w-xs mx-auto">
+                {["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ".", "-"].map((char) => (
+                  <button
+                    key={char}
+                    type="button"
+                    onClick={() => {
+                      const cur = numericAnswers[currentIndex] || "";
+                      handleNumericInput(cur + char);
+                    }}
+                    className="h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-900 font-mono font-bold text-sm flex items-center justify-center cursor-pointer transition-all active:scale-95"
+                  >
+                    {char}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Question Format 3: MCQ */}
+          {(!currentQ?.type || currentQ.type === "mcq") && (
+            <div className="space-y-2.5">
+              {currentQ?.options.map((opt, oIdx) => {
+                const isSelected = selectedAnswers[currentIndex] === oIdx;
+                return (
+                  <button
+                    key={oIdx}
+                    onClick={() => handleSelectOption(oIdx)}
+                    className={`w-full min-h-[48px] p-3.5 sm:p-4 rounded-xl border text-right font-sans text-xs sm:text-sm transition-all cursor-pointer flex items-center justify-between ${
+                      isSelected
+                        ? "bg-indigo-50 border-indigo-600 text-indigo-900 font-bold shadow-2xs"
+                        : "bg-white border-slate-200 hover:bg-slate-50 text-slate-800 font-medium"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border ${
+                          isSelected
+                            ? "bg-indigo-600 text-white border-indigo-600"
+                            : "bg-slate-100 text-slate-600 border-slate-200"
+                        }`}
+                      >
+                        {String.fromCharCode(65 + oIdx)}
+                      </span>
+                      <span>{opt}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Navigation Buttons */}
+          <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
+            <button
+              onClick={handlePrevious}
+              disabled={currentIndex === 0}
+              className="text-xs font-bold px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 disabled:opacity-40 text-slate-600 transition-colors cursor-pointer flex items-center gap-1.5"
+            >
+              <ArrowRight className="w-4 h-4" />
+              <span>پێشتر</span>
+            </button>
+
+            <button
+              onClick={handleNext}
+              disabled={!isCurrentAnswered}
+              className="text-xs font-bold px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white transition-colors cursor-pointer flex items-center gap-1.5 shadow-xs"
+            >
+              <span>
+                {currentIndex === questions.length - 1 ? "تەواوکردن و ناردن" : "دواتر"}
+              </span>
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 3. RESULTS SCREEN */}
+      {phase === "results" && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-xs space-y-6 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
+            <CheckCircle2 className="w-8 h-8" />
+          </div>
+
+          <div className="space-y-1">
+            <h2 className="font-sans font-black text-2xl text-slate-900">
+              تاقیکردنەوەی {activeSubjectMeta.label} بە سەرکەوتوویی تێپەڕکرا! 🎉
+            </h2>
+            <p className="font-sans text-xs sm:text-sm text-slate-500">
+              ئەمەش ئەنجام و شیکاری لێهاتوویی تۆیە لەسەر بابەتەکانی {activeSubjectMeta.label}:
+            </p>
+          </div>
+
+          {/* Metric Badges */}
+          <div className="grid grid-cols-2 gap-4 max-w-sm mx-auto">
+            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-center">
+              <span className="text-xs text-slate-500 font-sans block">نمرەی بەدەستهاتوو</span>
+              <span className="font-sans font-black text-2xl text-indigo-700">
+                {score} / {questions.length}
+              </span>
+              <span className="text-[11px] text-slate-400 font-mono block mt-0.5">({percentage}%)</span>
+            </div>
+
+            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-center">
+              <span className="text-xs text-slate-500 font-sans block">ئاستی دەستنیشانکراو</span>
+              <span className="font-sans font-black text-lg text-emerald-700 mt-1 block">
+                {percentage >= 80 ? "پێشکەوتوو و باڵا" : percentage >= 50 ? "مامناوەند" : "سەرەتایی"}
+              </span>
+              <span className="text-[10px] text-slate-400 block mt-0.5">بەپێی مەنهەجی {activeSubjectMeta.label}</span>
+            </div>
+          </div>
+
+          {/* Weaknesses and Recommendations Strictly Specific to Active Subject */}
+          <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-4 text-right space-y-2 text-xs font-sans text-slate-700">
+            <span className="font-bold text-amber-900 block">
+              خاڵە پێویستەکان بە پێداچوونەوە لە {activeSubjectMeta.label}:
+            </span>
+            {missedTopics.length > 0 ? (
+              <p>
+                • پێویستت بە بەهێزکردنی تێگەیشتنت لەم بابەتانە هەیە:{" "}
+                <span className="font-bold text-amber-950">{missedTopics.join("، ")}</span>.
+              </p>
+            ) : (
+              <p className="text-emerald-800 font-bold">
+                • ئافەرم! لە تەواوی بابەت و چەمکە سەرەکییەکانی {activeSubjectMeta.label} بە سەرکەوتوویی وەڵامت دایەوە.
+              </p>
+            )}
+            <p className="font-bold text-indigo-700 pt-1">
+              ڕاسپاردەی داهاتوو: بەشداری لە تاقیگەی مەجازی و ڕاهێنانی کارلێککارانە بکە لەسەر {activeSubjectMeta.label}.
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+            <button
+              onClick={handleStart}
+              className="text-xs font-bold px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>دووبارەکردنەوەی تاقیکردنەوە</span>
+            </button>
+
+            <button
+              onClick={onFinish}
+              className="text-xs font-bold px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white transition-colors cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
+            >
+              <span>گەڕانەوە بۆ ماڵەوە</span>
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default AdaptiveAssessment;

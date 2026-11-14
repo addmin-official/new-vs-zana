@@ -2,7 +2,7 @@ export type CurriculumGrade = "9" | "10" | "11" | "12";
 
 export type CurriculumStream = "scientific" | "literary" | "general";
 
-export type CurriculumSubject = "math" | "physics" | "chemistry" | "english";
+export type CurriculumSubject = "math" | "physics" | "chemistry" | "english" | "biology" | "kurdish" | "arabic" | "sports" | "history" | "economy" | "geography";
 
 export type CurriculumDifficulty =
   | "introductory"

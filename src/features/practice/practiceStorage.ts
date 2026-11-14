@@ -1,4 +1,5 @@
 import { PracticeBadge, PracticeProgressState } from "./practiceTypes.ts";
+import { syncStudentProgressToFirestore } from "../student/studentStorage.ts";
 
 const STORAGE_KEY = "zana_practice_progress_v1";
 
@@ -144,6 +145,14 @@ export class PracticeStorage {
     };
 
     this.saveProgress(updatedState);
+    void syncStudentProgressToFirestore({
+      totalScore: updatedState.totalXp,
+      streak: updatedState.currentStreak,
+      completedLessons: updatedState.completedModuleIds.length,
+      unlockedBadgeIds: updatedState.unlockedBadgeIds,
+      completedModuleIds: updatedState.completedModuleIds,
+      lastStudyDate: updatedState.lastPracticeDate,
+    });
     return { newlyUnlockedBadges, updatedState };
   }
 }

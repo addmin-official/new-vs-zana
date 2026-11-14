@@ -1,4 +1,5 @@
 import { PracticeModule } from "./practiceTypes.ts";
+import { SAMPLE_INTERACTIVE_EXERCISES } from "../../data/curriculum/interactiveExercises.ts";
 
 export const PRACTICE_MODULES: PracticeModule[] = [
   // ==========================================
@@ -857,5 +858,117 @@ export const PRACTICE_MODULES: PracticeModule[] = [
         }
       ]
     }
+  },
+
+  // ==========================================
+  // 13. GRADE 12 CHEMISTRY - FILL IN BLANKS (pH)
+  // ==========================================
+  {
+    id: "chem12_ph_fill_in_blank",
+    titleKu: "ڕاهێنانی پڕکردنەوەی شوێنە بەتاڵەکان: پێوەری pH",
+    subtitleKu: "تەواوکردنی دەستەواژە زانستییەکان و هاوکێشەی لۆگاریتمی ترشێتی بە وشەی گونجاو",
+    subject: "chemistry",
+    grade: "12",
+    moduleType: "interactive_exercise",
+    difficulty: "intermediate",
+    estimatedMinutes: 5,
+    xpReward: 95,
+    interactiveExerciseData: SAMPLE_INTERACTIVE_EXERCISES[0],
+  },
+
+  // ==========================================
+  // 14. GRADE 12 MATH - DERIVATIVES MATCHING
+  // ==========================================
+  {
+    id: "math12_derivatives_matching",
+    titleKu: "ڕاهێنانی هاوتاکردنی دوو ستوون: داتاشراوەکانی پۆلی ١٢",
+    subtitleKu: "بەستنەوەی هەر نەخشەیەک بە داتاشراوە تریگۆنۆمێتری و لۆگاریتمییە ڕاستەکەی",
+    subject: "math",
+    grade: "12",
+    moduleType: "interactive_exercise",
+    difficulty: "intermediate",
+    estimatedMinutes: 6,
+    xpReward: 110,
+    interactiveExerciseData: SAMPLE_INTERACTIVE_EXERCISES[1],
+  },
+
+  // ==========================================
+  // 15. GRADE 12 CHEMISTRY - TITRATION SEQUENCING (DRAG & DROP)
+  // ==========================================
+  {
+    id: "chem12_titration_ordering",
+    titleKu: "ڕاهێنانی ڕاکێشان و دابەزاندن: هەنگاوەکانی تیتراسیۆن",
+    subtitleKu: "ڕێکخستنی زنجیرەیی ٥ هەنگاوی کرداری تیتراسیۆن بە ڕاکێشان (Drag & Drop)",
+    subject: "chemistry",
+    grade: "12",
+    moduleType: "interactive_exercise",
+    difficulty: "advanced",
+    estimatedMinutes: 7,
+    xpReward: 125,
+    interactiveExerciseData: SAMPLE_INTERACTIVE_EXERCISES[2],
+  },
+
+  // ==========================================
+  // 16. GRADE 12 CHEMISTRY - EQUILIBRIUM CONCEPT MAP
+  // ==========================================
+  {
+    id: "chem12_equilibrium_concept_map",
+    titleKu: "ڕاهێنانی نەخشەسازی چەمک: پەیوەندی هاوسەنگی و Kw",
+    subtitleKu: "پشکنینی نەخشەی پەیوەندی نێوان [H₃O⁺]، [OH⁻]، pH و pOH لە پلەی ٢٥ پلەی سیلیزی",
+    subject: "chemistry",
+    grade: "12",
+    moduleType: "interactive_exercise",
+    difficulty: "advanced",
+    estimatedMinutes: 8,
+    xpReward: 140,
+    interactiveExerciseData: SAMPLE_INTERACTIVE_EXERCISES[3],
+  },
+
+  // ==========================================
+  // 17. GRADE 12 BIOLOGY - PROTEIN SYNTHESIS ORDERING (DRAG & DROP)
+  // ==========================================
+  {
+    id: "bio12_protein_synthesis_ordering",
+    titleKu: "ڕاهێنانی ڕاکێشان و دابەزاندن: قۆناغەکانی دروستبوونی پڕۆتین",
+    subtitleKu: "ڕیزکردنی هەنگاوەکانی لەبەرگرتنەوە (Transcription) و وەرگێڕان (Translation)",
+    subject: "biology",
+    grade: "12",
+    moduleType: "interactive_exercise",
+    difficulty: "intermediate",
+    estimatedMinutes: 6,
+    xpReward: 115,
+    interactiveExerciseData: SAMPLE_INTERACTIVE_EXERCISES[6],
+  },
+
+  // ==========================================
+  // 18. GRADE 12 ENGLISH - PHRASAL VERBS MATCHING
+  // ==========================================
+  {
+    id: "eng12_phrasal_verbs_matching",
+    titleKu: "ڕاهێنانی هاوتاکردن: کارە لێکدراوەکانی Sunrise 12",
+    subtitleKu: "هاوتاکردنی زاراوە و Phrasal Verbsی پەڕتووکی ئینگلیزی بە واتا دروستەکانیان",
+    subject: "english",
+    grade: "12",
+    moduleType: "interactive_exercise",
+    difficulty: "beginner",
+    estimatedMinutes: 5,
+    xpReward: 90,
+    interactiveExerciseData: SAMPLE_INTERACTIVE_EXERCISES[7],
+  },
+
+  // ==========================================
+  // 19. GRADE 12 PHYSICS - PHOTON ENERGY CONCEPT MAP
+  // ==========================================
+  {
+    id: "phys12_photon_energy_concept_map",
+    titleKu: "ڕاهێنانی نەخشەسازی چەمک: شەپۆلە کارۆموگناتیسییەکان و فۆتۆن",
+    subtitleKu: "دۆزینەوەی پەیوەندی نێوان فرێکوێنسی، درێژی شەپۆل و وزەی فۆتۆن (E = hf)",
+    subject: "physics",
+    grade: "12",
+    moduleType: "interactive_exercise",
+    difficulty: "advanced",
+    estimatedMinutes: 7,
+    xpReward: 130,
+    interactiveExerciseData: SAMPLE_INTERACTIVE_EXERCISES[8],
   }
 ];

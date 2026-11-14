@@ -1,4 +1,5 @@
 import { StudentSession, LearningMode, SessionGoal } from "./types.ts";
+import { CurriculumGrade, CurriculumStream, CurriculumSubject } from "../curriculum/types.ts";
 import { SessionStateEngine } from "./SessionStateEngine.ts";
 
 export class SessionEngine {
@@ -14,9 +15,9 @@ export class SessionEngine {
 
   public startNewSession(
     studentId: string,
-    grade: "9" | "10" | "11" | "12",
-    stream: "scientific" | "literary" | "general",
-    subject: "math" | "physics" | "chemistry" | "english",
+    grade: CurriculumGrade,
+    stream: CurriculumStream,
+    subject: CurriculumSubject,
     initialNodeId: string,
     initialLessonId: string,
     initialConceptId: string,

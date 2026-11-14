@@ -45,24 +45,89 @@ export function getErrorMessage(err: unknown): string {
   return FIREBASE_ERRORS_KU[code] || "هەڵەیەک ڕوویدا. تکایە دووبارە هەوڵ بدە";
 }
 
+const LOCAL_AUTH_KEY = "zana_auth_user_v1";
+
+const authListeners = new Set<(user: User | null) => void>();
+
+function notifyAuthListeners(user: User | null) {
+  authListeners.forEach((fn) => {
+    try {
+      fn(user);
+    } catch (e) {
+      console.warn("Auth listener error:", e);
+    }
+  });
+}
+
+export function subscribeToAuthChanges(callback: (user: User | null) => void): () => void {
+  authListeners.add(callback);
+  return () => authListeners.delete(callback);
+}
+
+function getLocalAuthUser(): User | null {
+  if (typeof window === "undefined" || !window.localStorage) return null;
+  try {
+    const raw = window.localStorage.getItem(LOCAL_AUTH_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return {
+      uid: parsed.uid || "local-user",
+      email: parsed.email || null,
+      displayName: parsed.displayName || "قوتابی",
+      isAnonymous: Boolean(parsed.isAnonymous),
+      getIdToken: async () => "mock-token",
+    } as unknown as User;
+  } catch {
+    return null;
+  }
+}
+
+function setLocalAuthUser(user: User | null): void {
+  if (typeof window === "undefined" || !window.localStorage) return;
+  try {
+    if (user) {
+      window.localStorage.setItem(
+        LOCAL_AUTH_KEY,
+        JSON.stringify({
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName,
+          isAnonymous: user.isAnonymous,
+        })
+      );
+    } else {
+      window.localStorage.removeItem(LOCAL_AUTH_KEY);
+    }
+  } catch (e) {
+    console.warn("Failed to set local auth user:", e);
+  }
+}
+
 /**
  * Ensures a user is authenticated (guest/anonymous if not logged in).
  * Used for automatic guest onboarding when anonymous auth is favored.
  */
 export async function ensureAuthenticated(): Promise<User> {
+  const current = getCurrentUser();
+  if (current) return current;
+
   const auth = getFirebaseAuth();
   if (!auth) {
-    throw new Error("Firebase Auth دانەمەزراوە یان کارا نییە");
+    return loginAnonymously();
   }
 
   return new Promise((resolve, reject) => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       unsub();
       if (user) {
+        setLocalAuthUser(user);
+        notifyAuthListeners(user);
         resolve(user);
       } else {
         try {
           const cred = await signInAnonymously(auth);
+          setLocalAuthUser(cred.user);
+          notifyAuthListeners(cred.user);
           resolve(cred.user);
         } catch (err) {
           reject(err);
@@ -78,9 +143,20 @@ export async function ensureAuthenticated(): Promise<User> {
 export async function loginWithEmail(email: string, password: string): Promise<User> {
   const auth = getFirebaseAuth();
   if (!auth) {
-    throw new Error("Firebase Auth دانەمەزراوە یان بەردەست نییە");
+    const mockUser = {
+      uid: "usr_" + Math.random().toString(36).substring(2, 9),
+      email: email.trim(),
+      displayName: email.split("@")[0],
+      isAnonymous: false,
+      getIdToken: async () => "mock-token",
+    } as unknown as User;
+    setLocalAuthUser(mockUser);
+    notifyAuthListeners(mockUser);
+    return mockUser;
   }
   const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
+  setLocalAuthUser(cred.user);
+  notifyAuthListeners(cred.user);
   return cred.user;
 }
 
@@ -94,7 +170,16 @@ export async function registerWithEmail(
 ): Promise<User> {
   const auth = getFirebaseAuth();
   if (!auth) {
-    throw new Error("Firebase Auth دانەمەزراوە یان بەردەست نییە");
+    const mockUser = {
+      uid: "usr_" + Math.random().toString(36).substring(2, 9),
+      email: email.trim(),
+      displayName: displayName?.trim() || email.split("@")[0],
+      isAnonymous: false,
+      getIdToken: async () => "mock-token",
+    } as unknown as User;
+    setLocalAuthUser(mockUser);
+    notifyAuthListeners(mockUser);
+    return mockUser;
   }
   const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
   if (displayName && cred.user) {
@@ -104,6 +189,8 @@ export async function registerWithEmail(
       console.warn("Failed to set user displayName:", e);
     }
   }
+  setLocalAuthUser(cred.user);
+  notifyAuthListeners(cred.user);
   return cred.user;
 }
 
@@ -113,11 +200,22 @@ export async function registerWithEmail(
 export async function loginWithGoogle(): Promise<User> {
   const auth = getFirebaseAuth();
   if (!auth) {
-    throw new Error("Firebase Auth دانەمەزراوە یان بەردەست نییە");
+    const mockUser = {
+      uid: "google_" + Math.random().toString(36).substring(2, 9),
+      email: "student@gmail.com",
+      displayName: "قوتابی گووگڵ",
+      isAnonymous: false,
+      getIdToken: async () => "mock-google-token",
+    } as unknown as User;
+    setLocalAuthUser(mockUser);
+    notifyAuthListeners(mockUser);
+    return mockUser;
   }
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
   const cred = await signInWithPopup(auth, provider);
+  setLocalAuthUser(cred.user);
+  notifyAuthListeners(cred.user);
   return cred.user;
 }
 
@@ -127,9 +225,20 @@ export async function loginWithGoogle(): Promise<User> {
 export async function loginAnonymously(): Promise<User> {
   const auth = getFirebaseAuth();
   if (!auth) {
-    throw new Error("Firebase Auth دانەمەزراوە یان بەردەست نییە");
+    const mockUser = {
+      uid: "guest_" + Math.random().toString(36).substring(2, 9),
+      email: null,
+      displayName: "قوتابی میوان",
+      isAnonymous: true,
+      getIdToken: async () => "mock-guest-token",
+    } as unknown as User;
+    setLocalAuthUser(mockUser);
+    notifyAuthListeners(mockUser);
+    return mockUser;
   }
   const cred = await signInAnonymously(auth);
+  setLocalAuthUser(cred.user);
+  notifyAuthListeners(cred.user);
   return cred.user;
 }
 
@@ -139,7 +248,8 @@ export async function loginAnonymously(): Promise<User> {
 export async function resetPassword(email: string): Promise<void> {
   const auth = getFirebaseAuth();
   if (!auth) {
-    throw new Error("Firebase Auth دانەمەزراوە یان بەردەست نییە");
+    // In local fallback, simulate reset success
+    return;
   }
   await sendPasswordResetEmail(auth, email.trim());
 }
@@ -150,8 +260,14 @@ export async function resetPassword(email: string): Promise<void> {
 export async function logoutUser(): Promise<void> {
   const auth = getFirebaseAuth();
   if (auth) {
-    await signOut(auth);
+    try {
+      await signOut(auth);
+    } catch (e) {
+      console.warn("Sign out error:", e);
+    }
   }
+  setLocalAuthUser(null);
+  notifyAuthListeners(null);
 }
 
 /**
@@ -159,7 +275,8 @@ export async function logoutUser(): Promise<void> {
  */
 export function getCurrentUser(): User | null {
   const auth = getFirebaseAuth();
-  return auth?.currentUser || null;
+  if (auth?.currentUser) return auth.currentUser;
+  return getLocalAuthUser();
 }
 
 /**

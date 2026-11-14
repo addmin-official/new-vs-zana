@@ -5,8 +5,10 @@ import { getStudentProfile, saveStudentProfile, deleteStudentProfile } from "../
 export interface ChatMessage {
   id: string;
   sender: "user" | "zana";
-  text: string;
+  content: string;
+  text?: string;
   timestamp: string;
+  chapterId?: string | number;
   isEducational?: boolean;
 }
 
@@ -109,7 +111,7 @@ export const ZanaStorage = {
       name: "",
       grade: "12",
       stream: "general",
-      activeSubject: "math",
+      activeSubject: "chemistry",
       level: "intermediate",
       onboardingCompleted: false,
       createdAt: new Date().toISOString(),
@@ -126,12 +128,29 @@ export const ZanaStorage = {
   // Chat
   getChatMessages(subjectId: string): ChatMessage[] {
     const key = `${STORAGE_KEYS.CHAT_MESSAGES_PREFIX}${subjectId}`;
-    return safeGet<ChatMessage[]>(key, []);
+    const raw = safeGet<Record<string, unknown>[]>(key, []);
+    return raw.map((item) => {
+      const content = String(item.content || item.text || "");
+      return {
+        id: String(item.id || `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`),
+        sender: ((item.sender === "bot" ? "zana" : item.sender) as "user" | "zana") || "zana",
+        content,
+        text: String(item.text || content),
+        timestamp: String(item.timestamp || new Date().toLocaleTimeString("ku-IQ", { hour: "2-digit", minute: "2-digit" })),
+        chapterId: item.chapterId as string | number | undefined,
+        isEducational: Boolean(item.isEducational),
+      };
+    });
   },
 
   saveChatMessages(subjectId: string, messages: ChatMessage[]): void {
     const key = `${STORAGE_KEYS.CHAT_MESSAGES_PREFIX}${subjectId}`;
-    safeSet<ChatMessage[]>(key, messages);
+    const normalized = messages.map((m) => ({
+      ...m,
+      text: m.text || m.content,
+      content: m.content || m.text || "",
+    }));
+    safeSet<ChatMessage[]>(key, normalized);
   },
 
   clearChatMessages(subjectId: string): void {
