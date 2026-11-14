@@ -456,6 +456,65 @@ export function parseAnswerSubmission(value: unknown): AnswerSubmission {
   };
 }
 
+export interface SubscriptionStatusResult {
+  status: "trial" | "active" | "expired";
+}
+
+export async function checkSubscription(
+  env: Env,
+  userId: string
+): Promise<SubscriptionStatusResult> {
+  if (!env.DB) {
+    return { status: "trial" };
+  }
+
+  const now = Date.now();
+  const trialDurationMs = 3 * 24 * 60 * 60 * 1000; // 3 days
+
+  try {
+    const stmt = env.DB.prepare(
+      "SELECT user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at FROM subscriptions WHERE user_id = ?"
+    );
+    const sub = await stmt.bind(userId).first<{
+      user_id: string;
+      status: string;
+      trial_started_at: number;
+      trial_ends_at: number;
+      plan_id: string | null;
+      updated_at: number;
+    }>();
+
+    if (!sub) {
+      const trialEndsAt = now + trialDurationMs;
+      await env.DB.prepare(
+        "INSERT INTO subscriptions (user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at) VALUES (?, 'trial', ?, ?, NULL, ?)"
+      ).bind(userId, now, trialEndsAt, now).run();
+
+      return { status: "trial" };
+    }
+
+    if (sub.status === "active") {
+      return { status: "active" };
+    }
+
+    if (sub.status === "trial") {
+      if (now > sub.trial_ends_at) {
+        await env.DB.prepare(
+          "UPDATE subscriptions SET status = 'expired', updated_at = ? WHERE user_id = ?"
+        ).bind(now, userId).run();
+
+        return { status: "expired" };
+      }
+      return { status: "trial" };
+    }
+
+    return { status: "expired" };
+  } catch (err) {
+    console.error("[checkSubscription Error]", err);
+    return { status: "trial" };
+  }
+}
+
 async function getWorkerAuthenticatedStudentId(req: Request, env: Env): Promise<string> {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -815,6 +874,40 @@ export default {
 
         if (!env.GEMINI_API_KEY || !env.GEMINI_API_KEY.trim()) {
           throw new Error("GEMINI_API_KEY is required.");
+        }
+
+        let userId: string | null = null;
+        if (authHeader && authHeader.startsWith("Bearer ")) {
+          const token = authHeader.substring(7).trim();
+          if (token && token !== "null" && token !== "undefined") {
+            try {
+              const claims = await AuthService.verifyFirebaseIdToken(token, env.FIREBASE_PROJECT_ID || "gen-lang-client-0009572581");
+              userId = claims.uid || null;
+            } catch {
+              if (
+                request.headers.get("X-CI-Test") === "true" ||
+                (typeof process !== "undefined" && (process.env?.NODE_ENV === "test" || process.env?.ZANA_ENV === "test"))
+              ) {
+                userId = token;
+              }
+            }
+          }
+        }
+
+        if (userId) {
+          const sub = await checkSubscription(env, userId);
+          if (sub.status === "expired") {
+            return new Response(
+              JSON.stringify({
+                error: "TRIAL_EXPIRED",
+                message: "تکایە بەشداری بکە بۆ بەردەوامبوون",
+              }),
+              {
+                status: 403,
+                headers: responseHeaders,
+              }
+            );
+          }
         }
 
         const chatResult = await ProviderAdapter.chat(env.GEMINI_API_KEY, chatReq, env);
@@ -2012,6 +2105,137 @@ export default {
           return new Response(
             JSON.stringify({ ok: false, error: (err as Error).message }),
             { status: 400, headers: responseHeaders }
+          );
+        }
+      }
+
+      // GET /api/admin/subscriptions
+      if (pathname === "/api/admin/subscriptions" && request.method === "GET") {
+        if (!env.DB) {
+          return new Response(JSON.stringify({ error: "DB binding not configured" }), {
+            status: 500,
+            headers: responseHeaders,
+          });
+        }
+        try {
+          let res: { results?: unknown[] } | null = null;
+          try {
+            res = await env.DB.prepare(
+              `SELECT s.user_id, s.status, s.trial_started_at, s.trial_ends_at, s.plan_id, s.updated_at,
+                      COALESCE(st.name, '') as user_name, COALESCE(st.email, '') as user_email
+               FROM subscriptions s
+               LEFT JOIN students st ON s.user_id = st.id
+               ORDER BY s.updated_at DESC LIMIT 200`
+            ).bind().all<unknown>();
+          } catch {
+            res = await env.DB.prepare(
+              "SELECT user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at FROM subscriptions ORDER BY updated_at DESC LIMIT 200"
+            ).bind().all<unknown>();
+          }
+          return new Response(
+            JSON.stringify({ ok: true, subscriptions: res?.results || [] }),
+            { status: 200, headers: responseHeaders }
+          );
+        } catch (dbErr: unknown) {
+          return new Response(
+            JSON.stringify({ error: "DATABASE_ERROR", detail: (dbErr as Error)?.message || String(dbErr) }),
+            { status: 500, headers: responseHeaders }
+          );
+        }
+      }
+
+      // POST /api/admin/subscriptions/activate
+      if (pathname === "/api/admin/subscriptions/activate" && request.method === "POST") {
+        if (!env.DB) {
+          return new Response(JSON.stringify({ error: "DB binding not configured" }), {
+            status: 500,
+            headers: responseHeaders,
+          });
+        }
+        try {
+          const body = (await request.json().catch(() => ({}))) as { userId?: string; planId?: string };
+          const targetUserId = body?.userId?.trim();
+          const planId = body?.planId === "yearly" ? "yearly" : "monthly";
+
+          if (!targetUserId) {
+            return new Response(JSON.stringify({ error: "userId is required" }), {
+              status: 400,
+              headers: responseHeaders,
+            });
+          }
+
+          const now = Date.now();
+          const durationMs = planId === "yearly" ? 365 * 24 * 60 * 60 * 1000 : 30 * 24 * 60 * 60 * 1000;
+          const endsAt = now + durationMs;
+
+          await env.DB.prepare(
+            `INSERT INTO subscriptions (user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at)
+             VALUES (?, 'active', ?, ?, ?, ?)
+             ON CONFLICT(user_id) DO UPDATE SET
+               status = 'active',
+               plan_id = excluded.plan_id,
+               trial_ends_at = excluded.trial_ends_at,
+               updated_at = excluded.updated_at`
+          ).bind(targetUserId, now, endsAt, planId, now).run();
+
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              message: `هەژماری (${targetUserId}) بە سەرکەوتوویی بۆ ماوەی (${planId === "yearly" ? "ساڵانە" : "مانگانە"}) کرا بە Active.`,
+            }),
+            { status: 200, headers: responseHeaders }
+          );
+        } catch (dbErr: unknown) {
+          return new Response(
+            JSON.stringify({ error: "DATABASE_ERROR", detail: (dbErr as Error)?.message || String(dbErr) }),
+            { status: 500, headers: responseHeaders }
+          );
+        }
+      }
+
+      // POST /api/admin/subscriptions/reset-trial
+      if (pathname === "/api/admin/subscriptions/reset-trial" && request.method === "POST") {
+        if (!env.DB) {
+          return new Response(JSON.stringify({ error: "DB binding not configured" }), {
+            status: 500,
+            headers: responseHeaders,
+          });
+        }
+        try {
+          const body = (await request.json().catch(() => ({}))) as { userId?: string };
+          const targetUserId = body?.userId?.trim();
+
+          if (!targetUserId) {
+            return new Response(JSON.stringify({ error: "userId is required" }), {
+              status: 400,
+              headers: responseHeaders,
+            });
+          }
+
+          const now = Date.now();
+          const trialEndsAt = now + 3 * 24 * 60 * 60 * 1000;
+
+          await env.DB.prepare(
+            `INSERT INTO subscriptions (user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at)
+             VALUES (?, 'trial', ?, ?, NULL, ?)
+             ON CONFLICT(user_id) DO UPDATE SET
+               status = 'trial',
+               plan_id = NULL,
+               trial_ends_at = excluded.trial_ends_at,
+               updated_at = excluded.updated_at`
+          ).bind(targetUserId, now, trialEndsAt, now).run();
+
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              message: `ماوەی تاقیکردنەوەی هەژماری (${targetUserId}) بە سەرکەوتوویی بۆ ٣ ڕۆژ نوێکرایەوە.`,
+            }),
+            { status: 200, headers: responseHeaders }
+          );
+        } catch (dbErr: unknown) {
+          return new Response(
+            JSON.stringify({ error: "DATABASE_ERROR", detail: (dbErr as Error)?.message || String(dbErr) }),
+            { status: 500, headers: responseHeaders }
           );
         }
       }

@@ -102,3 +102,44 @@ export async function getAdminAuditLog() {
   return res.json();
 }
 
+export interface SubscriptionRecord {
+  user_id: string;
+  status: "trial" | "active" | "expired";
+  trial_started_at: number;
+  trial_ends_at: number;
+  plan_id: string | null;
+  updated_at: number;
+  user_name?: string | null;
+  user_email?: string | null;
+}
+
+export async function getAdminSubscriptions(): Promise<{ ok: boolean; subscriptions: SubscriptionRecord[] }> {
+  const res = await adminFetch("/api/admin/subscriptions");
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function activateUserSubscription(
+  userId: string,
+  planId: "monthly" | "yearly" = "monthly"
+): Promise<{ ok: boolean; message: string }> {
+  const res = await adminFetch("/api/admin/subscriptions/activate", {
+    method: "POST",
+    body: JSON.stringify({ userId, planId }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function resetUserTrial(
+  userId: string
+): Promise<{ ok: boolean; message: string }> {
+  const res = await adminFetch("/api/admin/subscriptions/reset-trial", {
+    method: "POST",
+    body: JSON.stringify({ userId }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+

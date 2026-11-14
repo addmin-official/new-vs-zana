@@ -25,6 +25,11 @@ import {
  Zap,
  X,
  RefreshCw,
+ CreditCard,
+ UserCheck,
+ User,
+ Mail,
+ Copy,
 } from "lucide-react";
 import { InternalBrainService } from "../../core/brain/InternalBrainService";
 import {
@@ -35,6 +40,10 @@ import {
   executeAdminCommand,
   rollbackAdminCommand,
   getAdminAuditLog,
+  getAdminSubscriptions,
+  activateUserSubscription,
+  resetUserTrial,
+  type SubscriptionRecord,
 } from "../../services/adminApi.ts";
 import { useIsAdmin } from "../../hooks/useIsAdmin.ts";
 import {
@@ -63,7 +72,8 @@ type BrainSubTab =
  | "files_memory"
  | "eval_golden"
  | "qa"
- | "architecture";
+ | "architecture"
+ | "subscriptions";
 
 export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
  const brain = InternalBrainService.getInstance();
@@ -129,6 +139,68 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
  answerEn: string;
  recommendedCommandKu?: string;
  } | null>(null);
+
+ // Subscriptions state
+ const [subscriptions, setSubscriptions] = useState<SubscriptionRecord[]>([]);
+ const [isLoadingSubs, setIsLoadingSubs] = useState(false);
+ const [subActionMessage, setSubActionMessage] = useState<string | null>(null);
+ const [searchSubQuery, setSearchSubQuery] = useState("");
+ const [subStatusFilter, setSubStatusFilter] = useState<"all" | "active" | "trial" | "expired">("all");
+ const [manualUserId, setManualUserId] = useState("");
+ const [manualPlan, setManualPlan] = useState<"monthly" | "yearly">("monthly");
+ const [copiedId, setCopiedId] = useState<string | null>(null);
+
+ const loadSubscriptions = async () => {
+  setIsLoadingSubs(true);
+  setSubActionMessage(null);
+  try {
+   const data = await getAdminSubscriptions();
+   if (data && data.subscriptions) {
+    setSubscriptions(data.subscriptions);
+   }
+  } catch (err: unknown) {
+   console.warn("[BrainAdminDashboard] Failed to load subscriptions:", err);
+  } finally {
+   setIsLoadingSubs(false);
+  }
+ };
+
+ const handleActivateUser = async (targetUserId: string, plan: "monthly" | "yearly") => {
+  if (!targetUserId.trim()) {
+   alert("تکایە سەرەتا ناسنامەی بەکارهێنەر (User ID) دیاری بکە.");
+   return;
+  }
+  try {
+   const res = await activateUserSubscription(targetUserId.trim(), plan);
+   setSubActionMessage(res.message || `هەژماری (${targetUserId}) بە سەرکەوتوویی کرا بە Active.`);
+   await loadSubscriptions();
+  } catch (err: unknown) {
+   const msg = err instanceof Error ? err.message : String(err);
+   alert(`هەڵە لە کاراکردن: ${msg}`);
+  }
+ };
+
+ const handleResetTrial = async (targetUserId: string) => {
+  if (!targetUserId.trim()) {
+   alert("تکایە سەرەتا ناسنامەی بەکارهێنەر (User ID) دیاری بکە.");
+   return;
+  }
+  try {
+   const res = await resetUserTrial(targetUserId.trim());
+   setSubActionMessage(res.message || `تاقیکردنەوە بە سەرکەوتوویی بۆ ٣ ڕۆژ نوێکرایەوە.`);
+   await loadSubscriptions();
+  } catch (err: unknown) {
+   const msg = err instanceof Error ? err.message : String(err);
+   alert(`هەڵە لە نوێکردنەوەی تاقیکردنەوە: ${msg}`);
+  }
+ };
+
+ // Load subscriptions when tab switches to subscriptions
+ useEffect(() => {
+  if (activeSubTab === "subscriptions") {
+   void loadSubscriptions();
+  }
+ }, [activeSubTab]);
 
  // Auto-refresh observability snapshot periodically
  useEffect(() => {
@@ -505,6 +577,7 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
  { id: "eval_golden", label: "پێوەرەکان و تاقیکردنەوەی زێڕین (KPIs & Golden Tests)", icon: CheckSquare },
  { id: "qa", label: "پرسیار و پشکنین (چی شکستی؟ بۆچی؟)", icon: HelpCircle },
  { id: "architecture", label: "تەلارسازیی جیهانی (Architecture Map)", icon: Workflow },
+ { id: "subscriptions", label: "بەشداریکردن و فاستپەی (Subscriptions)", icon: CreditCard },
  ].map((tab) => {
  const Icon = tab.icon;
  const isSel = activeSubTab === tab.id;
@@ -1643,6 +1716,339 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
  </div>
  </div>
  </div>
+ )}
+
+ {activeSubTab === "subscriptions" && (
+  <div className="space-y-6">
+  {/* Header with Title and Refresh Button */}
+  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
+   <div>
+   <h2 className="text-lg font-bold flex items-center gap-2 text-white">
+    <CreditCard className="w-5 h-5 text-blue-400" />
+    <span>بەڕێوەبردنی بەشداریکردن و فاستپەی (Subscriptions Hub)</span>
+   </h2>
+   <p className="text-xs text-slate-400 dark:text-slate-300 mt-1">
+    کاراکردنی دەستبەجێی هەژماری قوتابیان بە یەک کلیک پاش ناردنی پارە و پسوولەی فاستپەی
+   </p>
+   </div>
+
+   <button
+   type="button"
+   onClick={loadSubscriptions}
+   disabled={isLoadingSubs}
+   className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition border border-slate-700 cursor-pointer disabled:opacity-50"
+   >
+   <RefreshCw className={`w-3.5 h-3.5 ${isLoadingSubs ? "animate-spin" : ""}`} />
+   <span>نوێکردنەوەی داتا</span>
+   </button>
+  </div>
+
+  {/* Subscriptions Metrics Bar (4-Grid) */}
+  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+   <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
+   <span className="text-[11px] font-bold text-slate-400 block">کۆی گشتی بەکارهێنەران</span>
+   <span className="text-xl font-mono font-black text-white">{subscriptions.length}</span>
+   </div>
+   <div className="bg-slate-900 border border-emerald-900/40 rounded-xl p-3.5">
+   <span className="text-[11px] font-bold text-emerald-400 block">بەشداربووی کارا (Active)</span>
+   <span className="text-xl font-mono font-black text-emerald-400">
+    {subscriptions.filter((s) => s.status === "active").length}
+   </span>
+   </div>
+   <div className="bg-slate-900 border border-blue-900/40 rounded-xl p-3.5">
+   <span className="text-[11px] font-bold text-blue-400 block">تاقیکردنەوە (Trial)</span>
+   <span className="text-xl font-mono font-black text-blue-400">
+    {subscriptions.filter((s) => s.status === "trial").length}
+   </span>
+   </div>
+   <div className="bg-slate-900 border border-rose-900/40 rounded-xl p-3.5">
+   <span className="text-[11px] font-bold text-rose-400 block">بەسەرچوو (Expired)</span>
+   <span className="text-xl font-mono font-black text-rose-400">
+    {subscriptions.filter((s) => s.status === "expired").length}
+   </span>
+   </div>
+  </div>
+
+  {/* Quick 1-Click Activation Panel */}
+  <div className="bg-slate-900 border border-blue-900/50 rounded-2xl p-5 space-y-4">
+   <div className="flex items-center gap-2">
+   <UserCheck className="w-5 h-5 text-blue-400" />
+   <h3 className="font-bold text-sm text-white">کاراکردنی خێرا بە یەک کلیک (Manual 1-Click Activation)</h3>
+   </div>
+   <p className="text-xs text-slate-400 leading-relaxed">
+   کاتێک قوتابی لە واتسئەپ وێنەی پسوولەی فاستپەی و User ID دەنێرێت، لێرە ناسنامەکەی دابنێ و کلیک لەسەر کاراکردن بکە:
+   </p>
+
+   {subActionMessage && (
+   <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center justify-between">
+    <span>✓ {subActionMessage}</span>
+    <button type="button" onClick={() => setSubActionMessage(null)} className="text-slate-400 hover:text-white">✕</button>
+   </div>
+   )}
+
+   <div className="flex flex-col sm:flex-row gap-3">
+   <div className="flex-1">
+    <input
+    type="text"
+    value={manualUserId}
+    onChange={(e) => setManualUserId(e.target.value)}
+    placeholder="ناسنامەی بەکارهێنەر بنووسە یان لکێنە (Firebase User ID)..."
+    className="w-full h-11 px-4 rounded-xl bg-slate-950 border border-slate-700 text-white font-mono text-xs placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
+    dir="ltr"
+    />
+   </div>
+
+   <div className="flex items-center gap-2">
+    <select
+    value={manualPlan}
+    onChange={(e) => setManualPlan(e.target.value as "monthly" | "yearly")}
+    className="h-11 px-3 rounded-xl bg-slate-950 border border-slate-700 text-white text-xs font-bold focus:outline-none focus:border-blue-500"
+    >
+    <option value="monthly">پلانی مانگانە (٣٠ ڕۆژ)</option>
+    <option value="yearly">پلانی ساڵانە (٣٦٥ ڕۆژ)</option>
+    </select>
+
+    <button
+    type="button"
+    onClick={() => handleActivateUser(manualUserId, manualPlan)}
+    disabled={!manualUserId.trim()}
+    className="h-11 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-md shadow-emerald-600/20 shrink-0"
+    >
+    <Check className="w-4 h-4" />
+    <span>ئەکتیڤکردن (Active)</span>
+    </button>
+
+    <button
+    type="button"
+    onClick={() => handleResetTrial(manualUserId)}
+    disabled={!manualUserId.trim()}
+    className="h-11 px-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+    >
+    <RotateCcw className="w-3.5 h-3.5" />
+    <span>نوێکردنەوەی تاقیکردنەوە</span>
+    </button>
+   </div>
+   </div>
+  </div>
+
+  {/* Subscriptions Table with Search by Name, Email, and User ID */}
+  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-4">
+   {/* Search Bar & Status Filter Bar */}
+   <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+   <div className="flex-1 relative">
+    <Search className="w-4 h-4 text-slate-400 absolute top-3 right-3 pointer-events-none" />
+    <input
+    type="text"
+    value={searchSubQuery}
+    onChange={(e) => setSearchSubQuery(e.target.value)}
+    placeholder="گەڕان بەپێی ناوی قوتابی، ئیمەیڵ، ناسنامە (User ID)..."
+    className="w-full h-10 pr-10 pl-9 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs placeholder:text-slate-400 focus:outline-none focus:border-blue-500 transition"
+    />
+    {searchSubQuery && (
+    <button
+     type="button"
+     onClick={() => setSearchSubQuery("")}
+     className="absolute left-3 top-2.5 text-slate-400 hover:text-white text-xs p-1 cursor-pointer"
+     title="سڕینەوەی دەقی گەڕان"
+    >
+     ✕
+    </button>
+    )}
+   </div>
+
+   {/* Status Filter Chips */}
+   <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 no-scrollbar">
+    {[
+    { id: "all", label: "هەمووان" },
+    { id: "active", label: "کارا (Active)" },
+    { id: "trial", label: "تاقیکردنەوە (Trial)" },
+    { id: "expired", label: "بەسەرچوو (Expired)" },
+    ].map((tab) => {
+    const isActive = subStatusFilter === tab.id;
+    return (
+     <button
+     key={tab.id}
+     type="button"
+     onClick={() => setSubStatusFilter(tab.id as "all" | "active" | "trial" | "expired")}
+     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+      isActive
+      ? "bg-blue-600 text-white shadow-sm"
+      : "bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700"
+     }`}
+     >
+     {tab.label}
+     </button>
+    );
+    })}
+   </div>
+   </div>
+
+   {/* Table Info & Match Count */}
+   {(() => {
+   const filteredSubs = subscriptions.filter((s) => {
+    // status filter
+    if (subStatusFilter !== "all") {
+    const isExpired = s.status === "expired" || (s.status === "trial" && Date.now() > s.trial_ends_at);
+    const effectiveStatus = s.status === "active" ? "active" : isExpired ? "expired" : "trial";
+    if (effectiveStatus !== subStatusFilter) return false;
+    }
+    // text search
+    if (!searchSubQuery.trim()) return true;
+    const q = searchSubQuery.toLowerCase().trim();
+    const matchId = s.user_id.toLowerCase().includes(q);
+    const matchStatus = s.status.toLowerCase().includes(q);
+    const matchName = (s.user_name || "").toLowerCase().includes(q);
+    const matchEmail = (s.user_email || "").toLowerCase().includes(q);
+    return matchId || matchStatus || matchName || matchEmail;
+   });
+
+   return (
+    <>
+    <div className="flex items-center justify-between text-xs text-slate-400">
+     <span>لیستی بەشداربووان لە داتابەیس (D1 Subscriptions)</span>
+     <span className="text-[11px] font-bold text-slate-300 bg-slate-800 px-2.5 py-0.5 rounded-md">
+     {filteredSubs.length} قوتابی دۆزرایەوە
+     </span>
+    </div>
+
+    {/* Table */}
+    <div className="overflow-x-auto">
+     <table className="w-full text-right text-xs">
+      <thead>
+      <tr className="border-b border-slate-800 text-slate-400 text-[11px]">
+       <th className="py-2.5 px-3">قوتابی (ناو و ئیمەیڵ)</th>
+       <th className="py-2.5 px-3">User ID</th>
+       <th className="py-2.5 px-3">دۆخی هەژمار</th>
+       <th className="py-2.5 px-3">پلان</th>
+       <th className="py-2.5 px-3">کۆتایی بەشداریکردن</th>
+       <th className="py-2.5 px-3">دواین چالاکی</th>
+       <th className="py-2.5 px-3 text-center">کرداری خێرا (1-Click)</th>
+      </tr>
+      </thead>
+      <tbody className="divide-y divide-slate-800/60 font-mono">
+      {filteredSubs.map((s) => {
+       const isExpired = s.status === "expired" || (s.status === "trial" && Date.now() > s.trial_ends_at);
+       const displayStatus = s.status === "active" ? "active" : isExpired ? "expired" : "trial";
+
+       return (
+        <tr key={s.user_id} className="hover:bg-slate-800/40 transition">
+        <td className="py-3 px-3 font-sans">
+         <div className="space-y-0.5">
+         <div className="font-bold text-xs text-white flex items-center gap-1.5">
+          <User className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+          <span>{s.user_name || "قوتابی تۆمارکراو"}</span>
+         </div>
+         {s.user_email ? (
+          <div className="text-[11px] text-slate-400 font-mono flex items-center gap-1" dir="ltr">
+          <Mail className="w-3 h-3 text-slate-500 shrink-0" />
+          <span>{s.user_email}</span>
+          </div>
+         ) : (
+          <span className="text-[10px] text-slate-500 italic block">
+          (بێ ئیمەیڵی تۆمارکراو)
+          </span>
+         )}
+         </div>
+        </td>
+        <td className="py-3 px-3">
+         <div className="flex items-center gap-1.5 font-mono text-[11px] text-slate-300">
+         <span>{s.user_id.length > 16 ? `${s.user_id.substring(0, 14)}...` : s.user_id}</span>
+         <button
+          type="button"
+          onClick={() => {
+          void navigator.clipboard.writeText(s.user_id);
+          setCopiedId(s.user_id);
+          setTimeout(() => setCopiedId(null), 2000);
+          }}
+          className="text-slate-500 hover:text-slate-300 cursor-pointer"
+          title="کۆپیکردنی تەواوی User ID"
+         >
+          {copiedId === s.user_id ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+         </button>
+         <button
+          type="button"
+          onClick={() => setManualUserId(s.user_id)}
+          className="text-[10px] text-blue-400 hover:text-blue-300 px-1 py-0.5 rounded bg-blue-950/60 border border-blue-800/60 cursor-pointer font-sans"
+          title="دانان لە خانەی کاراکردنی خێرا"
+         >
+          دیاریکردن
+         </button>
+         </div>
+        </td>
+        <td className="py-3 px-3">
+         {displayStatus === "active" && (
+          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+          کارا (Active)
+          </span>
+         )}
+         {displayStatus === "trial" && (
+          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">
+          تاقیکردنەوە (Trial)
+          </span>
+         )}
+         {displayStatus === "expired" && (
+          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">
+          بەسەرچوو (Expired)
+          </span>
+         )}
+        </td>
+        <td className="py-3 px-3 text-slate-300 font-sans">
+         {s.plan_id === "yearly" ? "ساڵانە" : s.plan_id === "monthly" ? "مانگانە" : "—"}
+        </td>
+        <td className="py-3 px-3 text-slate-400 text-[11px]">
+         {new Date(s.trial_ends_at).toLocaleDateString("en-GB")}
+        </td>
+        <td className="py-3 px-3 text-slate-500 text-[11px]">
+         {new Date(s.updated_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+        </td>
+        <td className="py-3 px-3 text-center">
+         <div className="flex items-center justify-center gap-1.5 font-sans">
+         <button
+          type="button"
+          onClick={() => handleActivateUser(s.user_id, "monthly")}
+          className="px-2.5 py-1 rounded-lg bg-emerald-600/30 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/40 text-[10px] font-bold transition cursor-pointer"
+         >
+          کاراکردن (مانگانە)
+         </button>
+         <button
+          type="button"
+          onClick={() => handleActivateUser(s.user_id, "yearly")}
+          className="px-2.5 py-1 rounded-lg bg-blue-600/30 hover:bg-blue-600 text-blue-300 hover:text-white border border-blue-500/40 text-[10px] font-bold transition cursor-pointer"
+         >
+          کاراکردن (ساڵانە)
+         </button>
+         <button
+          type="button"
+          onClick={() => handleResetTrial(s.user_id)}
+          className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 border border-slate-700 text-[10px] font-bold transition cursor-pointer"
+          title="نوێکردنەوە بۆ ٣ ڕۆژی تاقیکردنەوە"
+         >
+          نوێکردنەوە
+         </button>
+         </div>
+        </td>
+        </tr>
+       );
+      })}
+      {filteredSubs.length === 0 && (
+       <tr>
+        <td colSpan={7} className="text-center py-8 text-slate-500 font-sans text-xs">
+        {isLoadingSubs
+         ? "داتاکان لە بارکردندان..."
+         : searchSubQuery.trim()
+         ? `هیچ بەشداربوویەک بە گەڕانی "${searchSubQuery}" نەدۆزرایەوە.`
+         : "هیچ تۆمارێکی بەشداریکردن نەدۆزرایەوە."}
+        </td>
+       </tr>
+      )}
+      </tbody>
+     </table>
+    </div>
+    </>
+   );
+   })()}
+  </div>
+  </div>
  )}
 
  </main>

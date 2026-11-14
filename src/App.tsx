@@ -90,8 +90,16 @@ export default function App() {
     if (typeof window !== "undefined") {
       if (window.location.pathname === "/register") return "register";
       if (window.location.pathname === "/forgot-password") return "forgot-password";
+      if (window.location.pathname === "/login") return "login";
     }
     return "login";
+  });
+  const [isAuthExplicit, setIsAuthExplicit] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      const p = window.location.pathname;
+      return p === "/login" || p === "/register" || p === "/forgot-password";
+    }
+    return false;
   });
 
   // Manage active tab, plus optional "brain" mode
@@ -149,27 +157,26 @@ export default function App() {
       if (typeof window !== "undefined") {
         const path = window.location.pathname;
         setIsBrainActive(path.startsWith("/admin/brain"));
-        if (path === "/register") setAuthScreen("register");
-        else if (path === "/forgot-password") setAuthScreen("forgot-password");
-        else if (path === "/login") setAuthScreen("login");
-        else if (PATH_TO_TAB[path]) {
-          setActiveTabState(PATH_TO_TAB[path]);
+        if (path === "/register") {
+          setAuthScreen("register");
+          setIsAuthExplicit(true);
+        } else if (path === "/forgot-password") {
+          setAuthScreen("forgot-password");
+          setIsAuthExplicit(true);
+        } else if (path === "/login") {
+          setAuthScreen("login");
+          setIsAuthExplicit(true);
+        } else {
+          setIsAuthExplicit(false);
+          if (PATH_TO_TAB[path]) {
+            setActiveTabState(PATH_TO_TAB[path]);
+          }
         }
       }
     };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
-
-  // Clean URL when logged in from auth routes
-  useEffect(() => {
-    if (currentUser && typeof window !== "undefined") {
-      const path = window.location.pathname;
-      if (path === "/login" || path === "/register" || path === "/forgot-password") {
-        window.history.replaceState(null, "", "/");
-      }
-    }
-  }, [currentUser]);
 
   // Synchronize authenticated student profile with global app store
   useEffect(() => {
@@ -222,9 +229,9 @@ export default function App() {
 
   const navigateAuth = (screen: "login" | "register" | "forgot-password") => {
     setAuthScreen(screen);
+    setIsAuthExplicit(true);
     if (typeof window !== "undefined") {
-      const path = screen === "login" ? "/" : `/${screen}`;
-      window.history.pushState(null, "", path);
+      window.history.pushState(null, "", `/${screen}`);
     }
   };
 
@@ -239,7 +246,11 @@ export default function App() {
     useAppStore.getState().logout();
     setCurrentUser(null);
     setAuthScreen("login");
+    setIsAuthExplicit(true);
     setActiveTab("home");
+    if (typeof window !== "undefined") {
+      window.history.pushState(null, "", "/login");
+    }
   };
 
   const handleOnboardingComplete = (
@@ -289,8 +300,8 @@ export default function App() {
     );
   }
 
-  // 2. Unauthenticated User Flows (Login, Register, Forgot Password)
-  if (!currentUser) {
+  // 2. Unauthenticated User Flows or Explicit Auth Route (/login, /register, /forgot-password)
+  if (!currentUser || isAuthExplicit) {
     if (authScreen === "register") {
       return (
         <ThemeProvider>
@@ -298,6 +309,7 @@ export default function App() {
             <RegisterScreen
               onNavigateToLogin={() => navigateAuth("login")}
               onRegisterSuccess={(regData) => {
+                setIsAuthExplicit(false);
                 handleOnboardingComplete(
                   regData.name,
                   regData.grade,
@@ -305,6 +317,9 @@ export default function App() {
                   "intermediate",
                   regData.stream
                 );
+                if (typeof window !== "undefined") {
+                  window.history.replaceState(null, "", "/");
+                }
               }}
             />
           </Suspense>
@@ -330,8 +345,10 @@ export default function App() {
           onNavigateToRegister={() => navigateAuth("register")}
           onNavigateToForgotPassword={() => navigateAuth("forgot-password")}
           onLoginSuccess={() => {
-            if (isBrainActive && typeof window !== "undefined") {
-              window.history.replaceState(null, "", "/admin/brain");
+            setIsAuthExplicit(false);
+            if (typeof window !== "undefined") {
+              const target = isBrainActive ? "/admin/brain" : "/";
+              window.history.replaceState(null, "", target);
             }
           }}
         />
