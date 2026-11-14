@@ -195,15 +195,20 @@ export async function registerWithEmail(
 }
 
 /**
- * Sign in with Google using popup
+ * Sign in with Google using popup, or custom email if offline
  */
-export async function loginWithGoogle(): Promise<User> {
+export async function loginWithGoogle(customEmail?: string, customName?: string): Promise<User> {
   const auth = getFirebaseAuth();
   if (!auth) {
+    if (!customEmail || !customEmail.trim()) {
+      throw new Error("NEED_CUSTOM_EMAIL");
+    }
+    const cleanEmail = customEmail.trim().toLowerCase();
+    const cleanName = customName?.trim() || cleanEmail.split("@")[0];
     const mockUser = {
-      uid: "google_" + Math.random().toString(36).substring(2, 9),
-      email: "student@gmail.com",
-      displayName: "قوتابی گووگڵ",
+      uid: "usr_" + Math.random().toString(36).substring(2, 9),
+      email: cleanEmail,
+      displayName: cleanName,
       isAnonymous: false,
       getIdToken: async () => "mock-google-token",
     } as unknown as User;
@@ -217,6 +222,23 @@ export async function loginWithGoogle(): Promise<User> {
   setLocalAuthUser(cred.user);
   notifyAuthListeners(cred.user);
   return cred.user;
+}
+
+/**
+ * Update user email locally and notify listeners
+ */
+export function updateUserEmailLocally(newEmail: string): void {
+  const cleanEmail = newEmail.trim().toLowerCase();
+  const current = getCurrentUser();
+  if (current) {
+    const updated = {
+      ...current,
+      email: cleanEmail,
+      displayName: current.displayName || cleanEmail.split("@")[0],
+    } as unknown as User;
+    setLocalAuthUser(updated);
+    notifyAuthListeners(updated);
+  }
 }
 
 /**
