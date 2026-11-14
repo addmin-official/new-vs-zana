@@ -1,5 +1,5 @@
 import React from "react";
-import { User, Menu, Cpu, Award, ArrowLeftRight } from "lucide-react";
+import { User, Menu, Cpu, Award, ArrowLeftRight, LogIn, LogOut } from "lucide-react";
 import { UserProfile } from "../store/appStore.ts";
 import { SoundToggle } from "./SoundToggle.tsx";
 import { ThemeToggle } from "./ThemeToggle.tsx";
@@ -23,7 +23,10 @@ export interface HeaderProps {
   title?: string;
   user: UserProfile;
   activeSubject?: string;
+  isPermanentUser?: boolean;
   onNavigateToSubjects?: () => void;
+  onNavigateToLogin?: () => void;
+  onLogout?: () => void;
   onOpenMobileNav?: () => void;
   onOpenNotifications?: () => void;
   onOpenBrain?: () => void;
@@ -33,7 +36,10 @@ export function Header({
   title = "پلاتفۆرمی زانا",
   user,
   activeSubject,
+  isPermanentUser,
   onNavigateToSubjects,
+  onNavigateToLogin,
+  onLogout,
   onOpenMobileNav,
   onOpenBrain,
 }: HeaderProps) {
@@ -148,23 +154,45 @@ export function Header({
           </div>
         </div>
 
-        {/* User Avatar */}
-        <div className="flex items-center gap-2 pr-1.5">
-          {user.avatar ? (
-            <img
-              src={user.avatar}
-              alt={user.name}
-              className="w-8 h-8 rounded-full object-cover border border-indigo-600"
-            />
-          ) : (
-            <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold text-xs border border-indigo-200">
-              <User className="w-4 h-4" />
-            </div>
-          )}
-          <span className="font-sans text-xs font-bold text-slate-800 hidden md:inline truncate max-w-[100px]">
-            {user.name}
-          </span>
-        </div>
+        {/* Auth Button or User Avatar */}
+        {!isPermanentUser ? (
+          <button
+            type="button"
+            onClick={onNavigateToLogin}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition cursor-pointer shrink-0"
+            title="چوونەژوورەوە بە هەژمار"
+          >
+            <LogIn className="w-3.5 h-3.5" />
+            <span>چوونەژوورەوە</span>
+          </button>
+        ) : (
+          <div className="flex items-center gap-2 pr-1.5">
+            {user.avatar ? (
+              <img
+                src={user.avatar}
+                alt={user.name}
+                className="w-8 h-8 rounded-full object-cover border border-indigo-600"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold text-xs border border-indigo-200">
+                <User className="w-4 h-4" />
+              </div>
+            )}
+            <span className="font-sans text-xs font-bold text-slate-800 hidden md:inline truncate max-w-[100px]">
+              {user.name}
+            </span>
+            {onLogout && (
+              <button
+                type="button"
+                onClick={onLogout}
+                title="چوونەدەرەوە لە هەژمار"
+                className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </header>
   );

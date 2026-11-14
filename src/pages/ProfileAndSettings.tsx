@@ -12,6 +12,7 @@ import {
   AlertCircle,
   Sparkles,
   LogOut,
+  LogIn,
   Lock,
 } from "lucide-react";
 import { useAppStore } from "../store/appStore.ts";
@@ -25,14 +26,18 @@ import { useStudentMastery } from "../learning/hooks/useStudentMastery.ts";
 
 export interface ProfileAndSettingsProps {
   profile?: StudentProfile;
+  isPermanentUser?: boolean;
   onUpdateProfile?: (updates: Partial<StudentProfile>) => void;
+  onNavigateToLogin?: () => void;
   onLogout?: () => void;
   onReRunOnboarding?: () => void;
 }
 
 export function ProfileAndSettings({
   profile: propProfile,
+  isPermanentUser,
   onUpdateProfile,
+  onNavigateToLogin,
   onLogout,
   onReRunOnboarding,
 }: ProfileAndSettingsProps = {}) {
@@ -647,15 +652,27 @@ export function ProfileAndSettings({
               </div>
             )}
 
-            <div className="pt-4 flex justify-between items-center border-t border-slate-100">
+            <div className="pt-4 flex flex-col sm:flex-row justify-between items-center gap-3 border-t border-slate-100">
               <span className="text-xs text-slate-400 font-sans">ئەندامە لە {memberDate}ەوە</span>
-              <button
-                onClick={handleUserLogout}
-                className="text-xs font-bold text-red-600 hover:text-red-700 px-4 py-2 rounded-xl border border-red-200 hover:bg-red-50 transition-colors cursor-pointer flex items-center gap-1.5"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span>چوونەدەرەوە لە هەژمار</span>
-              </button>
+              {!isPermanentUser ? (
+                <button
+                  type="button"
+                  onClick={onNavigateToLogin}
+                  className="w-full sm:w-auto text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>چوونەژوورەوە بە هەژمار (Login)</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleUserLogout}
+                  className="w-full sm:w-auto text-xs font-bold text-red-600 hover:text-red-700 px-4 py-2 rounded-xl border border-red-200 hover:bg-red-50 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>چوونەدەرەوە لە هەژمار</span>
+                </button>
+              )}
             </div>
           </div>
         </div>

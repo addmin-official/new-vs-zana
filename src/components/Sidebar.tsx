@@ -11,6 +11,8 @@ import {
   FileText,
   User,
   GraduationCap,
+  LogIn,
+  LogOut,
 } from "lucide-react";
 
 export type NavItemKey =
@@ -51,9 +53,19 @@ export interface SidebarProps {
   activeTab: NavItemKey;
   onNavigate: (tab: NavItemKey) => void;
   className?: string;
+  isPermanentUser?: boolean;
+  onNavigateToLogin?: () => void;
+  onLogout?: () => void;
 }
 
-export function Sidebar({ activeTab, onNavigate, className = "" }: SidebarProps) {
+export function Sidebar({
+  activeTab,
+  onNavigate,
+  className = "",
+  isPermanentUser,
+  onNavigateToLogin,
+  onLogout,
+}: SidebarProps) {
   return (
     <aside
       className={`w-[280px] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 hidden lg:flex flex-col h-full p-4 shrink-0 shadow-2xs overflow-y-auto ${className}`}
@@ -108,8 +120,31 @@ export function Sidebar({ activeTab, onNavigate, className = "" }: SidebarProps)
         })}
       </div>
 
+      {/* Auth Action Button */}
+      <div className="pt-3 pb-1 border-t border-slate-100 dark:border-slate-800">
+        {!isPermanentUser ? (
+          <button
+            type="button"
+            onClick={onNavigateToLogin}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800 transition cursor-pointer shadow-2xs"
+          >
+            <LogIn className="w-4 h-4 shrink-0" />
+            <span>چوونەژوورەوە بە هەژمار</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onLogout}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-transparent hover:border-rose-200 transition cursor-pointer"
+          >
+            <LogOut className="w-4 h-4 shrink-0" />
+            <span>چوونەدەرەوە لە هەژمار</span>
+          </button>
+        )}
+      </div>
+
       {/* Footer Branding in Sidebar */}
-      <div className="pt-4 border-t border-slate-100 dark:border-slate-800 text-center">
+      <div className="pt-3 border-t border-slate-100 dark:border-slate-800 text-center">
         <p className="font-sans font-bold text-xs text-slate-800 dark:text-slate-200">پلاتفۆرمی زانا 🎓</p>
         <p className="font-sans text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">پڕۆگرامی فەرمی پۆلەکانی ٩ تا ١٢</p>
       </div>

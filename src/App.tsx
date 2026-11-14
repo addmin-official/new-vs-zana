@@ -102,6 +102,17 @@ export default function App() {
     return false;
   });
 
+  // Genuinely authenticated permanent user (Email or Google account)
+  const isPermanentUser = Boolean(currentUser && !currentUser.isAnonymous && currentUser.email);
+
+  // Check if student has explicitly bypassed login in this browser session as guest
+  const [isGuestBypassed, setIsGuestBypassed] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return sessionStorage.getItem("zana_guest_bypassed") === "true";
+    }
+    return false;
+  });
+
   // Manage active tab, plus optional "brain" mode
   const [activeTab, setActiveTabState] = useState<NavItemKey>(() => {
     if (typeof window !== "undefined") {
@@ -245,12 +256,14 @@ export default function App() {
     resetProfileOnly();
     useAppStore.getState().logout();
     setCurrentUser(null);
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("zana_guest_bypassed");
+      window.history.pushState(null, "", "/login");
+    }
+    setIsGuestBypassed(false);
     setAuthScreen("login");
     setIsAuthExplicit(true);
     setActiveTab("home");
-    if (typeof window !== "undefined") {
-      window.history.pushState(null, "", "/login");
-    }
   };
 
   const handleOnboardingComplete = (
@@ -301,7 +314,8 @@ export default function App() {
   }
 
   // 2. Unauthenticated User Flows or Explicit Auth Route (/login, /register, /forgot-password)
-  if (!currentUser || isAuthExplicit) {
+  const showAuthFlow = isAuthExplicit || (!isPermanentUser && !isGuestBypassed);
+  if (showAuthFlow) {
     if (authScreen === "register") {
       return (
         <ThemeProvider>
@@ -310,6 +324,11 @@ export default function App() {
               onNavigateToLogin={() => navigateAuth("login")}
               onRegisterSuccess={(regData) => {
                 setIsAuthExplicit(false);
+                if (typeof window !== "undefined") {
+                  sessionStorage.setItem("zana_guest_bypassed", "true");
+                  window.history.replaceState(null, "", "/");
+                }
+                setIsGuestBypassed(true);
                 handleOnboardingComplete(
                   regData.name,
                   regData.grade,
@@ -317,9 +336,6 @@ export default function App() {
                   "intermediate",
                   regData.stream
                 );
-                if (typeof window !== "undefined") {
-                  window.history.replaceState(null, "", "/");
-                }
               }}
             />
           </Suspense>
@@ -347,9 +363,11 @@ export default function App() {
           onLoginSuccess={() => {
             setIsAuthExplicit(false);
             if (typeof window !== "undefined") {
+              sessionStorage.setItem("zana_guest_bypassed", "true");
               const target = isBrainActive ? "/admin/brain" : "/";
               window.history.replaceState(null, "", target);
             }
+            setIsGuestBypassed(true);
           }}
         />
       </ThemeProvider>
@@ -476,7 +494,9 @@ export default function App() {
         return (
           <ProfileAndSettings
             profile={profile}
+            isPermanentUser={isPermanentUser}
             onUpdateProfile={updateProfile}
+            onNavigateToLogin={() => navigateAuth("login")}
             onLogout={handleLogout}
             onReRunOnboarding={() => setIsForcedOnboarding(true)}
           />
@@ -522,6 +542,10 @@ export default function App() {
           setActiveTab(tab);
         }}
         pageTitle={pageTitle}
+        isPermanentUser={isPermanentUser}
+        onNavigateToLogin={() => navigateAuth("login")}
+        onNavigateToRegister={() => navigateAuth("register")}
+        onLogout={handleLogout}
       >
         <Suspense fallback={<ScreenLoadingFallback />}>
           {renderScreen()}

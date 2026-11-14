@@ -12,6 +12,10 @@ export interface AppShellProps {
   onTabChange?: (tab: NavItemKey) => void;
   pageTitle?: string;
   className?: string;
+  isPermanentUser?: boolean;
+  onNavigateToLogin?: () => void;
+  onNavigateToRegister?: () => void;
+  onLogout?: () => void;
 }
 
 export function AppShell({
@@ -20,6 +24,10 @@ export function AppShell({
   onTabChange,
   pageTitle,
   className = "",
+  isPermanentUser,
+  onNavigateToLogin,
+  onNavigateToRegister: _onNavigateToRegister,
+  onLogout,
 }: AppShellProps) {
   const user = useAppStore((state) => state.user);
   const notifications = useAppStore((state) => state.notifications);
@@ -85,7 +93,10 @@ export function AppShell({
           title={pageTitle || "پلاتفۆرمی زانا"}
           user={user}
           activeSubject={user.activeSubject}
+          isPermanentUser={isPermanentUser}
           onNavigateToSubjects={() => handleNav("subjects")}
+          onNavigateToLogin={onNavigateToLogin}
+          onLogout={onLogout}
           onOpenMobileNav={() => setMobileMenuOpen(!mobileMenuOpen)}
         />
       </div>
@@ -109,14 +120,27 @@ export function AppShell({
                 ✕
               </button>
             </div>
-            <Sidebar activeTab={activeTab} onNavigate={handleNav} className="!flex !w-full !border-0 !p-0 !h-auto !shadow-none" />
+            <Sidebar
+              activeTab={activeTab}
+              onNavigate={handleNav}
+              isPermanentUser={isPermanentUser}
+              onNavigateToLogin={onNavigateToLogin}
+              onLogout={onLogout}
+              className="!flex !w-full !border-0 !p-0 !h-auto !shadow-none"
+            />
           </div>
         </div>
       )}
 
       {/* Body Layout: Sidebar + Main Content */}
       <div className="flex-1 min-h-0 flex w-full overflow-hidden">
-        <Sidebar activeTab={activeTab} onNavigate={handleNav} />
+        <Sidebar
+          activeTab={activeTab}
+          onNavigate={handleNav}
+          isPermanentUser={isPermanentUser}
+          onNavigateToLogin={onNavigateToLogin}
+          onLogout={onLogout}
+        />
 
         <main
           className={`flex-1 min-h-0 flex flex-col min-w-0 pb-6 lg:pb-8 overflow-y-auto overscroll-y-contain ${className}`}
