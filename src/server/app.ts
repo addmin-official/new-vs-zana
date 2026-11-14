@@ -19,6 +19,7 @@ import { StudyTaskStatus, PlanGenerationMode } from "../planning/domain/Learning
 import { PlanRebalancer } from "../planning/engine/PlanRebalancer.ts";
 import { AdaptiveLearningEngine as StudentMasteryAdaptiveEngine } from "../learning/engine/AdaptiveLearningEngine.ts";
 import { CurriculumRegistry } from "../curriculum/registry/CurriculumRegistry.ts";
+import { getChapterOutlineForSubject } from "../curriculum/data/chapterOutlines.ts";
 import { verifyFirebaseIdToken } from "./auth/tokenVerification.ts";
 import { DifficultyLevel, MisconceptionStatus } from "../learning/domain/MasteryTypes.ts";
 import { handleStudyPlanRoute } from "./api/study/plan.ts";
@@ -106,6 +107,13 @@ app.get("/api/health/curriculum", async (req: Request, res: Response) => {
   });
   const data = await response.json();
   res.status(response.status).json(data);
+});
+
+// Curriculum Outline Endpoint
+app.get("/api/curriculum/:subject/:grade/outline", (req: Request, res: Response) => {
+  const subject = String(req.params.subject || "chemistry");
+  const outline = getChapterOutlineForSubject(subject);
+  res.json(outline);
 });
 
 export { classifyError, getClientSafeErrorMessage, logMinimalError, type SafeErrorCategory };

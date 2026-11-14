@@ -6,6 +6,7 @@ import { PersistentLearningRecordProvider } from "../learning/providers/Learning
 import { AdaptiveLearningEngine } from "../learning/engine/AdaptiveLearningEngine.ts";
 import { DifficultyLevel, MisconceptionStatus, LearningEvent, LearningEventType, ExerciseAttempt, LearningSession } from "../learning/domain/MasteryTypes.ts";
 import { CurriculumRegistry } from "../curriculum/registry/CurriculumRegistry.ts";
+import { getChapterOutlineForSubject } from "../curriculum/data/chapterOutlines.ts";
 import { AuthService } from "../services/authService.ts";
 import {
   ChatRequest,
@@ -1681,6 +1682,14 @@ export default {
       // GET /api/health/curriculum
       if (pathname === "/api/health/curriculum" && request.method === "GET") {
         return handleCurriculumHealthRoute(request, env as never);
+      }
+
+      // GET /api/curriculum/:subject/:grade/outline
+      const outlineMatch = pathname.match(/^\/api\/curriculum\/([^/]+)\/([^/]+)\/outline$/);
+      if (outlineMatch && request.method === "GET") {
+        const subject = decodeURIComponent(outlineMatch[1]);
+        const outline = getChapterOutlineForSubject(subject);
+        return new Response(JSON.stringify(outline), { status: 200, headers: responseHeaders });
       }
 
       // GET /api/study/plan

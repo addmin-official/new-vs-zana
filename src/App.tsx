@@ -44,6 +44,37 @@ function ScreenLoadingFallback() {
   );
 }
 
+const PATH_TO_TAB: Record<string, NavItemKey> = {
+  "/": "home",
+  "/home": "home",
+  "/chat": "chat",
+  "/subjects": "subjects",
+  "/practice": "practice",
+  "/pedagogy": "pedagogy",
+  "/labs": "labs",
+  "/assessment": "assessment",
+  "/plan": "plan",
+  "/rooms": "rooms",
+  "/report": "report",
+  "/profile": "profile",
+  "/settings": "settings",
+};
+
+const TAB_TO_PATH: Record<NavItemKey, string> = {
+  home: "/",
+  chat: "/chat",
+  subjects: "/subjects",
+  practice: "/practice",
+  pedagogy: "/pedagogy",
+  labs: "/labs",
+  assessment: "/assessment",
+  plan: "/plan",
+  rooms: "/rooms",
+  report: "/report",
+  profile: "/profile",
+  settings: "/settings",
+};
+
 export default function App() {
   const { profile, updateProfile, completeOnboarding, resetProfileOnly } = useStudentProfile();
 
@@ -64,7 +95,13 @@ export default function App() {
   });
 
   // Manage active tab, plus optional "brain" mode
-  const [activeTab, setActiveTab] = useState<NavItemKey>("home");
+  const [activeTab, setActiveTabState] = useState<NavItemKey>(() => {
+    if (typeof window !== "undefined") {
+      const path = window.location.pathname;
+      if (PATH_TO_TAB[path]) return PATH_TO_TAB[path];
+    }
+    return "home";
+  });
   const [isForcedOnboarding, setIsForcedOnboarding] = useState(false);
   const [isBrainActive, setIsBrainActive] = useState(() => {
     if (typeof window !== "undefined") {
@@ -72,6 +109,17 @@ export default function App() {
     }
     return false;
   });
+
+  const setActiveTab = (tab: NavItemKey) => {
+    setActiveTabState(tab);
+    if (typeof window !== "undefined") {
+      setIsBrainActive(false);
+      const targetPath = TAB_TO_PATH[tab] || "/";
+      if (window.location.pathname !== targetPath) {
+        window.history.pushState(null, "", targetPath);
+      }
+    }
+  };
 
   // Auth State Listeners
   useEffect(() => {
@@ -104,6 +152,9 @@ export default function App() {
         if (path === "/register") setAuthScreen("register");
         else if (path === "/forgot-password") setAuthScreen("forgot-password");
         else if (path === "/login") setAuthScreen("login");
+        else if (PATH_TO_TAB[path]) {
+          setActiveTabState(PATH_TO_TAB[path]);
+        }
       }
     };
     window.addEventListener("popstate", handlePopState);
