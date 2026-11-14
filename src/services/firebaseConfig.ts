@@ -12,16 +12,16 @@ const nodeEnv: Record<string, string | undefined> =
     ? (process.env as Record<string, string | undefined>)
     : {};
 
-// Helper: read from Vite env first, then Node env, then empty string
-const readEnv = (key: string): string => {
-  return viteEnv[key] || nodeEnv[key] || "";
+// Helper: read from Vite env first, then Node env, then fallback
+const readEnv = (key: string, fallback = ""): string => {
+  return viteEnv[key] || nodeEnv[key] || fallback;
 };
 
 export const firebaseConfig = {
   apiKey: readEnv("VITE_FIREBASE_API_KEY"),
-  authDomain: readEnv("VITE_FIREBASE_AUTH_DOMAIN"),
-  projectId: readEnv("VITE_FIREBASE_PROJECT_ID"),
-  storageBucket: readEnv("VITE_FIREBASE_STORAGE_BUCKET"),
+  authDomain: readEnv("VITE_FIREBASE_AUTH_DOMAIN", "gen-lang-client-0009572581.firebaseapp.com"),
+  projectId: readEnv("VITE_FIREBASE_PROJECT_ID", "gen-lang-client-0009572581"),
+  storageBucket: readEnv("VITE_FIREBASE_STORAGE_BUCKET", "gen-lang-client-0009572581.firebasestorage.app"),
   messagingSenderId: readEnv("VITE_FIREBASE_MESSAGING_SENDER_ID"),
   appId: readEnv("VITE_FIREBASE_APP_ID"),
   measurementId: readEnv("VITE_FIREBASE_MEASUREMENT_ID"),

@@ -16,33 +16,67 @@ import { verifyFirebaseIdToken, VerifiedTokenClaims } from "../server/auth/token
 export { verifyFirebaseIdToken, type VerifiedTokenClaims };
 
 export const FIREBASE_ERRORS_KU: Record<string, string> = {
-  "auth/invalid-email": "ئیمەیلەکە دروست نییە",
-  "auth/user-disabled": "ئەم هەژمارە ناچالاک کراوە",
-  "auth/user-not-found": "هەژمار نەدۆزرایەوە. تکایە سەرەتا خۆت تۆمار بکە",
-  "auth/wrong-password": "وشەی نهێنی هەڵەیە",
-  "auth/invalid-credential": "ئیمەیل یان وشەی نهێنی هەڵەیە",
-  "auth/email-already-in-use": "ئەم ئیمەیلە پێشتر لە زانا تۆمارکراوە",
-  "auth/weak-password": "وشەی نهێنی لاوازە (پێویستە لانیکەم ٨ پیت و ژمارە بێت)",
-  "auth/network-request-failed": "کێشەی تۆڕی ئینتەرنێت هەیە. تکایە دووبارە هەوڵ بدە",
-  "auth/too-many-requests": "هەوڵی زۆر دراوە. تکایە کەمێکی تر تاقی بکەرەوە",
-  "auth/popup-closed-by-user": "پەنجەرەی چوونەژوورەوە لەلایەن تۆوە داخرایەوە",
-  "auth/popup-blocked": "پەنجەرەی پۆپ-ئەپ بەربەست کراوە. تکایە ڕێگە بە پەنجەرەکە بدە",
-  "auth/cancelled-popup-request": "داواکاری چوونەژوورەوە هەڵوەشێنرایەوە",
-  "auth/operation-not-allowed": "چوونەژوورەوە بەم شێوازە لە ئێستادا ناچالاکە",
-  "auth/admin-restricted-operation": "ئەم کردەیە پێویستی بە مۆڵەتی باڵاترە",
+  "auth/user-not-found": "ئەم ئیمەیڵە تۆمار نەکراوە.",
+  "auth/wrong-password": "وشەی نهێنی هەڵەیە.",
+  "auth/network-request-failed": "کێشەی ئینتەرنێت هەیە.",
+  "auth/invalid-credential": "ئیمەیل یان وشەی نهێنی هەڵەیە.",
+  "auth/invalid-email": "ئیمەیلەکە دروست نییە.",
+  "auth/user-disabled": "ئەم هەژمارە ناچالاک کراوە.",
+  "auth/email-already-in-use": "ئەم ئیمەیلە پێشتر لە زانا تۆمارکراوە.",
+  "auth/weak-password": "وشەی نهێنی لاوازە (پێویستە لانیکەم ٨ پیت و ژمارە بێت).",
+  "auth/too-many-requests": "هەوڵی زۆر دراوە. تکایە کەمێکی تر تاقی بکەرەوە.",
+  "auth/popup-closed-by-user": "پەنجەرەی چوونەژوورەوە لەلایەن تۆوە داخرایەوە.",
+  "auth/popup-blocked": "پەنجەرەی پۆپ-ئەپ بەربەست کراوە. تکایە ڕێگە بە پەنجەرەکە بدە.",
+  "auth/cancelled-popup-request": "داواکاری چوونەژوورەوە هەڵوەشێنرایەوە.",
+  "auth/operation-not-allowed": "چوونەژوورەوە بەم شێوازە لە ئێستادا ناچالاکە.",
+  "auth/admin-restricted-operation": "ئەم کردەیە پێویستی بە مۆڵەتی باڵاترە.",
+  "auth/invalid-api-key": "کلیل (API Key)ی فایەربەیس دیاری نەکراوە یان نادروستە.",
+  "auth/api-key-not-valid": "کلیل (API Key)ی فایەربەیس دیاری نەکراوە یان نادروستە.",
 };
 
 export function getErrorMessage(err: unknown): string {
-  if (!err) return "هەڵەیەکی نەناسراو ڕوویدا. تکایە دووبارە هەوڵ بدە";
-  const code = (err && typeof err === "object" && "code" in err) ? String((err as { code: unknown }).code) : "";
+  if (!err) return "هەڵەیەک ڕوویدا. تکایە دووبارە هەوڵ بدە";
+
+  let code = "";
+  if (typeof err === "object" && err !== null) {
+    if ("code" in err && typeof (err as { code: unknown }).code === "string") {
+      code = (err as { code: string }).code.trim();
+    }
+  }
+
+  const rawMessage = (err as Error)?.message || String(err);
+
+  if (!code) {
+    const match = rawMessage.match(/auth\/[a-z0-9-]+/i);
+    if (match) {
+      code = match[0].toLowerCase();
+    }
+  }
+
+  // Exact mappings
+  if (code === "auth/user-not-found" || rawMessage.includes("user-not-found")) {
+    return "ئەم ئیمەیڵە تۆمار نەکراوە.";
+  }
+  if (code === "auth/wrong-password" || rawMessage.includes("wrong-password")) {
+    return "وشەی نهێنی هەڵەیە.";
+  }
+  if (code === "auth/invalid-credential" || rawMessage.includes("invalid-credential")) {
+    return "ئیمەیل یان وشەی نهێنی هەڵەیە.";
+  }
+  if (
+    code === "auth/network-request-failed" ||
+    rawMessage.includes("network-request-failed") ||
+    rawMessage.includes("Failed to fetch") ||
+    rawMessage.includes("network error")
+  ) {
+    return "کێشەی ئینتەرنێت هەیە.";
+  }
+
   if (code && FIREBASE_ERRORS_KU[code]) {
     return FIREBASE_ERRORS_KU[code];
   }
-  const msg = (err as Error)?.message || String(err);
-  if (msg.includes("network") || msg.includes("Failed to fetch")) {
-    return "کێشەی تۆڕی ئینتەرنێت هەیە. پەیوەندییەکەت بپشکنە";
-  }
-  return FIREBASE_ERRORS_KU[code] || "هەڵەیەک ڕوویدا. تکایە دووبارە هەوڵ بدە";
+
+  return "هەڵەیەک ڕوویدا. تکایە دووبارە هەوڵ بدە";
 }
 
 const LOCAL_AUTH_KEY = "zana_auth_user_v1";

@@ -15,25 +15,28 @@ import {
 
 describe("ZANA Auth Service & Kurdish Error Mapping", () => {
   test("FIREBASE_ERRORS_KU contains correct Kurdish translations", () => {
-    assert.strictEqual(FIREBASE_ERRORS_KU["auth/invalid-email"], "ئیمەیلەکە دروست نییە");
-    assert.strictEqual(FIREBASE_ERRORS_KU["auth/user-not-found"], "هەژمار نەدۆزرایەوە. تکایە سەرەتا خۆت تۆمار بکە");
-    assert.strictEqual(FIREBASE_ERRORS_KU["auth/wrong-password"], "وشەی نهێنی هەڵەیە");
-    assert.strictEqual(FIREBASE_ERRORS_KU["auth/email-already-in-use"], "ئەم ئیمەیلە پێشتر لە زانا تۆمارکراوە");
-    assert.strictEqual(FIREBASE_ERRORS_KU["auth/weak-password"], "وشەی نهێنی لاوازە (پێویستە لانیکەم ٨ پیت و ژمارە بێت)");
+    assert.strictEqual(FIREBASE_ERRORS_KU["auth/user-not-found"], "ئەم ئیمەیڵە تۆمار نەکراوە.");
+    assert.strictEqual(FIREBASE_ERRORS_KU["auth/wrong-password"], "وشەی نهێنی هەڵەیە.");
+    assert.strictEqual(FIREBASE_ERRORS_KU["auth/invalid-credential"], "ئیمەیل یان وشەی نهێنی هەڵەیە.");
+    assert.strictEqual(FIREBASE_ERRORS_KU["auth/network-request-failed"], "کێشەی ئینتەرنێت هەیە.");
+    assert.strictEqual(FIREBASE_ERRORS_KU["auth/email-already-in-use"], "ئەم ئیمەیلە پێشتر لە زانا تۆمارکراوە.");
   });
 
   test("getErrorMessage maps error codes to Kurdish strings", () => {
     const errorObj = { code: "auth/invalid-credential" };
-    assert.strictEqual(getErrorMessage(errorObj), "ئیمەیل یان وشەی نهێنی هەڵەیە");
+    assert.strictEqual(getErrorMessage(errorObj), "ئیمەیل یان وشەی نهێنی هەڵەیە.");
 
     const userNotFound = { code: "auth/user-not-found" };
-    assert.strictEqual(getErrorMessage(userNotFound), "هەژمار نەدۆزرایەوە. تکایە سەرەتا خۆت تۆمار بکە");
+    assert.strictEqual(getErrorMessage(userNotFound), "ئەم ئیمەیڵە تۆمار نەکراوە.");
+
+    const wrongPassword = { code: "auth/wrong-password" };
+    assert.strictEqual(getErrorMessage(wrongPassword), "وشەی نهێنی هەڵەیە.");
   });
 
   test("getErrorMessage handles network failure gracefully", () => {
     const networkErr = new Error("Failed to fetch");
     const msg = getErrorMessage(networkErr);
-    assert.match(msg, /تۆڕی ئینتەرنێت/i);
+    assert.strictEqual(msg, "کێشەی ئینتەرنێت هەیە.");
   });
 
   test("getErrorMessage handles unknown errors with fallback", () => {
