@@ -32,6 +32,9 @@ export const FIREBASE_ERRORS_KU: Record<string, string> = {
   "auth/admin-restricted-operation": "ئەم کردەیە پێویستی بە مۆڵەتی باڵاترە.",
   "auth/invalid-api-key": "کلیل (API Key)ی فایەربەیس دیاری نەکراوە یان نادروستە.",
   "auth/api-key-not-valid": "کلیل (API Key)ی فایەربەیس دیاری نەکراوە یان نادروستە.",
+  "auth/unauthorized-domain": "ئەم دۆمەینە لە کۆنسۆڵی فایەربەیس مۆڵەتی پێنەدراوە (Unauthorized Domain).",
+  "auth/internal-error": "هەڵەی ناوخۆیی لە خزمەتگوزاری فایەربەیس ڕوویدا.",
+  "auth/requires-recent-login": "تکایە سەرلەنوێ بچۆ ژوورەوە بۆ جێبەجێکردنی ئەم داواکارییە.",
 };
 
 export function getErrorMessage(err: unknown): string {
@@ -46,6 +49,11 @@ export function getErrorMessage(err: unknown): string {
 
   const rawMessage = (err as Error)?.message || String(err);
 
+  // If the error message already has Kurdish/Arabic characters, preserve it directly
+  if (/[\u0600-\u06FF]/.test(rawMessage)) {
+    return rawMessage;
+  }
+
   if (!code) {
     const match = rawMessage.match(/auth\/[a-z0-9-]+/i);
     if (match) {
@@ -53,14 +61,18 @@ export function getErrorMessage(err: unknown): string {
     }
   }
 
-  // Exact mappings
+  // Exact mappings and fuzzy checks
   if (code === "auth/user-not-found" || rawMessage.includes("user-not-found")) {
     return "ئەم ئیمەیڵە تۆمار نەکراوە.";
   }
   if (code === "auth/wrong-password" || rawMessage.includes("wrong-password")) {
     return "وشەی نهێنی هەڵەیە.";
   }
-  if (code === "auth/invalid-credential" || rawMessage.includes("invalid-credential")) {
+  if (
+    code === "auth/invalid-credential" ||
+    rawMessage.includes("invalid-credential") ||
+    rawMessage.includes("INVALID_LOGIN_CREDENTIALS")
+  ) {
     return "ئیمەیل یان وشەی نهێنی هەڵەیە.";
   }
   if (
@@ -71,11 +83,29 @@ export function getErrorMessage(err: unknown): string {
   ) {
     return "کێشەی ئینتەرنێت هەیە.";
   }
+  if (code === "auth/unauthorized-domain" || rawMessage.includes("unauthorized-domain")) {
+    return "ئەم دۆمەینە لە کۆنسۆڵی فایەربەیس مۆڵەتی پێنەدراوە (Unauthorized Domain).";
+  }
+  if (
+    code === "auth/invalid-api-key" ||
+    code === "auth/api-key-not-valid" ||
+    rawMessage.toLowerCase().includes("api key") ||
+    rawMessage.toLowerCase().includes("api-key")
+  ) {
+    return "کلیل (API Key)ی فایەربەیس دیاری نەکراوە یان نادروستە.";
+  }
+  if (code === "auth/popup-closed-by-user" || rawMessage.includes("popup-closed-by-user")) {
+    return "پەنجەرەی چوونەژوورەوە لەلایەن تۆوە داخرایەوە.";
+  }
+  if (code === "auth/popup-blocked" || rawMessage.includes("popup-blocked")) {
+    return "پەنجەرەی پۆپ-ئەپ بەربەست کراوە. تکایە ڕێگە بە پەنجەرەکە بدە.";
+  }
 
   if (code && FIREBASE_ERRORS_KU[code]) {
     return FIREBASE_ERRORS_KU[code];
   }
 
+  console.error("Unhandled auth error:", err);
   return "هەڵەیەک ڕوویدا. تکایە دووبارە هەوڵ بدە";
 }
 
@@ -273,10 +303,24 @@ export async function loginAnonymously(): Promise<User> {
     notifyAuthListeners(mockUser);
     return mockUser;
   }
-  const cred = await signInAnonymously(auth);
-  setLocalAuthUser(cred.user);
-  notifyAuthListeners(cred.user);
-  return cred.user;
+  try {
+    const cred = await signInAnonymously(auth);
+    setLocalAuthUser(cred.user);
+    notifyAuthListeners(cred.user);
+    return cred.user;
+  } catch (err) {
+    console.warn("Firebase signInAnonymously failed (provider may be disabled), falling back to local guest:", err);
+    const mockUser = {
+      uid: "guest_" + Math.random().toString(36).substring(2, 9),
+      email: null,
+      displayName: "قوتابی میوان",
+      isAnonymous: true,
+      getIdToken: async () => "mock-guest-token",
+    } as unknown as User;
+    setLocalAuthUser(mockUser);
+    notifyAuthListeners(mockUser);
+    return mockUser;
+  }
 }
 
 /**

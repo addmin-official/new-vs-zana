@@ -12,22 +12,47 @@ const nodeEnv: Record<string, string | undefined> =
     ? (process.env as Record<string, string | undefined>)
     : {};
 
-// Helper: read from Vite env first, then Node env, then fallback
-const readEnv = (key: string, fallback = ""): string => {
-  return viteEnv[key] || nodeEnv[key] || fallback;
+const isTest =
+  nodeEnv.NODE_ENV === "test" ||
+  nodeEnv.ZANA_ENV === "test" ||
+  nodeEnv.ALLOW_TEST_AUTH_MOCK === "true";
+
+export const FALLBACK_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyD_u4I9xPn6dFoSnDTe9pyNMQwltDEpjN0",
+  authDomain: "gen-lang-client-0009572581.firebaseapp.com",
+  projectId: "gen-lang-client-0009572581",
+  storageBucket: "gen-lang-client-0009572581.firebasestorage.app",
+  messagingSenderId: "958839183835",
+  appId: "1:958839183835:web:80cec81bbb0227f7b82ffe",
+  measurementId: "G-RG8T98ZHBB",
+  firestoreDatabaseId: "ai-studio-zana-61fd6b5f-d052-40d1-8657-de471d642e8c",
+  oAuthClientId: "958839183835-3bc7tgfegi6ohldn6imvj7l9goombl6d.apps.googleusercontent.com",
+  recaptchaSiteKey: "AIzaSyCE9MMzIC_o6dPDsrfYUlbZ8EMWAV6rdDI",
+};
+
+// Helper: read from Vite env first, then Node env, then canonical fallback
+const readEnv = (key: string, fallbackKey?: keyof typeof FALLBACK_FIREBASE_CONFIG): string => {
+  const val = viteEnv[key] || nodeEnv[key];
+  if (val && !val.includes("YOUR_") && !val.includes("placeholder") && !val.includes("FakeKey")) {
+    return val;
+  }
+  if (isTest && !val) {
+    return "";
+  }
+  return fallbackKey ? FALLBACK_FIREBASE_CONFIG[fallbackKey] : "";
 };
 
 export const firebaseConfig = {
-  apiKey: readEnv("VITE_FIREBASE_API_KEY"),
-  authDomain: readEnv("VITE_FIREBASE_AUTH_DOMAIN", "gen-lang-client-0009572581.firebaseapp.com"),
-  projectId: readEnv("VITE_FIREBASE_PROJECT_ID", "gen-lang-client-0009572581"),
-  storageBucket: readEnv("VITE_FIREBASE_STORAGE_BUCKET", "gen-lang-client-0009572581.firebasestorage.app"),
-  messagingSenderId: readEnv("VITE_FIREBASE_MESSAGING_SENDER_ID"),
-  appId: readEnv("VITE_FIREBASE_APP_ID"),
-  measurementId: readEnv("VITE_FIREBASE_MEASUREMENT_ID"),
-  firestoreDatabaseId: readEnv("VITE_FIREBASE_DATABASE_ID"),
-  oAuthClientId: readEnv("VITE_FIREBASE_OAUTH_CLIENT_ID"),
-  recaptchaSiteKey: readEnv("VITE_FIREBASE_RECAPTCHA_SITE_KEY"),
+  apiKey: readEnv("VITE_FIREBASE_API_KEY", "apiKey"),
+  authDomain: readEnv("VITE_FIREBASE_AUTH_DOMAIN", "authDomain"),
+  projectId: readEnv("VITE_FIREBASE_PROJECT_ID", "projectId"),
+  storageBucket: readEnv("VITE_FIREBASE_STORAGE_BUCKET", "storageBucket"),
+  messagingSenderId: readEnv("VITE_FIREBASE_MESSAGING_SENDER_ID", "messagingSenderId"),
+  appId: readEnv("VITE_FIREBASE_APP_ID", "appId"),
+  measurementId: readEnv("VITE_FIREBASE_MEASUREMENT_ID", "measurementId"),
+  firestoreDatabaseId: readEnv("VITE_FIREBASE_DATABASE_ID", "firestoreDatabaseId"),
+  oAuthClientId: readEnv("VITE_FIREBASE_OAUTH_CLIENT_ID", "oAuthClientId"),
+  recaptchaSiteKey: readEnv("VITE_FIREBASE_RECAPTCHA_SITE_KEY", "recaptchaSiteKey"),
 };
 
 export const isFirebaseConfigured = (
@@ -37,7 +62,8 @@ export const isFirebaseConfigured = (
   const projectId = cfg.projectId;
   if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) return false;
   if (!projectId || typeof projectId !== "string" || !projectId.trim()) return false;
-  if (apiKey.includes("FakeKey") || apiKey.includes("placeholder")) return false;
+  if (apiKey.includes("FakeKey") || apiKey.includes("placeholder") || apiKey.includes("YOUR_")) return false;
+  if (projectId.includes("placeholder") || projectId.includes("YOUR_")) return false;
   return true;
 };
 
