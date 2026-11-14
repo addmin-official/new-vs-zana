@@ -205,7 +205,7 @@ describe("Patch 19.3 - Real Chemistry AI Tutor Grounding & Security Verification
     const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/chat", {
       method: "POST",
       headers: {
-        Origin: "https://zana.krd",
+        Origin: "https://zana.idggov.tech",
         "Content-Type": "application/json",
       },
       // Client attempts to pass arbitrary unverified grounding excerpts in the body
@@ -227,7 +227,7 @@ describe("Patch 19.3 - Real Chemistry AI Tutor Grounding & Security Verification
     });
 
     const env = {
-      ALLOWED_ORIGINS: "https://zana.krd",
+      ALLOWED_ORIGINS: "https://zana.idggov.tech",
       FIREBASE_PROJECT_ID: "gen-lang-client-0009572581",
       GEMINI_API_KEY: "dummy-key-for-routing-test",
     };
@@ -316,7 +316,7 @@ describe("Patch 19.3 - Real Chemistry AI Tutor Grounding & Security Verification
     const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/chat", {
       method: "POST",
       headers: {
-        Origin: "https://zana.krd",
+        Origin: "https://zana.idggov.tech",
         "Content-Type": "application/json",
         // Client specifies student Bearer token containing actual identity claims (Mock/Dummy token here for verification)
         "Authorization": "Bearer legitimate-student-123",
@@ -336,7 +336,7 @@ describe("Patch 19.3 - Real Chemistry AI Tutor Grounding & Security Verification
     });
 
     const env = {
-      ALLOWED_ORIGINS: "https://zana.krd",
+      ALLOWED_ORIGINS: "https://zana.idggov.tech",
       FIREBASE_PROJECT_ID: "gen-lang-client-0009572581",
       GEMINI_API_KEY: "dummy-key",
     };

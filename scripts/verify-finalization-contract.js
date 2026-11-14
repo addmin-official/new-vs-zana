@@ -38,7 +38,7 @@ try {
 requireMatch(wrangler, /"name"\s*:\s*"(?:new-vs-zana|zana-api-worker)"/, 'Cloudflare Worker name must be new-vs-zana or zana-api-worker.');
 requireMatch(wrangler, /"main"\s*:\s*"src\/worker\/index\.ts"/, 'Cloudflare Worker entrypoint must remain src/worker/index.ts.');
 requireMatch(wrangler, /"directory"\s*:\s*"\.\/dist\/client"/, 'Static Assets must remain bound to ./dist/client.');
-requireMatch(wrangler, /https:\/\/zana\.krd/, 'Canonical frontend origin https://zana.krd is missing from Wrangler configuration.');
+requireMatch(wrangler, /https:\/\/zana\.idggov\.tech/, 'Canonical frontend origin https://zana.idggov.tech is missing from Wrangler configuration.');
 const allowedOrigins = (wrangler.match(/"ALLOWED_ORIGINS"\s*:\s*"([^"]+)"/) || [])[1] || '';
 forbidMatch(allowedOrigins, /localhost|127\.0\.0\.1|\.web\.app|firebaseapp\.com/i, 'Production Wrangler configuration contains localhost, emulator, or Firebase Hosting routing.');
 forbidMatch(wrangler, /"vars"[\s\S]*?"VITE_FIREBASE_API_KEY"/, 'VITE_FIREBASE_API_KEY must not be defined in wrangler.jsonc vars; it must be a Cloudflare Secret.');

@@ -219,7 +219,7 @@ describe("Production Admin State & Persistence Test Suite", () => {
         id: "uid-approver-lead",
         name: "Admin Lead",
         role: "super_admin",
-        email: "lead@zana.krd",
+        email: "lead@zana.idggov.tech",
         permissions: ["*"],
       };
 
@@ -235,7 +235,7 @@ describe("Production Admin State & Persistence Test Suite", () => {
         id: "uid-approver-lead", // Same UID as primary approver
         name: "Admin Lead Impersonator",
         role: "super_admin",
-        email: "lead@zana.krd",
+        email: "lead@zana.idggov.tech",
         permissions: ["*"],
       };
 
@@ -249,7 +249,7 @@ describe("Production Admin State & Persistence Test Suite", () => {
         id: "uid-approver-auditor-2",
         name: "Auditor SecOps",
         role: "auditor",
-        email: "auditor@zana.krd",
+        email: "auditor@zana.idggov.tech",
         permissions: ["*"],
       };
 

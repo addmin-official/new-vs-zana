@@ -24,7 +24,7 @@ interface HealthResponse {
 // Helper to create a mock Env
 const createMockEnv = (assetsMock?: { fetch: (req: Request) => Promise<Response> }): Env => ({
   GEMINI_API_KEY: "test-api-key",
-  ALLOWED_ORIGINS: "https://zana.krd",
+  ALLOWED_ORIGINS: "https://zana.idggov.tech",
   FIREBASE_PROJECT_ID: "gen-lang-client-0009572581",
   ASSETS: assetsMock,
 });
@@ -33,7 +33,7 @@ test("Worker - GET /api/health with approved Origin returns 200 and exact CORS o
   const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/health", {
     method: "GET",
     headers: {
-      Origin: "https://zana.krd",
+      Origin: "https://zana.idggov.tech",
     },
   });
 
@@ -43,7 +43,7 @@ test("Worker - GET /api/health with approved Origin returns 200 and exact CORS o
   assert.strictEqual(res.status, 200);
   assert.strictEqual(res.headers.get("content-type"), "application/json");
   assert.strictEqual(res.headers.get("location"), null); // zero redirects
-  assert.strictEqual(res.headers.get("access-control-allow-origin"), "https://zana.krd");
+  assert.strictEqual(res.headers.get("access-control-allow-origin"), "https://zana.idggov.tech");
 
   const body = (await res.json()) as ApiJsonResponse;
   assert.strictEqual(body.ok, true);
@@ -209,13 +209,15 @@ test("Worker - GET /api/health with unapproved Origin returns 200 health without
   assert.strictEqual(body.ok, true);
 });
 
-test("Worker - GET /api/health rejects denied Firebase Hosting and localhost origins without CORS header", async () => {
+test("Worker - GET /api/health rejects denied Firebase Hosting, legacy zana.krd, and malicious origins without CORS header", async () => {
   const env = createMockEnv();
   const deniedOrigins = [
     "https://zana-app.web.app",
     "https://zana-official.web.app",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://zana.krd",
+    "https://malicious-attacker.com",
   ];
 
   for (const origin of deniedOrigins) {
@@ -238,7 +240,7 @@ test("Worker - GET /api/health is unaffected by missing GEMINI_API_KEY, JWT_SECR
   // Empty env without GEMINI_API_KEY, JWT_SECRET, or KV bindings
   const emptyEnv: Env = {
     GEMINI_API_KEY: "",
-    ALLOWED_ORIGINS: "https://zana.krd",
+    ALLOWED_ORIGINS: "https://zana.idggov.tech",
     FIREBASE_PROJECT_ID: "gen-lang-client-0009572581",
   };
 
@@ -253,7 +255,7 @@ test("Worker - GET /api/health/ with trailing slash normalizes to /api/health an
   const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/health/", {
     method: "GET",
     headers: {
-      Origin: "https://zana.krd",
+      Origin: "https://zana.idggov.tech",
     },
   });
 
@@ -284,13 +286,15 @@ test("Worker - Protected API route rejects unapproved Origin with 403", async ()
   assert.strictEqual(body.error, "Disallowed Origin");
 });
 
-test("Worker - Protected API route rejects denied Firebase Hosting and localhost origins with 403", async () => {
+test("Worker - Protected API route rejects denied Firebase Hosting, legacy zana.krd, and malicious origins with 403", async () => {
   const env = createMockEnv();
   const deniedOrigins = [
     "https://zana-app.web.app",
     "https://zana-official.web.app",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://zana.krd",
+    "https://malicious-attacker.com",
   ];
 
   for (const origin of deniedOrigins) {
@@ -316,7 +320,7 @@ test("Worker - Protected API route allows approved Origin", async () => {
   const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/chat", {
     method: "POST",
     headers: {
-      Origin: "https://zana.krd",
+      Origin: "https://zana.idggov.tech",
       "Content-Type": "application/json",
     },
     body: JSON.stringify({}), // Invalid payload triggers 400 validation error, confirming origin check passed
@@ -325,7 +329,7 @@ test("Worker - Protected API route allows approved Origin", async () => {
   const env = createMockEnv();
   const res = await worker.fetch(req, env);
 
-  assert.strictEqual(res.headers.get("access-control-allow-origin"), "https://zana.krd");
+  assert.strictEqual(res.headers.get("access-control-allow-origin"), "https://zana.idggov.tech");
   assert.notStrictEqual(res.status, 403);
 });
 
@@ -338,7 +342,7 @@ test("Worker - GET /api/health is not captured by SPA fallback", async () => {
   const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/health", {
     method: "GET",
     headers: {
-      Origin: "https://zana.krd",
+      Origin: "https://zana.idggov.tech",
     },
   });
 
@@ -355,7 +359,7 @@ test("Worker - unknown /api route returns JSON 404", async () => {
   const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/unknown-route-xyz", {
     method: "GET",
     headers: {
-      Origin: "https://zana.krd",
+      Origin: "https://zana.idggov.tech",
     },
   });
 
@@ -376,7 +380,7 @@ test("Worker - missing static asset returns real 404", async () => {
   const req = new Request("https://new-vs-zana.zana-platform.workers.dev/assets/nonexistent-file.css", {
     method: "GET",
     headers: {
-      Origin: "https://zana.krd",
+      Origin: "https://zana.idggov.tech",
     },
   });
 
@@ -402,7 +406,7 @@ test("Worker - SPA fallback works for paths without extensions", async () => {
   const req = new Request("https://new-vs-zana.zana-platform.workers.dev/some-app-route", {
     method: "GET",
     headers: {
-      Origin: "https://zana.krd",
+      Origin: "https://zana.idggov.tech",
     },
   });
 
@@ -419,7 +423,7 @@ test("Worker - Canonical URL / slash normalization is correct", async () => {
   const req = new Request("https://new-vs-zana.zana-platform.workers.dev//api//health", {
     method: "GET",
     headers: {
-      Origin: "https://zana.krd",
+      Origin: "https://zana.idggov.tech",
     },
   });
 
@@ -452,7 +456,7 @@ test("Worker - missing GEMINI_API_KEY on AI endpoint returns safe Kurdish error 
   const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/chat", {
     method: "POST",
     headers: {
-      Origin: "https://zana.krd",
+      Origin: "https://zana.idggov.tech",
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -462,7 +466,7 @@ test("Worker - missing GEMINI_API_KEY on AI endpoint returns safe Kurdish error 
   });
 
   const envWithoutKey: Env = {
-    ALLOWED_ORIGINS: "https://zana.krd",
+    ALLOWED_ORIGINS: "https://zana.idggov.tech",
     FIREBASE_PROJECT_ID: "gen-lang-client-0009572581",
     GEMINI_API_KEY: "",
   };
@@ -480,7 +484,7 @@ test("Worker - missing payload on /api/chat returns 400 with correct Kurdish spe
   const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/chat", {
     method: "POST",
     headers: {
-      Origin: "https://zana.krd",
+      Origin: "https://zana.idggov.tech",
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ message: "Hello" }), // Missing profile
@@ -498,7 +502,7 @@ test("Worker - missing payload on /api/study/ask returns 400 with correct Kurdis
   const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/study/ask", {
     method: "POST",
     headers: {
-      Origin: "https://zana.krd",
+      Origin: "https://zana.idggov.tech",
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ message: "Hello" }), // Missing context
@@ -516,7 +520,7 @@ test("Worker - missing payload on /api/report returns 400 without calling AI ser
   const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/report", {
     method: "POST",
     headers: {
-      Origin: "https://zana.krd",
+      Origin: "https://zana.idggov.tech",
       "Content-Type": "application/json",
     },
     body: JSON.stringify({}), // Missing profile
@@ -632,7 +636,7 @@ test("Worker - No API key or prompt leakage on error responses", async () => {
   const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/chat", {
     method: "POST",
     headers: {
-      Origin: "https://zana.krd",
+      Origin: "https://zana.idggov.tech",
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -642,7 +646,7 @@ test("Worker - No API key or prompt leakage on error responses", async () => {
   });
 
   const envWithSecretKey: Env = {
-    ALLOWED_ORIGINS: "https://zana.krd",
+    ALLOWED_ORIGINS: "https://zana.idggov.tech",
     FIREBASE_PROJECT_ID: "gen-lang-client-0009572581",
     GEMINI_API_KEY: "secret_api_key_123456789_do_not_leak",
   };
@@ -659,7 +663,7 @@ test("Worker - POST /api/chat contract accepts academicContext", async () => {
   const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/chat", {
     method: "POST",
     headers: {
-      Origin: "https://zana.krd",
+      Origin: "https://zana.idggov.tech",
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -689,7 +693,7 @@ test("Worker - POST /api/assessment validates missing state", async () => {
   const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/assessment", {
     method: "POST",
     headers: {
-      Origin: "https://zana.krd",
+      Origin: "https://zana.idggov.tech",
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -1005,7 +1009,7 @@ test("Worker - Uses Firebase AI endpoint with generateContent", async () => {
     const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/chat", {
       method: "POST",
       headers: {
-        Origin: "https://zana.krd",
+        Origin: "https://zana.idggov.tech",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -1015,7 +1019,7 @@ test("Worker - Uses Firebase AI endpoint with generateContent", async () => {
     });
 
     const envWithAqKey: Env = {
-      ALLOWED_ORIGINS: "https://zana.krd",
+      ALLOWED_ORIGINS: "https://zana.idggov.tech",
       FIREBASE_PROJECT_ID: "zana-edu-prod",
       GEMINI_API_KEY: "AQ.example-vertex-key-12345",
       GEMINI_PRIMARY_MODEL: "gemini-3.6-flash",

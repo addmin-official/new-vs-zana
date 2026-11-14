@@ -16,7 +16,7 @@ export async function verifyAuthToken(
   } catch (error) {
     if (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production') {
       // In dev mode, allow dev tokens or mock dev profiles if needed
-      return { uid: 'dev_student_pilot', email: 'dev@zana.krd' };
+      return { uid: 'dev_student_pilot', email: 'dev@zana.idggov.tech' };
     }
     console.error('[verifyAuthToken] Token verification failed:', error);
     return null;

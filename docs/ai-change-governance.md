@@ -13,7 +13,7 @@ This policy protects the finalized ZANA production baseline from unreviewed AI-g
 
 ## Protected production baseline
 
-- Frontend: Cloudflare Static Assets at `https://zana.krd`.
+- Frontend: Cloudflare Static Assets at `https://zana.idggov.tech` (legacy: `https://zana.krd`).
 - Backend: Cloudflare Worker.
 - Firebase: Authentication and Firestore only.
 - No Firebase Hosting or Firebase Functions production deployment.

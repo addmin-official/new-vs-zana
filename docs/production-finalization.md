@@ -14,7 +14,7 @@ A production release is complete only when the GitHub Actions pipeline confirms 
 
 Production architecture remains:
 
-- frontend: `https://zana.krd` on Cloudflare Static Assets;
+- frontend: `https://zana.idggov.tech` on Cloudflare Static Assets (legacy domain: `https://zana.krd`);
 - backend: Cloudflare Worker;
 - Firebase: Authentication and Firestore only;
 - no Firebase Hosting or Firebase Functions production deployment;

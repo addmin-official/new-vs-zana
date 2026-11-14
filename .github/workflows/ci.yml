@@ -433,12 +433,12 @@ jobs:
       - name: Verify Worker Health & CORS
         env:
           CLEANED_URL: ${{ secrets.VITE_API_BASE_URL }}
-          CANONICAL_FRONTEND_ORIGIN: ${{ secrets.ZANA_FRONTEND_ORIGIN || 'https://zana.krd' }}
+          CANONICAL_FRONTEND_ORIGIN: ${{ secrets.ZANA_FRONTEND_ORIGIN || 'https://zana.idggov.tech' }}
         run: |
           set -euo pipefail
           
           CLEANED_URL=$(echo "$CLEANED_URL" | sed 's/\/$//')
-          FRONTEND_ORIGIN="${CANONICAL_FRONTEND_ORIGIN:-https://zana.krd}"
+          FRONTEND_ORIGIN="${CANONICAL_FRONTEND_ORIGIN:-https://zana.idggov.tech}"
           export CLEANED_URL FRONTEND_ORIGIN
           echo "Verifying live Cloudflare Worker at: $CLEANED_URL"
           echo "Using canonical frontend origin: $FRONTEND_ORIGIN"
@@ -575,12 +575,12 @@ jobs:
       - name: Verify Production Provider Preflight
         env:
           CLEANED_URL: ${{ secrets.VITE_API_BASE_URL }}
-          CANONICAL_FRONTEND_ORIGIN: ${{ secrets.ZANA_FRONTEND_ORIGIN || 'https://zana.krd' }}
+          CANONICAL_FRONTEND_ORIGIN: ${{ secrets.ZANA_FRONTEND_ORIGIN || 'https://zana.idggov.tech' }}
           PROVIDER_PREFLIGHT_TOKEN: ${{ secrets.PROVIDER_PREFLIGHT_TOKEN }}
         run: |
           set -euo pipefail
           CLEANED_URL=$(echo "$CLEANED_URL" | sed 's/\/$//')
-          FRONTEND_ORIGIN="${CANONICAL_FRONTEND_ORIGIN:-https://zana.krd}"
+          FRONTEND_ORIGIN="${CANONICAL_FRONTEND_ORIGIN:-https://zana.idggov.tech}"
           echo "Verifying production AI provider preflight at ${CLEANED_URL}/api/provider/preflight..."
           
           # 1. Unauthenticated check (must fail with 401)
@@ -727,7 +727,7 @@ jobs:
       - name: Run Production Smoke Tests
         env:
           API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
-          ZANA_FRONTEND_ORIGIN: ${{ secrets.ZANA_FRONTEND_ORIGIN || 'https://zana.krd' }}
+          ZANA_FRONTEND_ORIGIN: ${{ secrets.ZANA_FRONTEND_ORIGIN || 'https://zana.idggov.tech' }}
         run: |
           set -euo pipefail
           npm run test:smoke 2>&1 | tee smoke-test-report.log

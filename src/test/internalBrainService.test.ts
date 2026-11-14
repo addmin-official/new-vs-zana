@@ -55,7 +55,7 @@ describe('Internal Portal Brain Service (مێشکی زیرەکی ناوخۆی پ
       id: 'admin_sys_01',
       name: 'Lead Admin',
       role: 'super_admin',
-      email: 'lead@zana.krd',
+      email: 'lead@zana.idggov.tech',
       permissions: ['approve_level_5'],
     }, false);
     assert.strictEqual(stage1.success, true);
@@ -68,7 +68,7 @@ describe('Internal Portal Brain Service (مێشکی زیرەکی ناوخۆی پ
       id: 'sec_auditor_02',
       name: 'Security Auditor',
       role: 'super_admin',
-      email: 'secops@zana.krd',
+      email: 'secops@zana.idggov.tech',
       permissions: ['approve_level_5'],
     }, true);
     assert.strictEqual(stage2.success, true);

@@ -9,7 +9,7 @@ Describe the exact user-facing or operational change. Do not include secrets, pr
 - [ ] Cloudflare Worker + Static Assets remains the production architecture.
 - [ ] Firebase remains Auth and Firestore only; no Hosting or Functions deployment was added.
 - [ ] No localhost, emulator, `.web.app`, or `firebaseapp.com` production routing was introduced.
-- [ ] `https://zana.krd` remains an allowed production origin.
+- [ ] `https://zana.idggov.tech` remains an allowed production origin.
 - [ ] Gemini model resolution and request format remain canonical.
 - [ ] Valid AI routes still expect HTTP 200.
 - [ ] Negative contracts remain 400 / 413 / 415 and unauthorized CORS remains rejected.
