@@ -53,3 +53,10 @@ export * from "./licensing/ContentLicense.ts";
 export { LicensePolicyEngine } from "./licensing/LicensePolicyEngine.ts";
 export { ContentUsageGuard } from "./licensing/ContentUsageGuard.ts";
 
+// Advanced Semantic Chunking, Caching, Grounding & Unified Pipeline
+export * from "./ingestion/SemanticChunker.ts";
+export * from "./retrieval/RetrievalCache.ts";
+export * from "./grounding.ts";
+export * from "./curriculum.ts";
+
+

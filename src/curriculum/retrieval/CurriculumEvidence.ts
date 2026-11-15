@@ -30,6 +30,9 @@ export interface CurriculumChunk {
   snippet: string;
   keywords: string[];
   provenance: CurriculumProvenance;
+  stream?: string;
+  prerequisites?: string[];
+  learningObjective?: string;
 }
 
 export interface CurriculumEvidence {
@@ -49,12 +52,17 @@ export interface CurriculumEvidence {
   keywords: string[];
   score: number; // Normalized relevance score (0.0 to 1.0)
   provenance: CurriculumProvenance;
+  stream?: string;
+  prerequisites?: string[];
+  learningObjective?: string;
 }
+
 
 export interface RetrievalFilter {
   curriculumId?: string;
   documentId?: string;
   grade?: string;
+  stream?: string;
   subject?: string;
   unitNumber?: number;
   chapterNumber?: number;
@@ -63,4 +71,7 @@ export interface RetrievalFilter {
   pageEnd?: number;
   limit?: number;
   minScore?: number;
+  includePrerequisites?: boolean;
+  noCache?: boolean;
 }
+

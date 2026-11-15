@@ -347,4 +347,52 @@ describe("Patch 19.3 - Real Chemistry AI Tutor Grounding & Security Verification
     assert.notStrictEqual(res.status, 400);
   });
 
+  it("builds the structured grounding prompt template adhering to all pedagogical sections", async () => {
+    const { buildStructuredGroundingPrompt, CurriculumGroundingEngine } = await import("./grounding");
+
+    const prompt = buildStructuredGroundingPrompt({
+      concept: "ترشی برۆنستد-لۆری",
+      grade: "12",
+      subject: "کیمیا",
+      stream: "زانستی",
+      prerequisites: ["گیراوەی ئاوی", "ئایۆنەکان"],
+      curriculumContext: [
+        "ترش بریتییە لە بەخشەری پرۆتۆن H+ لە کارلێکە کیمیاییەکاندا بەپێی تیۆری لۆری-برۆنشتێد.",
+      ],
+      studentLevel: "intermediate",
+      misconceptions: ["تێکەڵکردنی پێناسەی ئارینیۆس لەگەڵ برۆنستد"],
+    });
+
+    assert.ok(prompt.includes("[CONCEPT]: ترشی برۆنستد-لۆری"));
+    assert.ok(prompt.includes("[GRADE]: پۆلی 12 (زانستی) - کیمیا"));
+    assert.ok(prompt.includes("[PREREQUISITES]: گیراوەی ئاوی، ئایۆنەکان"));
+    assert.ok(prompt.includes("[CURRICULUM_CONTEXT]:"));
+    assert.ok(prompt.includes("بەخشەری پرۆتۆن"));
+    assert.ok(prompt.includes("[STUDENT_LEVEL]: intermediate (مامناوەند)"));
+    assert.ok(prompt.includes("[MISCONCEPTIONS]:"));
+    assert.ok(prompt.includes("تێکەڵکردنی پێناسەی ئارینیۆس"));
+  });
+
+  it("calculates grounding confidence score (0-1) correctly and evaluates verdict", async () => {
+    const { CurriculumGroundingEngine, calculateGroundingConfidence } = await import("./grounding");
+
+    // Empty chunks -> 0.0 confidence
+    assert.strictEqual(calculateGroundingConfidence({ chunks: [] }), 0.0);
+
+    // Grounded evaluation
+    const verdict = CurriculumGroundingEngine.evaluateGrounding({
+      concept: "پێوەری pH",
+      grade: "12",
+      curriculumContext: [
+        "پێوەری pH بریتییە لە لۆگاریتمی پێچەوانەی خەستی ئایۆنی هایدرۆنیۆم: pH = -log[H3O+].",
+      ],
+      studentLevel: "advanced",
+    });
+
+    assert.strictEqual(verdict.groundingStatus, "GROUNDED");
+    assert.ok(verdict.confidenceScore > 0.4);
+    assert.strictEqual(verdict.usedEvidenceCount, 1);
+  });
+
 });
+

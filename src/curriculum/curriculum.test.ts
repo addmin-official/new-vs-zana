@@ -315,3 +315,32 @@ test("Phase 19.1 - CurriculumRetriever grounding and fail-closed fallback", asyn
   assert.strictEqual(ungroundedResult.confidence, 0);
 });
 
+test("CurriculumPipelineService - orchestrates retrieval, caching, and structured grounding", async () => {
+  const { CurriculumPipelineService } = await import("./curriculum.ts");
+  const pipeline = CurriculumPipelineService.getInstance();
+
+  const response = await pipeline.retrieveAndGround({
+    grade: "12",
+    subject: "chemistry",
+    stream: "scientific",
+    conceptTitle: "ترش و تفتەکان",
+    studentLevel: "intermediate",
+    activeMisconceptions: ["هەڵەی تێگەیشتن لە pH"],
+    prerequisites: ["گیراوەکان"],
+  });
+
+  assert.ok(response.verdict);
+  assert.strictEqual(response.verdict.groundingStatus, "GROUNDED");
+  assert.ok(response.retrievalConfidence > 0);
+  assert.ok(response.evidenceCount > 0);
+  assert.ok(response.verdict.promptBlock.includes("[CONCEPT]:"));
+  assert.ok(response.verdict.promptBlock.includes("[GRADE]: پۆلی 12 (scientific) - chemistry"));
+  assert.ok(response.verdict.promptBlock.includes("[PREREQUISITES]: گیراوەکان"));
+  assert.ok(response.verdict.promptBlock.includes("[STUDENT_LEVEL]: intermediate (مامناوەند)"));
+  assert.ok(response.verdict.promptBlock.includes("[MISCONCEPTIONS]:"));
+
+  const stats = pipeline.getCacheStats();
+  assert.ok(stats.maxSize === 500);
+});
+
+

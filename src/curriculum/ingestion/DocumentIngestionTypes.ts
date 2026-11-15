@@ -80,3 +80,35 @@ export interface DocumentIngestionRecord {
   pages: ExtractedPage[];
   detectedSections: DetectedSection[];
 }
+
+/**
+ * Metadata schema for concept-aware semantic chunks.
+ */
+export interface SemanticChunkMetadata {
+  conceptId: string;
+  subject: string;
+  grade: string;
+  stream: string;
+  difficulty: string;
+  prerequisites: string[];
+  learningObjective: string;
+}
+
+/**
+ * Concept-aware semantic chunk carrying structured metadata,
+ * token bounds (optimal 200-400 tokens), and SHA-256 content deduplication hash.
+ */
+export interface SemanticChunk {
+  chunkId: string;
+  content: string;
+  metadata: SemanticChunkMetadata;
+  tokenCount: number;
+  hash: string;
+  pageStart: number;
+  pageEnd: number;
+  chapterNumber?: number;
+  chapterTitleKurdish?: string;
+  lessonNumber?: string;
+  lessonTitleKurdish?: string;
+}
+

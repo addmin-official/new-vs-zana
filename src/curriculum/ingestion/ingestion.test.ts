@@ -61,4 +61,50 @@ describe("Patch 19.1 - Chemistry Grade 12 Textbook Ingestion Foundation", () => 
     assert.strictEqual(result.valid, false);
     assert.ok(result.errors.some((e) => e.includes("Mismatched page count")));
   });
+
+  it("performs concept-aware semantic chunking with metadata and optimal token bounds", async () => {
+    const { SemanticChunker } = await import("./SemanticChunker");
+    const { chunks, duplicatesDetected } = SemanticChunker.chunkDocument(chemistryGrade12IngestionRecord);
+
+    assert.ok(chunks.length > 0, "Must produce semantic chunks");
+    assert.strictEqual(typeof duplicatesDetected, "number");
+
+    const firstChunk = chunks[0];
+    assert.ok(firstChunk.chunkId.startsWith("chk:"));
+    assert.ok(firstChunk.hash.length === 64, "Chunk must carry SHA-256 hash");
+    assert.ok(firstChunk.tokenCount >= 200, "Chunk should be within optimal token bounds (>= 200)");
+    assert.ok(firstChunk.tokenCount <= 450, "Chunk should not exceed maximum token boundary");
+
+    // Metadata validation
+    assert.ok(firstChunk.metadata.conceptId, "Must have conceptId");
+    assert.strictEqual(firstChunk.metadata.grade, "12");
+    assert.strictEqual(firstChunk.metadata.subject, "chemistry");
+    assert.strictEqual(firstChunk.metadata.stream, "scientific");
+    assert.ok(firstChunk.metadata.difficulty);
+    assert.ok(Array.isArray(firstChunk.metadata.prerequisites));
+    assert.ok(firstChunk.metadata.learningObjective);
+  });
+
+  it("detects and eliminates duplicate or near-duplicate semantic chunks", async () => {
+    const { SemanticChunker } = await import("./SemanticChunker");
+    const mockSection = chemistryGrade12IngestionRecord.detectedSections[0];
+    const initialChunks = SemanticChunker.chunkSection(mockSection, {
+      minTokens: 200,
+      maxTokens: 400,
+      grade: "12",
+      subject: "chemistry",
+      stream: "scientific",
+      defaultDifficulty: "intermediate",
+      curriculumId: "curr_test",
+      documentId: "doc_test",
+    });
+
+    // Artificially duplicate chunks
+    const duplicatedInput = [...initialChunks, ...initialChunks];
+    const { chunks, duplicatesDetected } = SemanticChunker.deduplicate(duplicatedInput);
+
+    assert.strictEqual(chunks.length, initialChunks.length);
+    assert.strictEqual(duplicatesDetected, initialChunks.length);
+  });
 });
+

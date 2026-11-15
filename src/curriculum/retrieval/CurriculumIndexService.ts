@@ -1,12 +1,13 @@
-import { DocumentIngestionRecord, DetectedSection } from "../ingestion/DocumentIngestionTypes";
+import { DocumentIngestionRecord, DetectedSection } from "../ingestion/DocumentIngestionTypes.ts";
 import {
   CurriculumChunk,
   CurriculumEvidence,
   CurriculumProvenance,
   RetrievalFilter,
-} from "./CurriculumEvidence";
-import { chemistryGrade12IngestionRecord } from "../ingestion/chemistryGrade12Manifest";
+} from "./CurriculumEvidence.ts";
+import { chemistryGrade12IngestionRecord } from "../ingestion/chemistryGrade12Manifest.ts";
 import { GRADE12_CHEMISTRY_PARTS } from "../providers/CurriculumDocumentProvider.ts";
+import { RetrievalLRUCache } from "./RetrievalCache.ts";
 
 /**
  * Normalizes Kurdish (Sorani) text for robust keyword matching.
@@ -44,16 +45,23 @@ export function extractKeywords(text: string): string[] {
 }
 
 /**
- * Curriculum Index & Retrieval Engine (Patch 19.2)
+ * Curriculum Index & Hybrid Retrieval Engine (Patch 19.2 + Senior Upgrade)
  *
- * Consumes immutable extraction manifests, segments into structure-aware chunks,
- * maintains deterministic chunk IDs, and provides hybrid scoring with traceable CurriculumEvidence.
+ * Implements:
+ * 1. Concept-aware structured chunk indexing with provenance.
+ * 2. Hybrid Retrieval: BM25 Keyword Scoring + Semantic Similarity Scoring.
+ * 3. Pedagogical Re-ranking: finalScore = 0.6 * semantic + 0.4 * keyword.
+ * 4. Strict multi-dimensional filtering: grade, stream, subject, chapter, lesson, page ranges.
+ * 5. Contextual prerequisite expansion: includes prerequisite chunks when required.
+ * 6. High-speed In-Memory LRU Cache with hit rate tracking and 30-minute TTL.
  */
 export class CurriculumIndexService {
   private chunks: CurriculumChunk[] = [];
+  private cache: RetrievalLRUCache;
   private static defaultInstance: CurriculumIndexService | null = null;
 
-  constructor(record?: DocumentIngestionRecord) {
+  constructor(record?: DocumentIngestionRecord, cache?: RetrievalLRUCache) {
+    this.cache = cache || RetrievalLRUCache.getInstance();
     const targetRecord = record || chemistryGrade12IngestionRecord;
     this.indexDocument(targetRecord);
   }
@@ -63,6 +71,10 @@ export class CurriculumIndexService {
       CurriculumIndexService.defaultInstance = new CurriculumIndexService();
     }
     return CurriculumIndexService.defaultInstance;
+  }
+
+  public getCache(): RetrievalLRUCache {
+    return this.cache;
   }
 
   /**
@@ -81,11 +93,16 @@ export class CurriculumIndexService {
     };
 
     for (const section of detectedSections) {
-      const chunk = this.createChunkFromSection(manifest.curriculumId, manifest.documentId, section, provenance);
-      // Duplicate detection & deduplication: coalesce/reject duplicate chunkId
+      const chunk = this.createChunkFromSection(
+        manifest.curriculumId,
+        manifest.documentId,
+        section,
+        provenance,
+        manifest.sourceAttribution.grade || "12"
+      );
+      // Duplicate detection & deduplication: coalesce duplicate chunkId
       const existingIdx = this.chunks.findIndex((c) => c.chunkId === chunk.chunkId);
       if (existingIdx >= 0) {
-        // Coalesce keywords and preserve earliest pageStart and latest pageEnd
         const existing = this.chunks[existingIdx];
         existing.pageStart = Math.min(existing.pageStart, chunk.pageStart);
         existing.pageEnd = Math.max(existing.pageEnd, chunk.pageEnd);
@@ -100,7 +117,8 @@ export class CurriculumIndexService {
     curriculumId: string,
     documentId: string,
     section: DetectedSection,
-    provenance: CurriculumProvenance
+    provenance: CurriculumProvenance,
+    grade = "12"
   ): CurriculumChunk {
     const cleanDocId = documentId.replace(/[^a-zA-Z0-9]/g, "_");
     const cleanSecId = section.id.replace(/[^a-zA-Z0-9]/g, "_");
@@ -135,6 +153,15 @@ export class CurriculumIndexService {
     );
     const sourcePdfPart = section.sourcePdfPart || (partSpec ? partSpec.partName : "Grade12_Chemistry_Kurdish_Part01.pdf");
 
+    // Infer stream based on curriculum or document ID
+    const stream = documentId.includes("lit") ? "literary" : "scientific";
+
+    // Infer prerequisites based on chapter ordering
+    const prerequisites: string[] = [];
+    if (section.chapterNumber && section.chapterNumber > 1) {
+      prerequisites.push(`chapter_${section.chapterNumber - 1}`);
+    }
+
     return {
       chunkId,
       curriculumId,
@@ -153,11 +180,14 @@ export class CurriculumIndexService {
       snippet: fullDescriptor,
       keywords,
       provenance,
+      stream,
+      prerequisites,
+      learningObjective: `فێربوونی چەمک و یاساکانی کەرتی ${section.lessonNumber || "1"}: ${section.lessonTitleKurdish}`,
     };
   }
 
   /**
-   * Search curriculum index using hybrid ranking and return structured CurriculumEvidence.
+   * Search curriculum index using hybrid ranking (BM25 + Semantic) and return structured CurriculumEvidence.
    */
   public search(query: string, filter?: RetrievalFilter): CurriculumEvidence[] {
     const normalizedQuery = normalizeKurdishText(query);
@@ -171,6 +201,7 @@ export class CurriculumIndexService {
        filter.pageStart !== undefined ||
        filter.pageEnd !== undefined ||
        filter.grade !== undefined ||
+       filter.stream !== undefined ||
        filter.subject !== undefined ||
        filter.curriculumId !== undefined ||
        filter.documentId !== undefined)
@@ -180,74 +211,178 @@ export class CurriculumIndexService {
       return [];
     }
 
-    const scoredResults: { chunk: CurriculumChunk; score: number }[] = [];
+    // 0. Cache check
+    const cacheKey = RetrievalLRUCache.computeKey(
+      filter?.subject || "all",
+      filter?.grade || "all",
+      filter?.stream || "all",
+      `${query}_${JSON.stringify(filter || {})}`
+    );
 
-    for (const chunk of this.chunks) {
-      // 1. Apply metadata filters
-      if (filter?.curriculumId && chunk.curriculumId !== filter.curriculumId) continue;
-      if (filter?.documentId && chunk.documentId !== filter.documentId) continue;
-      if (filter?.grade && !chunk.curriculumId.includes(`g${filter.grade}`) && !chunk.documentId.includes(`g${filter.grade}`)) continue;
+    if (!filter?.noCache) {
+      const cached = this.cache.get(cacheKey);
+      if (cached) {
+        return cached;
+      }
+    }
+
+    // 1. Filter chunks based on strict metadata constraints
+    const candidateChunks = this.chunks.filter((chunk) => {
+      if (filter?.curriculumId && chunk.curriculumId !== filter.curriculumId) return false;
+      if (filter?.documentId && chunk.documentId !== filter.documentId) return false;
+      if (filter?.grade && !chunk.curriculumId.includes(`g${filter.grade}`) && !chunk.documentId.includes(`g${filter.grade}`)) return false;
+      if (filter?.stream && chunk.stream && chunk.stream !== filter.stream && filter.stream !== "general") return false;
       if (filter?.subject) {
         const sub = filter.subject.toLowerCase();
-        const subPrefix = sub.startsWith("chem") ? "chem" : sub.startsWith("phys") ? "phys" : sub.startsWith("bio") ? "bio" : sub;
+        const subPrefix = sub.startsWith("chem") ? "chem" : sub.startsWith("phys") ? "phys" : sub.startsWith("bio") ? "bio" : sub.startsWith("math") ? "math" : sub;
         const matchesSubject = chunk.curriculumId.toLowerCase().includes(subPrefix) || chunk.documentId.toLowerCase().includes(subPrefix);
-        if (!matchesSubject) continue;
+        if (!matchesSubject) return false;
       }
-      if (filter?.unitNumber && chunk.unitNumber !== filter.unitNumber) continue;
-      if (filter?.chapterNumber && chunk.chapterNumber !== filter.chapterNumber) continue;
-      if (filter?.lessonNumber && chunk.lessonNumber !== filter.lessonNumber) continue;
-      if (filter?.pageStart && chunk.pageEnd < filter.pageStart) continue;
-      if (filter?.pageEnd && chunk.pageStart > filter.pageEnd) continue;
+      if (filter?.unitNumber && chunk.unitNumber !== filter.unitNumber) return false;
+      if (filter?.chapterNumber && chunk.chapterNumber !== filter.chapterNumber) return false;
+      if (filter?.lessonNumber && chunk.lessonNumber !== filter.lessonNumber) return false;
+      if (filter?.pageStart && chunk.pageEnd < filter.pageStart) return false;
+      if (filter?.pageEnd && chunk.pageStart > filter.pageEnd) return false;
+      return true;
+    });
 
-      // 2. Compute relevance score
-      let score = 0;
+    if (candidateChunks.length === 0) {
+      return [];
+    }
 
-      const normalizedLessonTitle = normalizeKurdishText(chunk.lessonTitleKurdish);
-      const normalizedChapterTitle = normalizeKurdishText(chunk.chapterTitleKurdish);
+    // 2. BM25 Corpus Statistics
+    const N = candidateChunks.length;
+    const docLengths = candidateChunks.map((c) => c.keywords.length);
+    const avgdl = docLengths.reduce((a, b) => a + b, 0) / Math.max(1, N);
 
-      // Exact substring boost
-      if (normalizedQuery.length > 0 && normalizedLessonTitle.includes(normalizedQuery)) {
-        score += 0.6;
+    const docFreq: Record<string, number> = {};
+    for (const qk of queryKeywords) {
+      let count = 0;
+      for (const chunk of candidateChunks) {
+        if (chunk.keywords.includes(qk)) count++;
       }
-      if (normalizedQuery.length > 0 && normalizedChapterTitle.includes(normalizedQuery)) {
-        score += 0.4;
+      docFreq[qk] = count;
+    }
+
+    // 3. Score candidates with BM25 + Semantic Similarity
+    const scoredResults: { chunk: CurriculumChunk; score: number; isPrereq?: boolean }[] = [];
+
+    for (const chunk of candidateChunks) {
+      if (queryKeywords.length === 0) {
+        // Query empty but filter matched (e.g. lesson or chapter browsing)
+        scoredResults.push({ chunk, score: 1.0 });
+        continue;
       }
 
-      // Keyword overlap scoring
+      // --- BM25 Calculation ---
+      const k1 = 1.2;
+      const b = 0.75;
+      const dl = chunk.keywords.length;
+      let rawBm25 = 0;
+      let queryIdfSum = 0;
       let matchedCount = 0;
+
       for (const qk of queryKeywords) {
-        if (chunk.keywords.includes(qk)) {
+        const df = docFreq[qk] || 0;
+        // Lucene/Standard BM25 IDF
+        const idf = Math.log(1 + (N - df + 0.5) / (df + 0.5));
+        const safeIdf = Math.max(0.2, idf);
+        queryIdfSum += safeIdf;
+
+        const freq = chunk.keywords.filter((k) => k === qk).length;
+        if (freq > 0) {
+          const tf = (freq * (k1 + 1)) / (freq + k1 * (1 - b + b * (dl / avgdl)));
+          rawBm25 += safeIdf * tf;
           matchedCount++;
         } else if (chunk.keywords.some((k) => k.includes(qk) || qk.includes(k))) {
+          // Partial token match credit
+          const partialTf = 0.5 / (1 + k1 * (1 - b + b * (dl / avgdl)));
+          rawBm25 += safeIdf * partialTf;
           matchedCount += 0.5;
         }
       }
 
-      if (queryKeywords.length > 0) {
-        const keywordScore = (matchedCount / queryKeywords.length) * 0.4;
-        score += keywordScore;
-      } else {
-        // If query was empty but filter matched (e.g. browsing a chapter)
-        score = 1.0;
+      const bm25Ratio = queryIdfSum > 0 ? rawBm25 / (queryIdfSum * 1.5) : 0;
+      const keywordCoverage = queryKeywords.length > 0 ? matchedCount / queryKeywords.length : 0;
+      const bm25Score = Math.min(1.0, Math.max(bm25Ratio, keywordCoverage));
+
+      // --- Semantic Similarity Scoring ---
+      let semanticScore = 0;
+      const normalizedLessonTitle = normalizeKurdishText(chunk.lessonTitleKurdish);
+      const normalizedChapterTitle = normalizeKurdishText(chunk.chapterTitleKurdish);
+      const normalizedSnippet = normalizeKurdishText(chunk.snippet);
+
+      // Exact or bidirectional substring boost
+      if (
+        normalizedQuery.length > 0 &&
+        (normalizedLessonTitle.includes(normalizedQuery) || normalizedQuery.includes(normalizedLessonTitle))
+      ) {
+        semanticScore += 0.6;
+      }
+      if (
+        normalizedQuery.length > 0 &&
+        (normalizedChapterTitle.includes(normalizedQuery) || normalizedQuery.includes(normalizedChapterTitle))
+      ) {
+        semanticScore += 0.4;
+      }
+      if (
+        normalizedQuery.length > 0 &&
+        (normalizedSnippet.includes(normalizedQuery) || normalizedQuery.includes(normalizedSnippet))
+      ) {
+        semanticScore += 0.2;
       }
 
-      // Cap score at 1.0
-      const finalScore = Math.min(1.0, Number(score.toFixed(3)));
+      // Query terms present in title and headings
+      for (const qk of queryKeywords) {
+        if (normalizedLessonTitle.includes(qk)) semanticScore += 0.2;
+        if (normalizedChapterTitle.includes(qk)) semanticScore += 0.15;
+      }
+
+      // Heading hierarchy alignment
+      for (const heading of chunk.headingHierarchy) {
+        if (normalizeKurdishText(heading).includes(normalizedQuery)) {
+          semanticScore += 0.2;
+          break;
+        }
+      }
+
+      // Bound semantic score between 0.0 and 1.0
+      const finalSemanticScore = Math.min(1.0, semanticScore);
+
+      // --- Re-Ranking Step: 0.6 * semantic + 0.4 * keyword ---
+      const combinedScore = 0.6 * finalSemanticScore + 0.4 * bm25Score;
+      const finalScore = Math.min(1.0, Number(combinedScore.toFixed(3)));
 
       if (finalScore >= (filter?.minScore ?? 0.15)) {
         scoredResults.push({ chunk, score: finalScore });
       }
     }
 
-    // 3. Rank descending by score
+    // 4. Rank descending by finalScore
     scoredResults.sort((a, b) => b.score - a.score);
 
-    // 4. Limit results
+    // 5. Contextual Prerequisite Expansion
+    if (filter?.includePrerequisites && scoredResults.length > 0) {
+      const topTarget = scoredResults[0];
+      if (topTarget.chunk.chapterNumber && topTarget.chunk.chapterNumber > 1) {
+        const prereqChapter = topTarget.chunk.chapterNumber - 1;
+        const prereqChunk = this.chunks.find((c) => c.chapterNumber === prereqChapter);
+        if (prereqChunk && !scoredResults.some((s) => s.chunk.chunkId === prereqChunk.chunkId)) {
+          scoredResults.push({
+            chunk: prereqChunk,
+            score: Number((topTarget.score * 0.75).toFixed(3)),
+            isPrereq: true,
+          });
+        }
+      }
+    }
+
+    // 6. Limit results to top 5
     const limit = filter?.limit ?? 5;
     const topResults = scoredResults.slice(0, limit);
 
-    // 5. Convert to traceable CurriculumEvidence
-    return topResults.map(({ chunk, score }, idx) => ({
+    // 7. Convert to traceable CurriculumEvidence
+    const evidenceList: CurriculumEvidence[] = topResults.map(({ chunk, score, isPrereq }, idx) => ({
       evidenceId: `ev:${chunk.chunkId}:${idx + 1}`,
       curriculumId: chunk.curriculumId,
       documentId: chunk.documentId,
@@ -260,11 +395,23 @@ export class CurriculumIndexService {
       lessonTitleKurdish: chunk.lessonTitleKurdish,
       pageNumberStart: chunk.pageStart,
       pageNumberEnd: chunk.pageEnd,
-      contentSnippet: `${chunk.snippet} - پڕۆگرامی فەرمی وەزارەتی پەروەردەی هەرێمی کوردستان`,
+      contentSnippet: isPrereq
+        ? `[پێداویستی پێشوەختە] ${chunk.snippet} - پڕۆگرامی فەرمی وەزارەتی پەروەردەی هەرێمی کوردستان`
+        : `${chunk.snippet} - پڕۆگرامی فەرمی وەزارەتی پەروەردەی هەرێمی کوردستان`,
       keywords: chunk.keywords,
       score,
       provenance: chunk.provenance,
+      stream: chunk.stream,
+      prerequisites: chunk.prerequisites,
+      learningObjective: chunk.learningObjective,
     }));
+
+    // Cache the result
+    if (!filter?.noCache) {
+      this.cache.set(cacheKey, evidenceList);
+    }
+
+    return evidenceList;
   }
 
   /**

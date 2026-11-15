@@ -251,5 +251,76 @@ describe("Patch 19.2 - Curriculum Index & Retrieval Engine", () => {
     assert.strictEqual(status.ingestionStatus, "INDEXED");
     assert.strictEqual(status.groundingVerdict, "PDF_GROUNDED");
   });
+
+  it("performs hybrid retrieval combining BM25 keyword matching and semantic scoring with re-ranking", () => {
+    // Search with specific chemical terms
+    const results = indexService.search("تیۆری ترش و تفت ئارینیۆس و برۆنستد", { limit: 5 });
+    assert.ok(results.length > 0);
+    assert.ok(results.length <= 5);
+
+    const top = results[0];
+    assert.ok(top.score > 0.4, "Top hybrid score must be substantial");
+    assert.ok(top.evidenceId.startsWith("ev:chk:"));
+    assert.ok(top.chapterTitleKurdish.includes("ترش") || top.lessonTitleKurdish.includes("ترش"));
+  });
+
+  it("filters accurately across grade, stream, and subject dimensions", () => {
+    // Filter by scientific stream
+    const scientificResults = indexService.search("ترش", { stream: "scientific", grade: "12", subject: "chemistry" });
+    assert.ok(scientificResults.length > 0);
+    assert.ok(scientificResults.every((r) => !r.stream || r.stream === "scientific"));
+
+    // Filter by literary stream should exclude chemistry chapters
+    const literaryResults = indexService.search("ترش", { stream: "literary" });
+    assert.strictEqual(literaryResults.length, 0, "Chemistry should not match literary stream filter");
+  });
+
+  it("expands contextual prerequisites when required", () => {
+    const results = indexService.search("هاوسەنگی کیمیایی", {
+      chapterNumber: 7,
+      includePrerequisites: true,
+      limit: 5,
+    });
+    assert.ok(results.length > 0);
+    // When includePrerequisites is requested, prerequisite chunks from earlier chapter should be included
+    const hasPrereq = results.some((r) => r.contentSnippet.includes("[پێداویستی پێشوەختە]"));
+    assert.ok(hasPrereq, "Must include prerequisite chunk context");
+  });
+
+  it("manages LRU cache correctly with hit-rate telemetry, SHA-256 keys, and TTL", async () => {
+    const { RetrievalLRUCache } = await import("./RetrievalCache");
+    const testCache = new RetrievalLRUCache(3, 5000); // 3 max items, 5s TTL
+
+    const key1 = RetrievalLRUCache.computeKey("chemistry", "12", "scientific", "acids");
+    const key2 = RetrievalLRUCache.computeKey("chemistry", "12", "scientific", "bases");
+    const key3 = RetrievalLRUCache.computeKey("physics", "12", "scientific", "motion");
+    const key4 = RetrievalLRUCache.computeKey("math", "12", "scientific", "limits");
+
+    assert.strictEqual(key1.length, 64, "Key must be a valid 64-char SHA-256 hash");
+
+    testCache.set(key1, []);
+    testCache.set(key2, []);
+    testCache.set(key3, []);
+
+    // Cache hit
+    const hitVal = testCache.get(key1);
+    assert.ok(hitVal !== null);
+
+    // Cache miss
+    const missVal = testCache.get("non-existent-key");
+    assert.strictEqual(missVal, null);
+
+    // LRU eviction test: inserting key4 should evict key2 (since key1 was recently accessed)
+    testCache.set(key4, []);
+    assert.strictEqual(testCache.has(key1), true, "Recently accessed key1 should remain");
+    assert.strictEqual(testCache.has(key2), false, "Least recently used key2 should be evicted");
+
+    const stats = testCache.getStats();
+    assert.strictEqual(stats.hits, 1);
+    assert.strictEqual(stats.misses, 1);
+    assert.strictEqual(stats.hitRate, 0.5);
+    assert.strictEqual(stats.evictions, 1);
+  });
 });
+
 
