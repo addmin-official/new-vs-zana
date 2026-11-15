@@ -80,7 +80,7 @@ export function ParentReport({ profile: propProfile }: ParentReportProps = {}) {
 
   const handleSendEmail = () => {
     // Copy text first to prevent data loss if Mail client fails (e.g. iCloud quota full)
-    handleCopyText();
+    void handleCopyText();
     const subject = encodeURIComponent(`ڕاپۆرتی هوشیاری باوان - قوتابی ${studentName}`);
     const body = encodeURIComponent(getShareText());
     window.location.href = `mailto:?subject=${subject}&body=${body}`;

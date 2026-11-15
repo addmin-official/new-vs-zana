@@ -6,17 +6,10 @@ import {
   Plus,
   Share2,
   Download,
-  BookOpen,
-  CheckCircle2,
-  Clock,
   Sparkles,
-  ChevronDown,
-  Filter,
-  Search,
   Copy,
   Check,
   Target,
-  ArrowRight,
 } from "lucide-react";
 import { MasteryGrid } from "../components/charts/MasteryGrid.tsx";
 import { ProgressRing } from "../components/charts/ProgressRing.tsx";
@@ -24,7 +17,6 @@ import {
   MOCK_TEACHER_CLASS,
 } from "../components/analytics/mockAnalyticsService.ts";
 import { TeacherAssignment } from "../components/analytics/analyticsTypes.ts";
-import { useAppStore } from "../store/appStore.ts";
 
 export interface TeacherDashboardProps {
   onNavigateToSubjects?: () => void;
@@ -33,11 +25,11 @@ export interface TeacherDashboardProps {
 }
 
 export function TeacherDashboard({
-  onNavigateToSubjects,
-  onNavigateToPractice,
+  onNavigateToSubjects: _onNavigateToSubjects,
+  onNavigateToPractice: _onNavigateToPractice,
   onBackToApp,
 }: TeacherDashboardProps) {
-  const [classData, setClassData] = useState(MOCK_TEACHER_CLASS);
+  const [classData] = useState(MOCK_TEACHER_CLASS);
   const [assignments, setAssignments] = useState<TeacherAssignment[]>([
     {
       id: "asg-1",
@@ -65,7 +57,7 @@ export function TeacherDashboard({
   const [isCreatingAssignment, setIsCreatingAssignment] = useState(false);
   const [assignmentTitle, setAssignmentTitle] = useState("");
   const [assignmentSubject, setAssignmentSubject] = useState("کیمیا");
-  const [selectedConcepts, setSelectedConcepts] = useState<string[]>(["c_buffer"]);
+  const [selectedConcepts] = useState<string[]>(["c_buffer"]);
   const [questionCount, setQuestionCount] = useState(10);
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
 
@@ -100,7 +92,7 @@ export function TeacherDashboard({
 
   const copyToClipboard = (link: string) => {
     if (navigator?.clipboard) {
-      navigator.clipboard.writeText(link);
+      void navigator.clipboard.writeText(link);
       setCopiedLink(link);
       setTimeout(() => setCopiedLink(null), 2500);
     }

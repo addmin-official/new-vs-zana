@@ -55,7 +55,7 @@ export async function runDatabaseIntegrityChecks(db?: D1DatabaseLike): Promise<I
   try {
     const stuRes = await db.prepare("SELECT COUNT(*) as cnt FROM students").bind().all<{ cnt: number }>();
     report.counts.students = stuRes?.results?.[0]?.cnt || 0;
-  } catch (err: unknown) {
+  } catch {
     // Might be in students_v2 or original
   }
 

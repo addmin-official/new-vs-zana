@@ -1,16 +1,13 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   Play,
   Pause,
   RotateCcw,
-  Atom,
   CheckCircle2,
-  FileText,
   Sparkles,
 } from "lucide-react";
 import {
   SimulationState,
-  SimulationConfig,
   ExperimentLogEntry,
   LabReportTemplate,
 } from "./labTypes.ts";

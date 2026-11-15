@@ -101,7 +101,7 @@ export const LineChart = React.memo(function LineChart({
         >
           <defs>
             <linearGradient id={`line-area-grad-${title || "main"}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={lineColor} stopOpacity="0.3" />
+              <stop offset="0%" stopColor={fillColor || lineColor} stopOpacity="0.3" />
               <stop offset="100%" stopColor={lineColor} stopOpacity="0.0" />
             </linearGradient>
           </defs>

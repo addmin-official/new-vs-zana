@@ -6,7 +6,6 @@ import {
   ArrowLeft,
   ArrowRight,
   RotateCcw,
-  ArrowLeftRight,
   Lock,
 } from "lucide-react";
 import { useSoundEffects } from "../hooks/useSoundEffects.ts";
@@ -915,7 +914,7 @@ export interface AdaptiveAssessmentProps {
 export function AdaptiveAssessment({
   onFinish,
   onNavigateToPractice: _onNavigateToPractice,
-  onNavigateToSubjects,
+  onNavigateToSubjects: _onNavigateToSubjects,
 }: AdaptiveAssessmentProps) {
   const { playSuccess } = useSoundEffects();
   const user = useAppStore((state) => state.user);

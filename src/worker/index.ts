@@ -2392,7 +2392,7 @@ export default {
                  email = COALESCE(excluded.email, students.email),
                  grade = COALESCE(excluded.grade, students.grade)`
             ).bind(studentId, studentId, studentName || "قوتابی", studentEmail || "", grade).run();
-          } catch (studentErr) {
+          } catch {
             try {
               await env.DB.prepare(
                 `INSERT INTO students (id, firebase_uid, name, grade, created_at)

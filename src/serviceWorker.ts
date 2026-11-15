@@ -51,7 +51,7 @@ class ServiceWorkerManager {
 
     if (isOnline) {
       // Trigger background sync for queued mastery updates
-      this.triggerOfflineSync();
+      void this.triggerOfflineSync();
     }
   }
 
@@ -129,7 +129,7 @@ export const swManager = new ServiceWorkerManager();
 export function registerServiceWorker(): void {
   if (typeof window !== "undefined") {
     window.addEventListener("load", () => {
-      swManager.register();
+      void swManager.register();
     });
   }
 }

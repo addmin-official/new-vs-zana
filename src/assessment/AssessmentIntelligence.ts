@@ -1,6 +1,5 @@
 import {
   AssessmentQuestion,
-  PublicQuestion,
   CognitiveLevel,
   IRTParameters,
   CognitiveProfile,

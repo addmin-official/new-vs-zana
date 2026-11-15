@@ -118,7 +118,7 @@ export class CurriculumIndexService {
     documentId: string,
     section: DetectedSection,
     provenance: CurriculumProvenance,
-    grade = "12"
+    _grade = "12"
   ): CurriculumChunk {
     const cleanDocId = documentId.replace(/[^a-zA-Z0-9]/g, "_");
     const cleanSecId = section.id.replace(/[^a-zA-Z0-9]/g, "_");

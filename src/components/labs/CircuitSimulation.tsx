@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
-  Play,
-  Pause,
   RotateCcw,
   Zap,
   CheckCircle2,
@@ -9,7 +7,6 @@ import {
 } from "lucide-react";
 import {
   SimulationState,
-  SimulationConfig,
   ExperimentLogEntry,
   LabReportTemplate,
 } from "./labTypes.ts";

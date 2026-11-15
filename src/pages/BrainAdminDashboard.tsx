@@ -3,32 +3,22 @@ import {
   ShieldAlert,
   Activity,
   Cpu,
-  CheckCircle2,
   AlertTriangle,
-  RotateCcw,
-  Sparkles,
   Search,
-  Bell,
   TrendingDown,
   Clock,
-  Layers,
   BarChart3,
   Flame,
   UserX,
-  ExternalLink,
-  ChevronDown,
   Check,
-  X,
-  Filter,
 } from "lucide-react";
 import { BarChart, BarSeries } from "../components/charts/BarChart.tsx";
 import { LineChart } from "../components/charts/LineChart.tsx";
 import { HeatMap } from "../components/charts/HeatMap.tsx";
-import { ProgressRing } from "../components/charts/ProgressRing.tsx";
 import {
   MOCK_SYSTEM_METRICS,
 } from "../components/analytics/mockAnalyticsService.ts";
-import { AnomalyAlert, StrugglingConcept } from "../components/analytics/analyticsTypes.ts";
+import { AnomalyAlert } from "../components/analytics/analyticsTypes.ts";
 import { useAppStore, UserRole } from "../store/appStore.ts";
 
 export interface BrainAdminDashboardProps {
@@ -39,8 +29,8 @@ export interface BrainAdminDashboardProps {
 
 export function BrainAdminDashboard({
   onBackToApp,
-  onNavigateToTeacher,
-  onNavigateToParent,
+  onNavigateToTeacher: _onNavigateToTeacher,
+  onNavigateToParent: _onNavigateToParent,
 }: BrainAdminDashboardProps) {
   const [activeTab, setActiveTab] = useState<"system_intelligence" | "struggling_concepts" | "anomalies">("system_intelligence");
   const [anomalies, setAnomalies] = useState<AnomalyAlert[]>(MOCK_SYSTEM_METRICS.anomalies);

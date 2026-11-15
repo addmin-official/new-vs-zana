@@ -354,6 +354,50 @@ export function topologicalSort(nodes: KnowledgeNode[]): KnowledgeNode[] {
 }
 
 /**
+ * Detects whether a knowledge graph contains cycles and returns circular nodes.
+ */
+export function detectKnowledgeGraphCycles(nodes: KnowledgeNode[]): { hasCycle: boolean; cycleNodes: string[] } {
+  const nodeMap = new Map<string, KnowledgeNode>();
+  const inDegree = new Map<string, number>();
+  const adjList = new Map<string, string[]>();
+
+  for (const node of nodes) {
+    nodeMap.set(node.id, node);
+    inDegree.set(node.id, 0);
+    adjList.set(node.id, []);
+  }
+
+  for (const node of nodes) {
+    for (const prereqId of node.prerequisites) {
+      if (nodeMap.has(prereqId)) {
+        adjList.get(prereqId)!.push(node.id);
+        inDegree.set(node.id, (inDegree.get(node.id) || 0) + 1);
+      }
+    }
+  }
+
+  const queue: string[] = [];
+  for (const [id, deg] of inDegree.entries()) {
+    if (deg === 0) queue.push(id);
+  }
+
+  let visitedCount = 0;
+  while (queue.length > 0) {
+    const curr = queue.shift()!;
+    visitedCount++;
+    for (const neighbor of adjList.get(curr) || []) {
+      const newDeg = (inDegree.get(neighbor) || 1) - 1;
+      inDegree.set(neighbor, newDeg);
+      if (newDeg === 0) queue.push(neighbor);
+    }
+  }
+
+  const hasCycle = visitedCount < nodes.length;
+  const cycleNodes = nodes.filter((n) => (inDegree.get(n.id) || 0) > 0).map((n) => n.id);
+  return { hasCycle, cycleNodes };
+}
+
+/**
  * Evaluates node lock/mastery state against a student's mastery profile.
  * - MASTERED: masteryScore >= 0.8
  * - UNLOCKED: all prerequisites mastered (score >= 0.6)

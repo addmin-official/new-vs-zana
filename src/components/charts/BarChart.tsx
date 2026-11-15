@@ -148,8 +148,7 @@ export const BarChart = React.memo(function BarChart({
                         fill={s.color}
                         rx={2}
                         className="transition-all duration-300 hover:opacity-85 cursor-pointer"
-                        onMouseEnter={(e) => {
-                          const rect = e.currentTarget.getBoundingClientRect();
+                        onMouseEnter={() => {
                           setHoveredBar({
                             itemIndex: dIdx,
                             seriesKey: s.key,

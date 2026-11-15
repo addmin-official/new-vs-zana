@@ -6,8 +6,6 @@ import {
   Dna,
   Lock,
   Users,
-  FileText,
-  BookOpen,
 } from "lucide-react";
 import { useAppStore } from "../store/appStore.ts";
 import {
@@ -101,6 +99,7 @@ export function VirtualScienceLab() {
     } else {
       setActiveLab("titration");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rawSubj]);
 
   // Report Modal State

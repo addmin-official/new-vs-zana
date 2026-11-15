@@ -1,7 +1,6 @@
-import { CurriculumRetriever, RetrievalOptions } from "./retrieval/CurriculumRetriever.ts";
+import { CurriculumRetriever } from "./retrieval/CurriculumRetriever.ts";
 import { CurriculumIndexService } from "./retrieval/CurriculumIndexService.ts";
 import { RetrievalLRUCache, CacheStats } from "./retrieval/RetrievalCache.ts";
-import { DocumentIntakeService } from "./ingestion/DocumentIntakeService.ts";
 import { SemanticChunker } from "./ingestion/SemanticChunker.ts";
 import {
   CurriculumGroundingEngine,

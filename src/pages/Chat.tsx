@@ -371,6 +371,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
         conceptsDiscussed: [...prev.conceptsDiscussed, activeChapter.title],
       }));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChapter?.title, sessionMemory.conceptsDiscussed]);
 
   const _isPhysics = currentSubject === "physics";

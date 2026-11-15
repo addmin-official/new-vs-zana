@@ -117,8 +117,9 @@ export function NotificationCenter({
 
   useEffect(() => {
     if (isOpen) {
-      loadNotifications();
+      void loadNotifications();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   // Keyboard navigation: Escape closes modal
@@ -157,7 +158,7 @@ export function NotificationCenter({
 
   const handleAction = (item: NotificationItem) => {
     if (!item.readAt) {
-      notificationService.markAsRead(item.id);
+      void notificationService.markAsRead(item.id);
       setNotifications((prev) =>
         prev.map((n) => (n.id === item.id ? { ...n, readAt: Date.now() } : n))
       );

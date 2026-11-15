@@ -2,7 +2,6 @@ import {
   SystemIntelligenceMetrics,
   TeacherClassOverview,
   ParentPortalSummary,
-  TeacherAssignment,
 } from "./analyticsTypes.ts";
 
 export const MOCK_SYSTEM_METRICS: SystemIntelligenceMetrics = {

@@ -9,7 +9,6 @@ import {
   Clock,
   ShieldCheck,
   Zap,
-  Flame,
   Brain,
 } from "lucide-react";
 

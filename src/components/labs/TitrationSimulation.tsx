@@ -1,18 +1,14 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, { useState, useRef, useMemo, useEffect } from "react";
 import {
   Play,
   Pause,
   RotateCcw,
   Droplets,
-  BarChart3,
   CheckCircle2,
-  AlertTriangle,
-  FileText,
   Sparkles,
 } from "lucide-react";
 import {
   SimulationState,
-  SimulationConfig,
   ExperimentLogEntry,
   LabReportTemplate,
 } from "./labTypes.ts";
@@ -36,11 +32,10 @@ export const TitrationSimulation: React.FC<TitrationSimulationProps> = ({
   // Variables
   const [volumeAdded, setVolumeAdded] = useState(0);
   const [baseConcentration, setBaseConcentration] = useState(0.1);
-  const [acidConcentration, setAcidConcentration] = useState(0.1);
+  const acidConcentration = 0.1;
 
   // Animation & Dripping
   const [isDripping, setIsDripping] = useState(false);
-  const [showAnalysis, setShowAnalysis] = useState(false);
   const [logs, setLogs] = useState<ExperimentLogEntry[]>([]);
 
   // Throttle ref for 60fps
@@ -170,7 +165,6 @@ export const TitrationSimulation: React.FC<TitrationSimulationProps> = ({
   const handleReset = () => {
     setVolumeAdded(0);
     setSimState("SETUP");
-    setShowAnalysis(false);
     recordLog("reset", "دوبارەکردنەوەی تاقیگە", volumeAdded, 0, "mL", "گەڕانەوە بۆ خاڵی سەرەتا");
   };
 

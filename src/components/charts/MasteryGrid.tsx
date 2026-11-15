@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { ArrowUpDown, HelpCircle } from "lucide-react";
+import { ArrowUpDown } from "lucide-react";
 
 export interface StudentConceptMastery {
   studentId: string;
@@ -148,7 +148,7 @@ export const MasteryGrid = React.memo(function MasteryGrid({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs font-sans">
-            {sortedStudents.map((st) => (
+            {sortedStudents.map((st: StudentConceptMastery) => (
               <tr
                 key={st.studentId}
                 className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors"

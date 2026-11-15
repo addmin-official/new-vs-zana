@@ -150,9 +150,6 @@ export function ProfileAndSettings({
     }
   };
 
-  const [dailyReminders, setDailyReminders] = useState(true);
-  const [assessmentResultsNotif, setAssessmentResultsNotif] = useState(true);
-  const [socialActivityNotif, setSocialActivityNotif] = useState(false);
   const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
 
   // Privacy toggles

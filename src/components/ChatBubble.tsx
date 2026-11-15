@@ -11,7 +11,6 @@ import {
   ExternalLink,
   Layers,
   Brain,
-  CheckCircle2,
 } from "lucide-react";
 import { ChatMessage } from "../services/storage.ts";
 

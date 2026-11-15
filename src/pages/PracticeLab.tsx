@@ -8,21 +8,13 @@ import {
   X,
   Flame,
   Calculator,
-  ArrowLeftRight,
   Lock,
   Sparkles,
   GraduationCap,
   Activity,
-  HelpCircle,
-  CheckCircle2,
-  ListOrdered,
-  CheckSquare,
-  Layers,
   MoveUp,
   MoveDown,
   Sliders,
-  ChevronDown,
-  ChevronUp,
   Lightbulb,
   BookOpen,
 } from "lucide-react";
@@ -795,7 +787,7 @@ export interface PracticeLabProps {
 
 export function PracticeLab({
   onNavigateToPedagogy,
-  onNavigateToSubjects,
+  onNavigateToSubjects: _onNavigateToSubjects,
 }: PracticeLabProps = {}) {
   const { playSuccess, playError } = useSoundEffects();
   const { profile } = useStudentProfile();
@@ -879,8 +871,8 @@ export function PracticeLab({
       const topicName = gap.conceptId.replace(/_/g, " ");
       return {
         id: `gap-${gap.conceptId}-${index}`,
-        category: (rawSubj as any) || "chemistry",
-        grade: (studentGrade as any) || "12",
+        category: (rawSubj as ProblemItem["category"]) || "chemistry",
+        grade: (studentGrade as ProblemItem["grade"]) || "12",
         format: "step_solver",
         questionType: "MULTIPLE_CHOICE",
         isMasteryGapTargeted: true,
@@ -974,6 +966,7 @@ export function PracticeLab({
     } else {
       setOrderingCurrentList([]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentProblem?.id]);
 
   const handleCheckWork = () => {
@@ -1794,7 +1787,7 @@ export function PracticeLab({
                     {hintLevel < 3 && (
                       <button
                         type="button"
-                        onClick={() => setHintLevel((prev) => Math.min(3, prev + 1) as any)}
+                        onClick={() => setHintLevel((prev) => Math.min(3, prev + 1) as 0 | 1 | 2 | 3)}
                         className="text-[11px] font-bold text-amber-800 hover:text-amber-950 underline cursor-pointer pt-1"
                       >
                         ئاشکراکردنی ئاستی داهاتووی تێبینی (+{hintLevel + 1})
@@ -1825,7 +1818,7 @@ export function PracticeLab({
               <button
                 type="button"
                 onClick={() =>
-                  setHintLevel((prev) => (prev >= 3 ? 0 : ((prev + 1) as any)))
+                  setHintLevel((prev) => (prev >= 3 ? 0 : ((prev + 1) as 0 | 1 | 2 | 3)))
                 }
                 className={`text-xs font-bold px-3.5 py-2.5 rounded-xl border transition-colors cursor-pointer flex items-center gap-1.5 ${
                   hintLevel > 0

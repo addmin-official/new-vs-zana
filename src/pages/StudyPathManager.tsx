@@ -9,15 +9,10 @@ import {
   Trash2,
   ExternalLink,
   X,
-  Lock,
-  Unlock,
-  Sparkles,
   Flame,
   Brain,
   Calendar,
   TrendingUp,
-  Compass,
-  Award,
   ArrowRight,
   Target,
   ShieldAlert,
@@ -33,7 +28,6 @@ import {
   evaluateMomentum,
   EvaluatedKnowledgeNode,
   IntelligentWeeklyPlan,
-  WeeklyPlanItem,
   ProgressForecastResult,
 } from "../planning/planning.ts";
 import { StudentMasteryProfile, MasteryStatus } from "../learning/domain/MasteryTypes.ts";

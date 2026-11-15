@@ -1,4 +1,4 @@
-import { DifficultyLevel, RecommendationType } from "../../learning/domain/MasteryTypes.ts";
+import { DifficultyLevel, RecommendationType, ConceptMasteryState } from "../../learning/domain/MasteryTypes.ts";
 
 export enum AssessmentType {
   DIAGNOSTIC = "DIAGNOSTIC",
@@ -231,7 +231,7 @@ export interface AssessmentAttempt {
   expiresAt?: string;
   createdAt: string;
   updatedAt: string;
-  previousMasteries?: Record<string, any>;
+  previousMasteries?: Record<string, ConceptMasteryState | null>;
 }
 
 export interface ScoreBreakdown {

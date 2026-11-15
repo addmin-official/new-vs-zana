@@ -7,14 +7,9 @@ import {
   CheckCircle2,
   BookOpen,
   Bell,
-  Mail,
-  ShieldCheck,
-  Sparkles,
-  ArrowRight,
   TrendingUp,
 } from "lucide-react";
 import { MOCK_PARENT_DATA } from "../components/analytics/mockAnalyticsService.ts";
-import { ProgressRing } from "../components/charts/ProgressRing.tsx";
 import { StudentProfile } from "../features/student/studentTypes.ts";
 
 export interface ParentPortalProps {

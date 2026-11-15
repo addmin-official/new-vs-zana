@@ -15,7 +15,6 @@ import {
   LogOut,
   Heart,
   Cpu,
-  ShieldAlert,
 } from "lucide-react";
 import { useAppStore, UserRole } from "../store/appStore.ts";
 

@@ -12,8 +12,6 @@ import {
   getDocs,
   doc,
   setDoc,
-  getDoc,
-  writeBatch,
 } from "firebase/firestore";
 import {
   UserDocument,
@@ -39,7 +37,7 @@ export async function migrateLegacyStudentData(
   db: Firestore,
   options: { dryRun?: boolean; batchLimit?: number } = {}
 ): Promise<MigrationStats> {
-  const { dryRun = false, batchLimit = 200 } = options;
+  const { dryRun = false, batchLimit: _batchLimit = 200 } = options;
   const stats: MigrationStats = {
     totalScanned: 0,
     migratedUsers: 0,

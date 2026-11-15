@@ -87,6 +87,23 @@ jobs:
           set -euo pipefail
           npm test 2>&1 | tee test.log
 
+      # STAGE 3.6: Vitest Unit & Coverage Gate (70% Threshold)
+      - name: Run Vitest Unit Tests with Coverage
+        run: |
+          set -euo pipefail
+          npx vitest run --coverage 2>&1 | tee vitest-coverage.log
+
+      # STAGE 3.7: Playwright Headless E2E Tests (Chromium)
+      - name: Install Playwright Chromium & Dependencies
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium
+
+      - name: Run Playwright E2E Tests
+        run: |
+          set -euo pipefail
+          npx playwright test --project=chromium 2>&1 | tee playwright.log
+
       - name: Save Pipeline Start Time
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
@@ -188,6 +205,23 @@ jobs:
           fi
 
           echo "Explicit client output verification succeeded."
+
+      # STAGE 4.2.1: Bundle Size Budget Verification (< 150KB gzipped entry)
+      - name: Verify Initial Bundle Size Budget (< 150KB gzipped)
+        run: |
+          set -euo pipefail
+          INDEX_JS=$(find dist/client/assets -type f -name "index-*.js" | head -n 1)
+          if [ -z "$INDEX_JS" ] || [ ! -f "$INDEX_JS" ]; then
+            echo "::error::Primary entrypoint index-*.js not found in dist/client/assets!"
+            exit 1
+          fi
+          GZIP_SIZE=$(gzip -c "$INDEX_JS" | wc -c)
+          echo "Primary entrypoint: $INDEX_JS (Gzipped: $GZIP_SIZE bytes)"
+          if [ "$GZIP_SIZE" -gt 153600 ]; then
+            echo "::error::Initial bundle ($GZIP_SIZE bytes gzipped) exceeds 150KB budget limit!"
+            exit 1
+          fi
+          echo "Initial bundle size check passed: $GZIP_SIZE bytes (< 150KB target)."
 
       # STAGE 4.3: Worker Validation (Only runs after dist/client exists)
       - name: Build Worker (Validation)
