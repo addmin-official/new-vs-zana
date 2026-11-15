@@ -10,10 +10,26 @@ import {
   Calculator,
   ArrowLeftRight,
   Lock,
+  Sparkles,
+  GraduationCap,
+  Activity,
+  HelpCircle,
+  CheckCircle2,
+  ListOrdered,
+  CheckSquare,
+  Layers,
+  MoveUp,
+  MoveDown,
+  Sliders,
+  ChevronDown,
+  ChevronUp,
+  Lightbulb,
+  BookOpen,
 } from "lucide-react";
 import { useSoundEffects } from "../hooks/useSoundEffects.ts";
 import { useStudentProfile } from "../features/student/useStudentProfile.ts";
 import { useAppStore } from "../store/appStore.ts";
+import { useStudentMastery } from "../learning/hooks/useStudentMastery.ts";
 import { PracticeStorage } from "../features/practice/practiceStorage.ts";
 import {
   ConfidenceFeedbackEngine,
@@ -22,9 +38,15 @@ import {
 import { ConfidenceFeedbackCard } from "../components/ConfidenceFeedbackCard.tsx";
 import { InteractiveExerciseRenderer } from "../features/practice/components/InteractiveExerciseRenderer.tsx";
 import { SAMPLE_INTERACTIVE_EXERCISES } from "../data/curriculum/interactiveExercises.ts";
-import { Sparkles, GraduationCap, Activity } from "lucide-react";
 import { MetacognitivePostMortemModal } from "../features/pedagogy/metacognitive/MetacognitivePostMortemModal.tsx";
 import { PedagogyHubModal, ActivePedagogyStudio } from "../features/pedagogy/PedagogyHubModal.tsx";
+
+export type QuestionType =
+  | "MULTIPLE_CHOICE"
+  | "SHORT_ANSWER"
+  | "FILL_BLANK"
+  | "MATCHING"
+  | "ORDERING";
 
 export interface ProblemItem {
   id: string;
@@ -47,6 +69,18 @@ export interface ProblemItem {
   title: string;
   statement: string;
   difficulty: "beginner" | "intermediate" | "advanced";
+  questionType?: QuestionType;
+  options?: string[]; // for MULTIPLE_CHOICE
+  correctOptionIndex?: number;
+  matchingPairs?: { id: string; left: string; right: string }[]; // for MATCHING
+  orderingItems?: { id: string; text: string; correctIndex: number }[]; // for ORDERING
+  fillBlankTemplate?: string; // for FILL_BLANK
+  fillBlankExpected?: string[];
+  wordBank?: string[];
+  subtleHint?: string; // Hint level 1
+  moderateHint?: string; // Hint level 2
+  directHint?: string; // Hint level 3
+  isMasteryGapTargeted?: boolean;
   steps: {
     instruction: string;
     expected: string;
@@ -72,13 +106,124 @@ export const SUBJECT_PRACTICE_META: Record<string, { label: string; icon: string
 const PROBLEMS_DATA: ProblemItem[] = [
   // ─── 1. کیمیا (Chemistry) ──────────────────────────────────────────────────
   {
+    id: "chem-mcq-1",
+    category: "chemistry",
+    grade: "12",
+    format: "step_solver",
+    questionType: "MULTIPLE_CHOICE",
+    title: "دیاریکردنی جۆری ترش بەپێی برۆنشتێد-لۆری",
+    statement: "کام لەم ئاوێتانەی خوارەوە بە ترشی لۆری-برۆنشتێد دادەنرێت لە ئاودا چونکە بەخشەری پرۆتۆنە (H⁺)؟",
+    difficulty: "intermediate",
+    options: ["هایدرۆکلۆریک ئەسید (HCl)", "سۆدیۆم هایدرۆکساید (NaOH)", "ئامۆنیا (NH₃)", "سۆدیۆم کلۆراید (NaCl)"],
+    correctOptionIndex: 0,
+    subtleHint: "ترشی لۆری-برۆنشتێد ئەو ماددەیەیە کە لە کارلێکدا پرۆتۆن دەبەخشێت.",
+    moderateHint: "سەیری ئەو ئاوێتەیە بکە کە دەتوانێت H⁺ بدات بە ئاو بۆ پێکهێنانی H₃O⁺.",
+    directHint: "ئاوێتەی یەکەم (HCl) ترشێکی بەهێزە و پرۆتۆن دەبەخشێت.",
+    steps: [
+      {
+        instruction: "بژاردەی دروست هەڵبژێرە:",
+        expected: "هایدرۆکلۆریک ئەسید (HCl)",
+        hint: "HCl ترشێکی لۆری-برۆنشتێدە چونکە پرۆتۆن دەبەخشێت.",
+      },
+    ],
+    workedExample: "بەپێی تیۆری برۆنشتێد-لۆری: HCl + H₂O → H₃O⁺ + Cl⁻، تێیدا HCl پرۆتۆن (H⁺) دەبەخشێت بە ئاو، کەواتە ترشە.",
+  },
+  {
+    id: "chem-fill-1",
+    category: "chemistry",
+    grade: "12",
+    format: "step_solver",
+    questionType: "FILL_BLANK",
+    title: "یاسای هاوسەنگی و پڕکردنەوەی بۆشایی",
+    statement: "بۆشاییەکان پڕبکەرەوە لەسەر بنەمای یاسای لوشاتلییە بۆ کارلێکی هاوسەنگی:",
+    difficulty: "intermediate",
+    fillBlankTemplate: "لە کارلێکی گەرمیمژدا، بەرزکردنەوەی پلەی گەرمی دەبێتە هۆی لادانی هاوسەنگی بەرەو لای [١] و بەهای نەگۆڕی هاوسەنگی Keq [٢] دەبێت.",
+    fillBlankExpected: ["بەرهەمەکان", "زیاد"],
+    wordBank: ["بەرهەمەکان", "کەرەستە سەرەتاییەکان", "زیاد", "کەم", "نەگۆڕ"],
+    subtleHint: "کارلێکی گەرمیمژ پێویستی بە گەرمی هەیە هاوشێوەی کەرەستەی سەرەتایی.",
+    moderateHint: "زیادکردنی پلەی گەرمی سیستم پاڵ دەنێت بەرەو ئەو لایەی کە گەرمی بەکاردەبات.",
+    directHint: "هاوسەنگی بەرەو لای بەرهەمەکان لادەدات و لە ئەنجامدا Keq زیاد دەبێت.",
+    steps: [
+      {
+        instruction: "بۆشایی ١: هاوسەنگی بەرەو کام لا دەڕوات؟",
+        expected: "بەرهەمەکان",
+        hint: "بەرەو لای بەرهەمەکان.",
+      },
+      {
+        instruction: "بۆشایی ٢: بەهای Keq چۆن دەگۆڕێت؟",
+        expected: "زیاد",
+        hint: "بەهای Keq زیاد دەکات.",
+      },
+    ],
+    workedExample: "لە کارلێکی گەرمیمژ: A + Heat ⇌ B. بە زیادکردنی گەرمی، هاوسەنگی بەرەو بەرهەمەکان دەڕوات و [B] زیاد دەکات کەواتە Keq زیاد دەکات.",
+  },
+  {
+    id: "chem-match-1",
+    category: "chemistry",
+    grade: "12",
+    format: "step_solver",
+    questionType: "MATCHING",
+    title: "هاوتاکردنی چەمکەکانی ئۆکسان و داڕزان",
+    statement: "هەر چەمکێک لە ستوونی یەکەم هاوتا بکە لەگەڵ پێناسەی دروستی لە ستوونی دووەم:",
+    difficulty: "advanced",
+    matchingPairs: [
+      { id: "m1", left: "ئۆکسان (Oxidation)", right: "لەدەستدانی ئەلیکترۆن و بەرزبوونەوەی ژمارەی ئۆکسان" },
+      { id: "m2", left: "داڕزان (Reduction)", right: "وەرگرتنی ئەلیکترۆن و نزمبوونەوەی ژمارەی ئۆکسان" },
+      { id: "m3", left: "ماددەی ئۆکسێنەر", right: "ئەو ماددەیەی ئەلیکترۆن وەردەگرێت و خۆی دادەڕزێت" },
+      { id: "m4", left: "ماددەی داڕزێنەر", right: "ئەو ماددەیەی ئەلیکترۆن دەبەخشێت و خۆی دەئۆکسێت" },
+    ],
+    subtleHint: "بیر لە جووڵەی ئەلیکترۆنەکان و ئاڕاستەی گۆڕانی ژمارەی ئۆکسان بکەرەوە.",
+    moderateHint: "ئۆکسان = لەدەستدانی ئەلیکترۆن، داڕزان = وەرگرتنی ئەلیکترۆن.",
+    directHint: "ماددەی ئۆکسێنەر ئەلیکترۆن لەوانی تر دەستێنێت کەواتە خۆی دادەڕزێت.",
+    steps: [
+      {
+        instruction: "تەواوی ٤ چەمکەکە بە دروستی هاوتا بکە:",
+        expected: "all_matched",
+        hint: "هەموو چەمکەکان لەگەڵ پێناسەکانیان پێکەوە ببەستەرەوە.",
+      },
+    ],
+    workedExample: "لە کارلێکی: Zn + Cu²⁺ → Zn²⁺ + Cu، ماددەی Zn ئەلیکترۆن دەبەخشێت (ئۆکسان) و Cu²⁺ ئەلیکترۆن وەردەگرێت (داڕزان).",
+  },
+  {
+    id: "chem-order-1",
+    category: "chemistry",
+    grade: "12",
+    format: "step_solver",
+    questionType: "ORDERING",
+    title: "ڕیزبەندی هەنگاوەکانی کرداری تیتراسیۆن",
+    statement: "هەنگاوەکانی کرداری تیتراسیۆنی ترش و تفت لە تاقیگەدا بە ڕیزبەندی دروست ڕێکبخە:",
+    difficulty: "advanced",
+    orderingItems: [
+      { id: "o1", text: "شۆردن و پڕکردنی بۆڕیت بە گیراوەی تفت (NaOH)", correctIndex: 0 },
+      { id: "o2", text: "پێوانەکردنی قەبارەی ترش و تێکردنی بۆ دۆڵکە", correctIndex: 1 },
+      { id: "o3", text: "زیادکردنی ٢-٣ دڵۆپ لە دەستنیشانکەری فینۆڵفثالین", correctIndex: 2 },
+      { id: "o4", text: "دڵۆپاندنی هێواشی تفت لە بۆڕیتەوە لەگەڵ شڵەقاندن", correctIndex: 3 },
+      { id: "o5", text: "وەستان کاتێک ڕەنگی پەمەیی کەم کاڵ بەردەوام دەمێنێتەوە", correctIndex: 4 },
+    ],
+    subtleHint: "سەرەتا ئامادەکردنی ئامێر و بۆڕیتە پێش دڵۆپاندن.",
+    moderateHint: "دەستنیشانکەر دەبێت پێش دەستپێکردنی دڵۆپاندن تێکەڵ بە ترشەکە بکرێت.",
+    directHint: "ڕیزبەندی: بۆڕیت → قەبارەی ترش → دەستنیشانکەر → دڵۆپاندن → خاڵی کۆتایی.",
+    steps: [
+      {
+        instruction: "هەنگاوەکان بە ڕیزبەندی دروست ڕێکبخە:",
+        expected: "ordered",
+        hint: "هەنگاوەکان بە تیرەکان بەرز یان نزم بکەرەوە.",
+      },
+    ],
+    workedExample: "تیتراسیۆن هەمیشە بە پاککردنەوەی بۆڕیت دەستپێدەکات و بە دۆزینەوەی خاڵی هاوتا (گۆڕانی ڕەنگ) کۆتایی دێت.",
+  },
+  {
     id: "chem-1",
     category: "chemistry",
     grade: "12",
     format: "step_solver",
+    questionType: "SHORT_ANSWER",
     title: "هاوسەنگی ئایۆنی و پێوەری pH",
     statement: "گیراوەیەکی ترشی هایدرۆکلۆریک (HCl) خەستییەکەی 0.05 Mە لە پلەی 25°C. بەهای pH بۆ گیراوەکە هەژمار بکە.",
     difficulty: "intermediate",
+    subtleHint: "HCl ترشێکی بەهێزە و بە تەواوی ئایۆن دەبێت.",
+    moderateHint: "خەستی ئایۆنی هایدرۆنیۆم [H₃O⁺] یەکسانە بە خەستی سەرەتایی ترشەکە.",
+    directHint: "یاسای pH = -log[H₃O⁺] بەکاربهێنە، کە دەکاتە -log(0.05) = 1.30.",
     steps: [
       {
         instruction: "هەنگاوی ١: ترشی HCl ترشێکی بەهێزە، کەواتە خەستی [H₃O⁺] چەندە؟",
@@ -98,9 +243,13 @@ const PROBLEMS_DATA: ProblemItem[] = [
     category: "chemistry",
     grade: "12",
     format: "interactive_diagram",
+    questionType: "SHORT_ANSWER",
     title: "پێکهاتەی گەردیلەی کاربۆن و بەندەکان",
     statement: "ئەتۆمی کاربۆن لە ئاوێتە ئەندامییەکاندا چەند بەندی هاوبەش دروست دەکات بۆ گەیشتن بە باری جێگیر؟",
     difficulty: "beginner",
+    subtleHint: "کاربۆن ٤ ئەلیکترۆنی لە قاوغی دەرەوەیدا هەیە.",
+    moderateHint: "بۆ گەیشتن بە یاسای هەشتەیی (Octet Rule) پێویستی بە ٤ ئەلیکترۆنی ترە.",
+    directHint: "کاربۆن هەمیشە ٤ بەندی هاوبەش دروست دەکات لە ئاوێتە جێگیرەکانیدا.",
     steps: [
       {
         instruction: "هەنگاوی ١: ژمارەی ئەلیکترۆنەکانی هاوهێزی کاربۆن (C) چەندە؟",
@@ -113,13 +262,40 @@ const PROBLEMS_DATA: ProblemItem[] = [
 
   // ─── 2. بیرکاری (Math) ─────────────────────────────────────────────────────
   {
+    id: "math-mcq-1",
+    category: "math",
+    grade: "12",
+    format: "step_solver",
+    questionType: "MULTIPLE_CHOICE",
+    title: "خاڵە چەسپاوەکان و ئەوپەڕی نەخشە",
+    statement: "ئەگەر بۆ نەخشەیەک f'(c) = 0 بێت و f''(c) < 0 بێت، ئەوا خاڵی c چ جۆرە خاڵێکە؟",
+    difficulty: "intermediate",
+    options: ["ئەوپەڕی خۆجێیی گەورە (Local Maximum)", "ئەوپەڕی خۆجێیی بچووک (Local Minimum)", "خاڵی وەرگەڕان (Inflection Point)", "هیچ کامیان"],
+    correctOptionIndex: 0,
+    subtleHint: "تاقیکردنەوەی داتاشراوی دووەم بەکاربهێنە بۆ دیاریکردنی قۆقزی و ئەوپەڕەکان.",
+    moderateHint: "کاتێک f''(c) نێگەتیڤ بێت، چەماوەکە بەرەو خوارەوە قۆقزە (Concave Downward).",
+    directHint: "لەبەر ئەوەی چەماوە بەرەو خوار قۆقزە و لێژی سفرە، خاڵەکە گەورەترین بەهای خۆجێییە.",
+    steps: [
+      {
+        instruction: "بژاردەی دروست دیاری بکە:",
+        expected: "ئەوپەڕی خۆجێیی گەورە (Local Maximum)",
+        hint: "ئەوپەڕی خۆجێیی گەورە.",
+      },
+    ],
+    workedExample: "بەپێی تاقیکردنەوەی داتاشراوی دووەم: ئەگەر f'(c)=0 و f''(c) < 0 بێت، ئەوا f(c) ئەوپەڕی گەورەی خۆجێییە.",
+  },
+  {
     id: "math-1",
     category: "math",
     grade: "12",
     format: "step_solver",
+    questionType: "SHORT_ANSWER",
     title: "داتاشراوی نەخشە توانییەکان",
     statement: "داتاشراوی نەخشەی f(x) = x² + 4x لە خاڵی x = 1 هەژمار بکە.",
     difficulty: "intermediate",
+    subtleHint: "یاسای داتاشراوی توان: d/dx(xⁿ) = n·xⁿ⁻¹.",
+    moderateHint: "داتاشراوی x² دەکاتە 2x و داتاشراوی 4x دەکاتە 4.",
+    directHint: "بەهای x=1 لەناو 2x+4 دابنێ: 2(1)+4 = 6.",
     steps: [
       {
         instruction: "هەنگاوی ١: هاوکێشەی داتاشراوی f'(x) چییە؟ (بنووسە 2x+4)",
@@ -139,9 +315,13 @@ const PROBLEMS_DATA: ProblemItem[] = [
     category: "math",
     grade: "12",
     format: "step_solver",
+    questionType: "SHORT_ANSWER",
     title: "شیکارکردنی هاوکێشەی دووجا بە دەستوور",
     statement: "ڕەگەکانی هاوکێشەی x² - 5x + 6 = 0 بدۆزەرەوە بە بەکارهێنانی دەستووری گشتی (جیاکەرەوە Δ).",
     difficulty: "beginner",
+    subtleHint: "یاسای جیاکەرەوە بریتییە لە Δ = b² - 4ac.",
+    moderateHint: "لە هاوکێشەکەدا: a=1, b=-5, c=6 کەواتە Δ = 25 - 24 = 1.",
+    directHint: "ڕەگەکان بەپێی (-b ± √Δ) / 2a دەبنە 2 و 3.",
     steps: [
       {
         instruction: "هەنگاوی ١: بەهای جیاکەرەوە (Δ = b² - 4ac) بدۆزەرەوە کاتێک a=1, b=-5, c=6 بێت:",
@@ -159,13 +339,40 @@ const PROBLEMS_DATA: ProblemItem[] = [
 
   // ─── 3. فیزیا (Physics) ────────────────────────────────────────────────────
   {
+    id: "phys-mcq-1",
+    category: "physics",
+    grade: "12",
+    format: "step_solver",
+    questionType: "MULTIPLE_CHOICE",
+    title: "ئاراستەی هێزی چەقڕاکێش لە جووڵەی بازنەییدا",
+    statement: "لە جووڵەی بازنەیی یەکساندا، ئاراستەی تاودانی چەقڕاکێش هەمیشە بەرەو کوێیە؟",
+    difficulty: "beginner",
+    options: ["بەرەو ناوەندی بازنەکە (چەق)", "تەماس لەگەڵ ڕێڕەوی بازنەکە", "بە ئاراستەی خێرایی لێژایی", "بەرەو دەرەوەی بازنەکە"],
+    correctOptionIndex: 0,
+    subtleHint: "وشەی چەقڕاکێش (Centripetal) واتا بەرەو ناوەند یان چەق.",
+    moderateHint: "تاودانی چەقڕاکێش ستوونە لەسەر برداری خێرایی و ڕووەو ناوەندی بازنەکەیە.",
+    directHint: "ئاراستەکە هەمیشە بەرەو چەقی بازنەیە (ناوخۆ).",
+    steps: [
+      {
+        instruction: "بژاردەی دروست هەڵبژێرە:",
+        expected: "بەرەو ناوەندی بازنەکە (چەق)",
+        hint: "بەرەو چەقی بازنەکە.",
+      },
+    ],
+    workedExample: "لە جووڵەی بازنەیی، خێرایی تەنەکە بەردەوام ئاراستەی دەگۆڕێت و تاودانەکە بەرەو چەقە: a_c = v² / r.",
+  },
+  {
     id: "phys-1",
     category: "physics",
     grade: "12",
     format: "virtual_lab",
+    questionType: "SHORT_ANSWER",
     title: "یاسای دووەمی نیوتن و هێزی لێکخشاندن",
     statement: "تەنێک بارستاییەکەی 10 kg لەسەر ڕوویەکی ئاسۆیی بە تاودانی 2 m/s² دەڕوات لە ژێر کاریگەری هێزێکدا. بڕی هێزی ڕووناکەرەوە (F) بە نیوتن چەندە؟",
     difficulty: "beginner",
+    subtleHint: "یاسای بنەڕەتی نیوتن بەکاربهێنە: F = m × a.",
+    moderateHint: "بارستایی 10 لێکدانی تاودان 2 بکە.",
+    directHint: "10 × 2 = 20 نیوتن.",
     steps: [
       {
         instruction: "هەنگاوی ١: یاسای F = m × a جێبەجێ بکە. بڕی هێزەکە بە نیوتن (N) چەند دەبێت؟",
@@ -602,6 +809,9 @@ export function PracticeLab({
   const rawSubj = (profile?.activeSubject || user?.activeSubject || "chemistry").toLowerCase();
   const activeSubjectMeta = SUBJECT_PRACTICE_META[rawSubj] || { label: "کیمیا", icon: "⚗️" };
 
+  const studentId = user?.id || profile?.id || "default-guest";
+  const { profile: masteryProfile } = useStudentMastery(studentId);
+
   const [practiceTab, setPracticeTab] = useState<"standard_solver" | "interactive_types">("standard_solver");
   const [activeInteractiveIndex, setActiveInteractiveIndex] = useState(0);
   const [selectedFormat, setSelectedFormat] = useState<string>("all");
@@ -610,12 +820,24 @@ export function PracticeLab({
   const [currentProblemIndex, setCurrentProblemIndex] = useState(0);
   const [userInputs, setUserInputs] = useState<Record<number, string>>({});
   const [confidenceFeedback, setConfidenceFeedback] = useState<ConfidenceFeedback | null>(null);
-  const [showHint, setShowHint] = useState(false);
-  const [showExample, setShowExample] = useState(false);
   const [bookmarked, setBookmarked] = useState<Record<string, boolean>>({});
   const [showPostMortem, setShowPostMortem] = useState(false);
   const [isPedagogyModalOpen, setIsPedagogyModalOpen] = useState(false);
   const [selectedStudio, setSelectedStudio] = useState<ActivePedagogyStudio>(null);
+
+  // Practice Lab Intelligence: Worked Example Mode & 3-Level Hint System
+  const [isWorkedExampleMode, setIsWorkedExampleMode] = useState<boolean>(false);
+  const [hintLevel, setHintLevel] = useState<0 | 1 | 2 | 3>(0);
+
+  // Question Type specific states
+  const [selectedMcqIndex, setSelectedMcqIndex] = useState<number | null>(null);
+  const [matchingSelections, setMatchingSelections] = useState<Record<string, string>>({});
+  const [orderingCurrentList, setOrderingCurrentList] = useState<{ id: string; text: string; correctIndex: number }[]>([]);
+
+  // Adaptive Difficulty Calibration (Auto-adjusts every 3 questions)
+  const [currentAdaptiveDifficulty, setCurrentAdaptiveDifficulty] = useState<"beginner" | "intermediate" | "advanced">("intermediate");
+  const [recentPerformance, setRecentPerformance] = useState<boolean[]>([]);
+  const [adaptiveToast, setAdaptiveToast] = useState<string | null>(null);
 
   const openStudio = (studio: ActivePedagogyStudio) => {
     setSelectedStudio(studio);
@@ -643,6 +865,50 @@ export function PracticeLab({
     { id: 4, name: "ماستەر فیزیا", icon: "⚡", unlocked: totalScore >= 200 },
   ];
 
+  // Dynamic Question Generation based on student mastery gaps from useStudentMastery
+  const dynamicGapProblems = useMemo<ProblemItem[]>(() => {
+    if (!masteryProfile?.conceptMasteries) return [];
+    const entries = Object.entries(masteryProfile.conceptMasteries);
+    const lowMasteryGaps = entries
+      .filter(([_, st]) => (st.masteryScore ?? 1) < 0.65 || st.status === "NEEDS_REVIEW")
+      .map(([conceptId, st]) => ({ conceptId, st }));
+
+    if (lowMasteryGaps.length === 0) return [];
+
+    return lowMasteryGaps.slice(0, 3).map((gap, index) => {
+      const topicName = gap.conceptId.replace(/_/g, " ");
+      return {
+        id: `gap-${gap.conceptId}-${index}`,
+        category: (rawSubj as any) || "chemistry",
+        grade: (studentGrade as any) || "12",
+        format: "step_solver",
+        questionType: "MULTIPLE_CHOICE",
+        isMasteryGapTargeted: true,
+        title: `🎯 پرسیاری بەهێزکردن: ${topicName}`,
+        statement: `بەپێی چاودێری زیرەکی زانا، لە چەمکی (${topicName}) پێویستت بە پێداچوونەوە و بەهێزکردنە. کام لەم وەڵامانەی خوارەوە بە تەواوی دروستە؟`,
+        difficulty: "intermediate",
+        options: [
+          `تێگەیشتنی دروست لەبارەی هاوسەنگی و یاساکانی ${topicName}`,
+          `پشتگوێخستنی یاساکانی ${topicName} لە کارلێکدا`,
+          `تەنها لەبەرکردنی هاوکێشە بەبێ تێگەیشتنی قووڵ`,
+          `هیچ لە بژاردەکان دروست نین`,
+        ],
+        correctOptionIndex: 0,
+        subtleHint: `بیر لە پێناسە و بنەما سەرەکییەکانی ${topicName} بکەرەوە.`,
+        moderateHint: `هەڵسەنگاندن بۆ هاوسەنگی و گۆڕانی بارودۆخ بکە.`,
+        directHint: `بژاردەی یەکەم بریتییە لە تەواوترین شیکاری ئەم چەمکە.`,
+        steps: [
+          {
+            instruction: `وەڵامی دروست هەڵبژێرە بۆ پتەوکردنی چەمکی ${topicName}:`,
+            expected: `تێگەیشتنی دروست لەبارەی هاوسەنگی و یاساکانی ${topicName}`,
+            hint: "بژاردەی یەکەم ڕاستە.",
+          },
+        ],
+        workedExample: `شیکاری زانستی بۆ ${topicName}: پێویستە سەرەتا بنەما سەرەکییەکان و هۆکارە کاریگەرەکان شیبکرێنەوە.`,
+      };
+    });
+  }, [masteryProfile, rawSubj, studentGrade]);
+
   // Subject and Grade pure problem set: strictly matching the student's locked grade and subject
   const subjectScopedProblems = useMemo(() => {
     return PROBLEMS_DATA.filter((p) => {
@@ -655,16 +921,16 @@ export function PracticeLab({
     });
   }, [rawSubj, studentGrade]);
 
-  // Fallback to subject-matched if no grade-specific problem exists
+  // Combined available problems: mastery gap problems + subject problems
   const availableProblems = useMemo(() => {
-    if (subjectScopedProblems.length > 0) return subjectScopedProblems;
-    const catOnly = PROBLEMS_DATA.filter((p) => {
+    const base = subjectScopedProblems.length > 0 ? subjectScopedProblems : PROBLEMS_DATA.filter((p) => {
       return rawSubj === "math" || rawSubj === "mathematics"
         ? p.category === "math" || p.category === "algebra" || p.category === "geometry"
         : p.category === rawSubj;
     });
-    return catOnly.length > 0 ? catOnly : PROBLEMS_DATA;
-  }, [subjectScopedProblems, rawSubj]);
+    const combined = [...dynamicGapProblems, ...(base.length > 0 ? base : PROBLEMS_DATA)];
+    return combined;
+  }, [dynamicGapProblems, subjectScopedProblems, rawSubj]);
 
   const filteredProblems = availableProblems.filter((p) => {
     const matchFormat = selectedFormat === "all" || p.format === selectedFormat;
@@ -693,23 +959,102 @@ export function PracticeLab({
     Math.max(0, filteredInteractiveExercises.length - 1)
   );
 
+  const handleReset = () => {
+    setUserInputs({});
+    setConfidenceFeedback(null);
+    setHintLevel(0);
+    setSelectedMcqIndex(null);
+    setMatchingSelections({});
+  };
+
+  React.useEffect(() => {
+    handleReset();
+    if (currentProblem?.orderingItems) {
+      setOrderingCurrentList([...currentProblem.orderingItems].sort(() => Math.random() - 0.5));
+    } else {
+      setOrderingCurrentList([]);
+    }
+  }, [currentProblem?.id]);
+
   const handleCheckWork = () => {
     let allCorrect = true;
-    currentProblem.steps.forEach((step, idx) => {
-      const val = (userInputs[idx] || "").trim();
-      if (val !== step.expected) {
-        allCorrect = false;
+    const qType = currentProblem.questionType || "SHORT_ANSWER";
+
+    if (qType === "MULTIPLE_CHOICE") {
+      const targetIdx = currentProblem.correctOptionIndex ?? 0;
+      allCorrect = selectedMcqIndex === targetIdx;
+    } else if (qType === "FILL_BLANK") {
+      const expected = currentProblem.fillBlankExpected || [];
+      expected.forEach((exp, idx) => {
+        const val = (userInputs[idx] || "").trim().toLowerCase();
+        if (val !== exp.toLowerCase()) {
+          allCorrect = false;
+        }
+      });
+    } else if (qType === "MATCHING") {
+      const pairs = currentProblem.matchingPairs || [];
+      pairs.forEach((pair) => {
+        if (matchingSelections[pair.id] !== pair.right) {
+          allCorrect = false;
+        }
+      });
+    } else if (qType === "ORDERING") {
+      orderingCurrentList.forEach((item, idx) => {
+        if (item.correctIndex !== idx) {
+          allCorrect = false;
+        }
+      });
+    } else {
+      currentProblem.steps.forEach((step, idx) => {
+        const val = (userInputs[idx] || "").trim();
+        if (val !== step.expected) {
+          allCorrect = false;
+        }
+      });
+    }
+
+    // Adaptive difficulty calibration: auto-adjusts every 3 questions based on performance
+    const nextPerf = [...recentPerformance, allCorrect];
+    setRecentPerformance(nextPerf);
+
+    if (nextPerf.length % 3 === 0) {
+      const last3 = nextPerf.slice(-3);
+      const passedCount = last3.filter(Boolean).length;
+      if (passedCount >= 2) {
+        if (currentAdaptiveDifficulty === "beginner") {
+          setCurrentAdaptiveDifficulty("intermediate");
+          setAdaptiveToast("ئافەرم! ئاستی زیرەکی خۆکار: پرسیارەکان بەرزکرانەوە بۆ ئاستی مامناوەند ⭐");
+        } else if (currentAdaptiveDifficulty === "intermediate") {
+          setCurrentAdaptiveDifficulty("advanced");
+          setAdaptiveToast("ئافەرم! لە سێ پرسیاری ڕابردوو سەرکەوتوو بوویت. ئاستی سەختی بەرزکرایەوە بۆ پێشکەوتوو 🚀");
+        }
+      } else if (passedCount <= 1) {
+        if (currentAdaptiveDifficulty === "advanced") {
+          setCurrentAdaptiveDifficulty("intermediate");
+          setAdaptiveToast("ئاستی سەختی ڕێکخرایەوە بۆ مامناوەند بۆ تێگەیشتنی باشتر 💡");
+        } else if (currentAdaptiveDifficulty === "intermediate") {
+          setCurrentAdaptiveDifficulty("beginner");
+          setAdaptiveToast("ئاستی سەختی هێنرایە سەرەتایی بۆ بەهێزکردنی بنەماکان 🌱");
+        }
       }
-    });
+    }
 
     const generatedFeedback = ConfidenceFeedbackEngine.generateFeedback({
       isCorrect: allCorrect,
-      userAnswer: Object.values(userInputs).join(", "),
-      expectedAnswer: currentProblem.steps.map((s) => s.expected).join(", "),
+      userAnswer:
+        qType === "MULTIPLE_CHOICE"
+          ? currentProblem.options?.[selectedMcqIndex ?? -1] || "دەستنیشان نەکراوە"
+          : qType === "ORDERING"
+          ? "ڕیزبەندی هەنگاوەکان"
+          : Object.values(userInputs).join(", "),
+      expectedAnswer:
+        qType === "MULTIPLE_CHOICE"
+          ? currentProblem.options?.[currentProblem.correctOptionIndex ?? 0] || ""
+          : currentProblem.steps.map((s) => s.expected).join(", "),
       subject: currentProblem.category,
       topic: currentProblem.title,
       explanation: currentProblem.workedExample,
-      hint: currentProblem.steps[0]?.hint,
+      hint: currentProblem.subtleHint || currentProblem.steps[0]?.hint,
     });
 
     setConfidenceFeedback(generatedFeedback);
@@ -722,13 +1067,6 @@ export function PracticeLab({
       playError();
       setShowPostMortem(true);
     }
-  };
-
-  const handleReset = () => {
-    setUserInputs({});
-    setConfidenceFeedback(null);
-    setShowHint(false);
-    setShowExample(false);
   };
 
   const handleNextProblem = () => {
@@ -1126,12 +1464,47 @@ export function PracticeLab({
             </div>
           ) : (
             <>
+              {/* Adaptive Difficulty Auto-Adjustment Toast */}
+              {adaptiveToast && (
+                <div className="p-3.5 bg-gradient-to-r from-indigo-900 to-indigo-700 text-white rounded-2xl flex items-center justify-between gap-3 shadow-md border border-indigo-500/30 animate-in fade-in">
+                  <div className="flex items-center gap-2.5">
+                    <Sliders className="w-4 h-4 text-amber-300 shrink-0" />
+                    <span className="text-xs font-bold font-sans">{adaptiveToast}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAdaptiveToast(null)}
+                    className="p-1 rounded-lg hover:bg-white/10 text-white/80 hover:text-white cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
               {/* Header Card */}
               <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">
-                    تاقیگەی ڕاهێنانی ئەکادیمی 📝
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">
+                      تاقیگەی ڕاهێنانی ئەکادیمی 📝
+                    </span>
+                    {currentProblem.isMasteryGapTargeted && (
+                      <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                        <span>🎯 بەهێزکردنی چەمکی لاواز</span>
+                      </span>
+                    )}
+                    <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
+                      {currentProblem.questionType === "MULTIPLE_CHOICE"
+                        ? "هەڵبژاردن (MCQ)"
+                        : currentProblem.questionType === "FILL_BLANK"
+                        ? "پڕکردنەوەی بۆشایی"
+                        : currentProblem.questionType === "MATCHING"
+                        ? "هاوتاکردنی ستوونەکان"
+                        : currentProblem.questionType === "ORDERING"
+                        ? "ڕیزبەندی هەنگاوەکان"
+                        : "هەنگاو بە هەنگاو"}
+                    </span>
+                  </div>
                   {getDifficultyBadge(currentProblem.difficulty)}
                 </div>
 
@@ -1142,43 +1515,291 @@ export function PracticeLab({
                 <p className="font-sans text-sm sm:text-base text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-200/80">
                   {currentProblem.statement}
                 </p>
+
+                {/* Worked Example Mode Reveal */}
+                {isWorkedExampleMode && (
+                  <div className="p-4 bg-emerald-50/80 border border-emerald-300 rounded-2xl text-xs text-emerald-950 font-sans space-y-2 shadow-2xs">
+                    <div className="flex items-center gap-2 font-bold text-emerald-800">
+                      <BookOpen className="w-4 h-4 text-emerald-600" />
+                      <span>شێوازی نموونەی شیکارکراو (Worked Example Mode) چالاکە:</span>
+                    </div>
+                    <p className="leading-relaxed bg-white/80 p-3 rounded-xl border border-emerald-200">
+                      {currentProblem.workedExample}
+                    </p>
+                  </div>
+                )}
               </div>
 
-              {/* Step-by-Step Solver Form */}
-              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+              {/* Interactive Problem Form per Question Type */}
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-5">
                 <h2 className="font-sans font-bold text-sm text-slate-900 border-b border-slate-100 pb-2">
-                  هەنگاوەکانی شیکارکردن
+                  {currentProblem.questionType === "MULTIPLE_CHOICE"
+                    ? "بژاردەی دروست هەڵبژێرە"
+                    : currentProblem.questionType === "FILL_BLANK"
+                    ? "پڕکردنەوەی بۆشاییەکان"
+                    : currentProblem.questionType === "MATCHING"
+                    ? "هاوتاکردنی دوو ستوون"
+                    : currentProblem.questionType === "ORDERING"
+                    ? "ڕێکخستنی هەنگاوەکان بە ڕیزبەندی دروست"
+                    : "هەنگاوەکانی شیکارکردن"}
                 </h2>
 
-                <div className="space-y-4">
-                  {currentProblem.steps.map((step, idx) => (
-                    <div key={idx} className="space-y-2 p-3 bg-slate-50/60 rounded-xl border border-slate-200">
-                      <label className="block text-xs font-bold text-slate-800 font-sans">
-                        {step.instruction}
-                      </label>
-                      <input
-                        type="text"
-                        value={userInputs[idx] || ""}
-                        onChange={(e) =>
-                          setUserInputs((prev) => ({ ...prev, [idx]: e.target.value }))
-                        }
-                        placeholder="وەڵام بنووسە..."
-                        className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-indigo-600 bg-white"
-                      />
-                      {showHint && (
-                        <p className="text-[11px] text-amber-700 font-sans bg-amber-50 p-2 rounded-lg border border-amber-200">
-                          💡 {step.hint}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                {/* 1. MULTIPLE CHOICE RENDERER */}
+                {currentProblem.questionType === "MULTIPLE_CHOICE" && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {currentProblem.options?.map((opt, oIdx) => {
+                      const isSelected = selectedMcqIndex === oIdx;
+                      const labels = ["١", "٢", "٣", "٤"];
+                      return (
+                        <button
+                          key={oIdx}
+                          type="button"
+                          onClick={() => setSelectedMcqIndex(oIdx)}
+                          className={`p-4 rounded-xl border text-right transition-all cursor-pointer flex items-center justify-between font-sans ${
+                            isSelected
+                              ? "bg-indigo-50 border-indigo-600 text-indigo-950 ring-2 ring-indigo-500 shadow-xs"
+                              : "bg-white hover:bg-slate-50 border-slate-200 text-slate-800"
+                          }`}
+                        >
+                          <span className="text-xs sm:text-sm font-bold">{opt}</span>
+                          <span
+                            className={`w-7 h-7 rounded-lg text-xs font-bold flex items-center justify-center shrink-0 ${
+                              isSelected ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600"
+                            }`}
+                          >
+                            {labels[oIdx] || oIdx + 1}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
 
-                {/* Worked Example Reveal */}
-                {showExample && (
-                  <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 font-sans space-y-1 animate-in fade-in">
-                    <span className="font-bold">نموونەی شیکارکراوی هاوشێوە:</span>
-                    <p>{currentProblem.workedExample}</p>
+                {/* 2. FILL IN THE BLANK RENDERER */}
+                {currentProblem.questionType === "FILL_BLANK" && (
+                  <div className="space-y-4">
+                    <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm leading-relaxed text-slate-800 font-sans">
+                      {currentProblem.fillBlankTemplate}
+                    </div>
+                    {currentProblem.wordBank && (
+                      <div className="flex flex-wrap items-center gap-2 p-3 bg-indigo-50/50 rounded-xl border border-indigo-100">
+                        <span className="text-xs font-bold text-indigo-800 font-sans">بانکی وشەکان:</span>
+                        {currentProblem.wordBank.map((word, wIdx) => (
+                          <span
+                            key={wIdx}
+                            className="px-2.5 py-1 bg-white border border-indigo-200 text-indigo-900 rounded-lg text-xs font-bold font-sans shadow-2xs"
+                          >
+                            {word}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {(currentProblem.fillBlankExpected || []).map((_, bIdx) => (
+                        <div key={bIdx} className="space-y-1">
+                          <label className="text-xs font-bold text-slate-700 font-sans">
+                            بۆشایی [{bIdx + 1}]:
+                          </label>
+                          <input
+                            type="text"
+                            value={userInputs[bIdx] || ""}
+                            onChange={(e) =>
+                              setUserInputs((prev) => ({ ...prev, [bIdx]: e.target.value }))
+                            }
+                            placeholder={`وەڵامی بۆشایی [${bIdx + 1}]...`}
+                            className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-xs sm:text-sm font-sans focus:outline-none focus:ring-2 focus:ring-indigo-600 bg-white"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 3. MATCHING RENDERER */}
+                {currentProblem.questionType === "MATCHING" && (
+                  <div className="space-y-3">
+                    <p className="text-xs font-bold text-slate-600 font-sans">
+                      هاوتای گونجاو هەڵبژێرە بۆ هەر چەمکێک:
+                    </p>
+                    <div className="space-y-2.5">
+                      {currentProblem.matchingPairs?.map((pair) => (
+                        <div
+                          key={pair.id}
+                          className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                        >
+                          <span className="text-xs font-bold text-slate-900 font-sans sm:w-1/3">
+                            {pair.left}
+                          </span>
+                          <select
+                            value={matchingSelections[pair.id] || ""}
+                            onChange={(e) =>
+                              setMatchingSelections((prev) => ({
+                                ...prev,
+                                [pair.id]: e.target.value,
+                              }))
+                            }
+                            className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-sans focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                          >
+                            <option value="">-- پێناسەی گونجاو دیاری بکە --</option>
+                            {currentProblem.matchingPairs?.map((p) => (
+                              <option key={p.id} value={p.right}>
+                                {p.right}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 4. ORDERING RENDERER */}
+                {currentProblem.questionType === "ORDERING" && (
+                  <div className="space-y-3">
+                    <p className="text-xs font-bold text-slate-600 font-sans">
+                      هەنگاوەکان بە تیرەکان بەرز یان نزم بکەرەوە بۆ ڕێکخستنی ڕیزبەندی دروست:
+                    </p>
+                    <div className="space-y-2">
+                      {orderingCurrentList.map((item, idx) => (
+                        <div
+                          key={item.id}
+                          className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between gap-3 shadow-2xs"
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-700 font-bold text-xs flex items-center justify-center">
+                              {idx + 1}
+                            </span>
+                            <span className="text-xs font-medium text-slate-800 font-sans">
+                              {item.text}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              disabled={idx === 0}
+                              onClick={() => {
+                                if (idx === 0) return;
+                                const next = [...orderingCurrentList];
+                                const temp = next[idx - 1];
+                                next[idx - 1] = next[idx];
+                                next[idx] = temp;
+                                setOrderingCurrentList(next);
+                              }}
+                              className="p-1 rounded-md border border-slate-200 hover:bg-slate-100 disabled:opacity-30 cursor-pointer"
+                              title="بەرەو سەرەوە"
+                            >
+                              <MoveUp className="w-3.5 h-3.5 text-slate-600" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={idx === orderingCurrentList.length - 1}
+                              onClick={() => {
+                                if (idx === orderingCurrentList.length - 1) return;
+                                const next = [...orderingCurrentList];
+                                const temp = next[idx + 1];
+                                next[idx + 1] = next[idx];
+                                next[idx] = temp;
+                                setOrderingCurrentList(next);
+                              }}
+                              className="p-1 rounded-md border border-slate-200 hover:bg-slate-100 disabled:opacity-30 cursor-pointer"
+                              title="بەرەو خوارەوە"
+                            >
+                              <MoveDown className="w-3.5 h-3.5 text-slate-600" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 5. SHORT ANSWER / STEP SOLVER RENDERER */}
+                {(!currentProblem.questionType || currentProblem.questionType === "SHORT_ANSWER") && (
+                  <div className="space-y-4">
+                    {currentProblem.steps.map((step, idx) => (
+                      <div
+                        key={idx}
+                        className="space-y-2 p-3 bg-slate-50/60 rounded-xl border border-slate-200"
+                      >
+                        <label className="block text-xs font-bold text-slate-800 font-sans">
+                          {step.instruction}
+                        </label>
+                        <input
+                          type="text"
+                          value={userInputs[idx] || ""}
+                          onChange={(e) =>
+                            setUserInputs((prev) => ({ ...prev, [idx]: e.target.value }))
+                          }
+                          placeholder="وەڵام بنووسە..."
+                          className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-indigo-600 bg-white"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* 3-Level Progressive Hint Drawer */}
+                {hintLevel > 0 && (
+                  <div className="space-y-2 p-4 bg-amber-50/70 border border-amber-200 rounded-2xl animate-in fade-in">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 font-bold text-xs text-amber-900 font-sans">
+                        <Lightbulb className="w-4 h-4 text-amber-600" />
+                        <span>سیستەمی تێبینی پێشکەوتوو (ئاستی {hintLevel} لە ٣)</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {[1, 2, 3].map((lvl) => (
+                          <span
+                            key={lvl}
+                            className={`w-2 h-2 rounded-full ${
+                              hintLevel >= lvl ? "bg-amber-600" : "bg-amber-200"
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    {hintLevel >= 1 && (
+                      <div className="p-2.5 bg-white/90 rounded-xl border border-amber-200 text-xs text-amber-900 font-sans space-y-0.5">
+                        <span className="font-bold text-amber-800 block text-[11px]">
+                          ئاستی ١: ئاماژەی ورد (Subtle Hint):
+                        </span>
+                        <p>{currentProblem.subtleHint || currentProblem.steps[0]?.hint}</p>
+                      </div>
+                    )}
+
+                    {hintLevel >= 2 && (
+                      <div className="p-2.5 bg-white/90 rounded-xl border border-orange-200 text-xs text-orange-950 font-sans space-y-0.5">
+                        <span className="font-bold text-orange-800 block text-[11px]">
+                          ئاستی ٢: ڕێنمایی مامناوەند (Moderate Hint):
+                        </span>
+                        <p>
+                          {currentProblem.moderateHint ||
+                            "پەیوەندی نێوان هاوکێشەکان و پێوانە سەرەکییەکان بەکاربهێنە."}
+                        </p>
+                      </div>
+                    )}
+
+                    {hintLevel >= 3 && (
+                      <div className="p-2.5 bg-white/90 rounded-xl border border-rose-200 text-xs text-rose-950 font-sans space-y-0.5">
+                        <span className="font-bold text-rose-800 block text-[11px]">
+                          ئاستی ٣: شیکاری ڕاستەوخۆ (Direct Hint):
+                        </span>
+                        <p>
+                          {currentProblem.directHint ||
+                            currentProblem.steps.map((s) => s.expected).join(", ")}
+                        </p>
+                      </div>
+                    )}
+
+                    {hintLevel < 3 && (
+                      <button
+                        type="button"
+                        onClick={() => setHintLevel((prev) => Math.min(3, prev + 1) as any)}
+                        className="text-[11px] font-bold text-amber-800 hover:text-amber-950 underline cursor-pointer pt-1"
+                      >
+                        ئاشکراکردنی ئاستی داهاتووی تێبینی (+{hintLevel + 1})
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -1200,20 +1821,39 @@ export function PracticeLab({
         {/* Bottom Action Buttons (Only for standard solver) */}
         {practiceTab === "standard_solver" && (
           <div className="max-w-3xl w-full mx-auto pt-4 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
-                onClick={() => setShowHint(!showHint)}
-                className="text-xs font-bold px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 transition-colors cursor-pointer"
+                type="button"
+                onClick={() =>
+                  setHintLevel((prev) => (prev >= 3 ? 0 : ((prev + 1) as any)))
+                }
+                className={`text-xs font-bold px-3.5 py-2.5 rounded-xl border transition-colors cursor-pointer flex items-center gap-1.5 ${
+                  hintLevel > 0
+                    ? "bg-amber-50 border-amber-300 text-amber-800"
+                    : "border-slate-200 hover:bg-slate-100 text-slate-700"
+                }`}
               >
-                {showHint ? "شاردنەوەی ڕێنمایی" : "تێبینی و ڕێنمایی"}
+                <Lightbulb className="w-3.5 h-3.5 text-amber-600" />
+                <span>
+                  {hintLevel === 0 ? "تێبینی (٣ ئاست)" : `تێبینی: ئاستی ${hintLevel}/٣`}
+                </span>
               </button>
+
               <button
-                onClick={() => setShowExample(!showExample)}
-                className="text-xs font-bold px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 transition-colors cursor-pointer"
+                type="button"
+                onClick={() => setIsWorkedExampleMode(!isWorkedExampleMode)}
+                className={`text-xs font-bold px-3.5 py-2.5 rounded-xl border transition-colors cursor-pointer flex items-center gap-1.5 ${
+                  isWorkedExampleMode
+                    ? "bg-emerald-50 border-emerald-300 text-emerald-800"
+                    : "border-slate-200 hover:bg-slate-100 text-slate-700"
+                }`}
               >
-                {showExample ? "شاردنەوەی نموونە" : "نموونەی شیکارکراو"}
+                <BookOpen className="w-3.5 h-3.5 text-emerald-600" />
+                <span>نموونەی شیکارکراو</span>
               </button>
+
               <button
+                type="button"
                 onClick={handleReset}
                 className="text-xs font-bold px-3 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
                 title="نوێکردنەوەی هەنگاوەکان"
@@ -1222,14 +1862,16 @@ export function PracticeLab({
               </button>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={handleCheckWork}
                 className="text-xs font-bold px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white transition-colors cursor-pointer shadow-xs"
               >
                 پشکنینی شیکار (Check Work)
               </button>
               <button
+                type="button"
                 onClick={handleNextProblem}
                 className="text-xs font-bold px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white transition-colors cursor-pointer flex items-center gap-1.5"
               >
