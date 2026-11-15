@@ -2,29 +2,90 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Global Safety Net
+    // Global Safety Net: Deny all by default
     match /{document=**} {
       allow read, write: if false;
     }
     
-    // Valid identifier check
+    // ========================================================================
+    // Helper Functions
+    // ========================================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isVerifiedUser() {
+      return isAuthenticated() && 
+             request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+    
+    function isOwner(userId) {
+      return isVerifiedUser() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.admin == true ||
+        request.auth.token.role == 'admin' ||
+        (request.auth.token.email is string && request.auth.token.email in ['addmin.official.idg@gmail.com', 'admin@zana.krd'])
+      );
+    }
+    
     function isValidId(id) {
       return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
     
-    // Authenticated non-anonymous user check
-    function isVerifiedUser() {
-      return request.auth != null && 
-             request.auth.token.firebase.sign_in_provider != 'anonymous';
+    // Rate Limiting: Minimum 600ms between consecutive individual writes per document
+    // Enforces maximum write rate of ~100 writes/minute
+    function isWithinRateLimit() {
+      return !('updatedAt' in resource.data) ||
+             (request.time.toMillis() - resource.data.updatedAt.toMillis()) >= 600;
     }
     
-    // Owner authorization check
-    function isOwner(studentId) {
-      return isVerifiedUser() && request.auth.uid == studentId;
+    // ========================================================================
+    // Schema Validations
+    // ========================================================================
+    
+    function isValidUserData(data) {
+      return data.keys().hasAny(['profile', 'settings']) &&
+             (!('profile' in data) || (
+               data.profile is map &&
+               data.profile.keys().hasAll(['name', 'grade', 'stream']) &&
+               data.profile.name is string && data.profile.name.size() <= 100 &&
+               data.profile.grade in ['9', '10', '11', '12'] &&
+               data.profile.stream in ['scientific', 'literary', 'general']
+             ));
     }
     
-    // Schema validation for Student Profile
-    function isValidStudentData(data) {
+    function isValidMasteryData(data) {
+      return data.keys().hasAll(['subjectId', 'lastUpdated']) &&
+             data.subjectId is string &&
+             data.subjectId in ['math', 'physics', 'chemistry', 'english', 'kurdish', 'arabic', 'biology', 'history', 'geography', 'economics'];
+    }
+    
+    function isValidSessionData(data) {
+      return data.keys().hasAll(['startTime', 'subject', 'questionsAttempted', 'correctCount']) &&
+             data.subject is string &&
+             data.questionsAttempted is number &&
+             data.correctCount is number;
+    }
+    
+    function isValidStudyPlanData(data) {
+      return data.keys().hasAll(['weekId', 'days']) &&
+             data.weekId is string &&
+             data.days is map;
+    }
+    
+    function isValidAssessmentData(data) {
+      return data.keys().hasAll(['studentId', 'subjectId', 'score']) &&
+             data.studentId == request.auth.uid &&
+             data.subjectId is string &&
+             data.score is number;
+    }
+    
+    // Legacy student profile validation for backward compatibility
+    function isValidLegacyStudentData(data) {
       return data.keys().hasAll(['id', 'name', 'grade', 'stream', 'activeSubject', 'level']) &&
              data.id is string && data.id.size() <= 128 &&
              data.name is string && data.name.size() <= 100 &&
@@ -34,34 +95,86 @@ service cloud.firestore {
              data.level in ['beginner', 'intermediate', 'advanced'];
     }
     
-    // Student profiles access control
+    // ========================================================================
+    // 1. Users Collection: users/{userId}
+    // ========================================================================
+    
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create, update: if (isOwner(userId) || isAdmin()) && 
+                              isValidId(userId) && 
+                              isValidUserData(request.resource.data) &&
+                              isWithinRateLimit();
+      allow delete: if isAdmin();
+      
+      // Subcollection: users/{userId}/mastery/{subjectId}
+      match /mastery/{subjectId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if (isOwner(userId) || isAdmin()) && 
+                        isValidId(subjectId) && 
+                        isValidMasteryData(request.resource.data) &&
+                        isWithinRateLimit();
+      }
+      
+      // Subcollection: users/{userId}/sessions/{sessionId}
+      match /sessions/{sessionId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create, update: if (isOwner(userId) || isAdmin()) && 
+                                isValidId(sessionId) && 
+                                isValidSessionData(request.resource.data) &&
+                                isWithinRateLimit();
+        allow delete: if isAdmin();
+      }
+      
+      // Subcollection: users/{userId}/studyPlan/{weekId}
+      match /studyPlan/{weekId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if (isOwner(userId) || isAdmin()) && 
+                        isValidId(weekId) && 
+                        isValidStudyPlanData(request.resource.data) &&
+                        isWithinRateLimit();
+      }
+    }
+    
+    // ========================================================================
+    // 2. Curriculum: curriculum/{grade}/{subject}/concepts/{conceptId}
+    // Read: All / Write: Admin only
+    // ========================================================================
+    
+    match /curriculum/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // ========================================================================
+    // 3. Assessments: assessments/{assessmentId}
+    // Read: Own / Write: Own / Delete: None
+    // ========================================================================
+    
+    match /assessments/{assessmentId} {
+      allow read: if isAuthenticated() && (resource.data.studentId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && 
+                      request.resource.data.studentId == request.auth.uid && 
+                      isValidAssessmentData(request.resource.data);
+      allow update: if isAuthenticated() && 
+                      resource.data.studentId == request.auth.uid && 
+                      request.resource.data.studentId == request.auth.uid;
+      allow delete: if false; // Strict requirement: assessments cannot be deleted
+    }
+    
+    // ========================================================================
+    // 4. Backward Compatibility: students/{studentId}
+    // ========================================================================
+    
     match /students/{studentId} {
-      allow read: if isOwner(studentId);
-      allow create, update: if isOwner(studentId) && isValidId(studentId) && isValidStudentData(request.resource.data);
+      allow read: if isOwner(studentId) || isAdmin();
+      allow create, update: if (isOwner(studentId) || isAdmin()) && 
+                              isValidId(studentId) && 
+                              isValidLegacyStudentData(request.resource.data);
       allow delete: if false;
       
-      // Mastery subcollection
-      match /mastery/{docId} {
-        allow read: if isOwner(studentId);
-        allow write: if isOwner(studentId) && isValidId(docId);
-      }
-      
-      // Chat messages subcollection
-      match /chatMessages/{messageId} {
-        allow read: if isOwner(studentId);
-        allow write: if isOwner(studentId) && isValidId(messageId);
-      }
-      
-      // Attempts subcollection
-      match /attempts/{attemptId} {
-        allow read: if isOwner(studentId);
-        allow write: if isOwner(studentId) && isValidId(attemptId);
-      }
-      
-      // Sessions subcollection
-      match /sessions/{sessionId} {
-        allow read: if isOwner(studentId);
-        allow write: if isOwner(studentId) && isValidId(sessionId);
+      match /{allSubcollections=**} {
+        allow read, write: if isOwner(studentId) || isAdmin();
       }
     }
   }
