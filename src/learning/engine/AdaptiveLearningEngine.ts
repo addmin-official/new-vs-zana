@@ -3,11 +3,14 @@ import {
   MasteryStatus,
   MisconceptionState,
   MisconceptionStatus,
+  MisconceptionType,
   AdaptiveRecommendation,
   RecommendationType,
   ExerciseAttempt,
   StudentMasteryProfile,
-  DifficultyLevel
+  DifficultyLevel,
+  ResponseSpeedFlag,
+  MasteryCalculationResult
 } from "../domain/MasteryTypes.ts";
 
 export interface MasteryAttemptInput {
@@ -21,10 +24,45 @@ export interface MasteryAttemptInput {
   isNonAuthoritative?: boolean;
 }
 
+/**
+ * Senior-level Adaptive Learning Engine for the ZANA platform.
+ *
+ * Implements:
+ * 1. Spaced Repetition (SuperMemo-2 algorithm + Ebbinghaus forgetting curve decay)
+ * 2. Adaptive Dynamic Difficulty Index (DDI) calibration per student & across sessions
+ * 3. 5-Tier Mastery System with attempt gating:
+ *    - NOT_STARTED (0.0-0.10)
+ *    - INTRODUCED (0.10-0.35, min 1-2 attempts)
+ *    - DEVELOPING (0.35-0.60, min 3 attempts)
+ *    - PROFICIENT (0.60-0.80, min 5 attempts)
+ *    - MASTERED (0.80-1.00, min 7-10 attempts)
+ * 4. Misconception Tracking with 3x failure pattern detection & resolution persistence
+ * 5. Percentile-based response time intelligence (p50/p75/p95) & partial mastery scoring
+ * 6. Pure, side-effect-free pedagogical decision functions
+ */
 export class AdaptiveLearningEngine {
   /**
-   * Calculate a new mastery state based on the previous state and an exercise attempt or learning action.
-   * Employs progressive difficulty-weighted scoring with consecutive response multipliers, speed rules, and stable mastery protection.
+   * Default benchmark response time percentiles (p50, p75, p95) in milliseconds.
+   */
+  public static readonly DEFAULT_TIME_PERCENTILES: Record<
+    DifficultyLevel,
+    { p50: number; p75: number; p95: number }
+  > = {
+    [DifficultyLevel.FOUNDATION]: { p50: 4000, p75: 8000, p95: 15000 },
+    [DifficultyLevel.EASY]: { p50: 4000, p75: 8000, p95: 15000 },
+    [DifficultyLevel.STANDARD]: { p50: 8000, p75: 16000, p95: 28000 },
+    [DifficultyLevel.CHALLENGING]: { p50: 14000, p75: 25000, p95: 45000 },
+    [DifficultyLevel.ADVANCED]: { p50: 20000, p75: 35000, p95: 60000 }
+  };
+
+  /**
+   * Calculates a new concept mastery state based on the previous state and an exercise attempt or learning action.
+   * Employs progressive difficulty-weighted scoring, consecutive multipliers, SM-2 scheduling,
+   * percentile response time classification, and stable mastery protection.
+   *
+   * @param previous Previous ConceptMasteryState or null for unstarted concepts
+   * @param attempt Student attempt input containing correctness, timing, and difficulty
+   * @returns Updated ConceptMasteryState
    */
   public static calculateNewMastery(
     previous: ConceptMasteryState | null,
@@ -34,24 +72,28 @@ export class AdaptiveLearningEngine {
 
     // Non-authoritative / guest attempts must NEVER update official mastery
     if (attempt.isGuest || attempt.isNonAuthoritative) {
-      return previous || {
-        conceptId,
-        masteryScore: 0.0,
-        status: MasteryStatus.NOT_STARTED,
-        lastAttemptedAt: new Date().toISOString(),
-        totalAttempts: 0,
-        consecutiveCorrect: 0,
-        history: []
-      };
+      return (
+        previous || {
+          conceptId,
+          masteryScore: 0.0,
+          status: MasteryStatus.NOT_STARTED,
+          lastAttemptedAt: new Date().toISOString(),
+          totalAttempts: 0,
+          consecutiveCorrect: 0,
+          history: []
+        }
+      );
     }
-    const history = previous?.history ? [...previous.history] : [];
-    
-    // Default/fallback values for history logging
+
+    // Apply forgetting curve decay if significant time elapsed since last review/attempt
+    const basePrevious = previous ? this.applyForgettingCurve(previous) : null;
+    const history = basePrevious?.history ? [...basePrevious.history] : [];
+
     const isCorrect = attempt.isCorrect ?? false;
     const responseTimeMs = attempt.responseTimeMs ?? 5000;
     const difficulty = attempt.difficulty;
 
-    // Append to history if it's not a purely passive view, limit history length
+    // Append to history if it's not a purely passive view, limit history length to 50
     if (!attempt.isPassiveView) {
       history.push({
         isCorrect,
@@ -64,8 +106,8 @@ export class AdaptiveLearningEngine {
       }
     }
 
-    const totalAttempts = (previous?.totalAttempts || 0) + (attempt.isPassiveView ? 0 : 1);
-    let consecutiveCorrect = previous?.consecutiveCorrect || 0;
+    const totalAttempts = (basePrevious?.totalAttempts || 0) + (attempt.isPassiveView ? 0 : 1);
+    let consecutiveCorrect = basePrevious?.consecutiveCorrect || 0;
 
     if (!attempt.isPassiveView) {
       if (isCorrect) {
@@ -75,9 +117,19 @@ export class AdaptiveLearningEngine {
       }
     }
 
-    let prevScore = previous?.masteryScore !== undefined ? previous.masteryScore : 0.0;
+    const prevScore = basePrevious?.masteryScore !== undefined ? basePrevious.masteryScore : 0.0;
     let newScore = prevScore;
     let explanationCode = "INITIAL_STATE";
+
+    // 1. Response Time Intelligence & Percentiles
+    const difficultyTimes = history
+      .filter((h) => h.difficulty === difficulty)
+      .map((h) => h.responseTimeMs);
+    const percentiles = this.calculateResponseTimePercentiles(difficultyTimes, difficulty);
+    const speedFlag = this.classifyResponseSpeed(responseTimeMs, isCorrect, percentiles);
+
+    // 2. Dynamic Difficulty Index (DDI) over recent history (last 10 attempts)
+    const ddi = this.calculateDDI(history, 10);
 
     if (attempt.isPassiveView) {
       // Passive lesson viewing has very low weight and a low ceiling
@@ -88,41 +140,61 @@ export class AdaptiveLearningEngine {
       // Centralized evidence weights based on difficulty level
       let difficultyWeight = 1.0;
       switch (difficulty) {
-        case DifficultyLevel.FOUNDATION: difficultyWeight = 0.8; break;
-        case DifficultyLevel.EASY: difficultyWeight = 1.0; break;
-        case DifficultyLevel.STANDARD: difficultyWeight = 1.5; break;
-        case DifficultyLevel.CHALLENGING: difficultyWeight = 2.0; break;
-        case DifficultyLevel.ADVANCED: difficultyWeight = 2.5; break;
+        case DifficultyLevel.FOUNDATION:
+          difficultyWeight = 0.8;
+          break;
+        case DifficultyLevel.EASY:
+          difficultyWeight = 1.0;
+          break;
+        case DifficultyLevel.STANDARD:
+          difficultyWeight = 1.5;
+          break;
+        case DifficultyLevel.CHALLENGING:
+          difficultyWeight = 2.0;
+          break;
+        case DifficultyLevel.ADVANCED:
+          difficultyWeight = 2.5;
+          break;
       }
 
-      // Speed affects mastery only when timing is reliable
-      let speedMultiplier = 1.0;
-      const timingIsReliable = 
-        !attempt.unreliableTiming && 
-        responseTimeMs > 500 && 
-        responseTimeMs < 45000;
+      // Speed intelligence rule: Slow correct answers signal partial mastery
+      if (speedFlag === "SLOW_CORRECT" || speedFlag === "VERY_SLOW_CORRECT") {
+        const slowGain = 0.03;
+        newScore = Math.min(1.0, Number((prevScore + slowGain).toFixed(3)));
+        explanationCode = "CORRECT_ATTEMPT_SLOW_PARTIAL";
+      } else {
+        // Normal or Fast response speed
+        let speedMultiplier = 1.0;
+        const timingIsReliable =
+          !attempt.unreliableTiming && responseTimeMs > 500 && responseTimeMs < 45000;
 
-      if (timingIsReliable) {
-        if (responseTimeMs < 5000) {
-          speedMultiplier = 1.10; // 10% bonus for fast correct response
-        } else if (responseTimeMs < 10000) {
-          speedMultiplier = 1.05; // 5% bonus for reasonable speed
+        if (timingIsReliable) {
+          if (speedFlag === "FAST_CORRECT") {
+            speedMultiplier = 1.1; // 10% bonus for fast correct response
+          } else if (responseTimeMs < 10000) {
+            speedMultiplier = 1.05; // 5% bonus for reasonable speed
+          }
         }
+
+        // Streak-based progressive weight (up to 20% bonus)
+        const streakBonus = Math.min(consecutiveCorrect, 4) * 0.05;
+        const totalStreakMultiplier = 1.0 + streakBonus;
+
+        // Hint usage reduces evidence strength
+        const hintPenaltyMultiplier = attempt.hintUsed ? 0.5 : 1.0;
+
+        const baseGain =
+          0.1 * difficultyWeight * speedMultiplier * totalStreakMultiplier * hintPenaltyMultiplier;
+        newScore = Math.min(1.0, Number((prevScore + baseGain).toFixed(3)));
+
+        explanationCode = attempt.hintUsed
+          ? "CORRECT_ATTEMPT_WITH_HINT"
+          : speedFlag === "FAST_CORRECT"
+          ? "CORRECT_ATTEMPT_FAST"
+          : "CORRECT_ATTEMPT_STANDARD";
       }
 
-      // Streak-based progressive weight (repeated assessed success has higher weight)
-      const streakBonus = Math.min(consecutiveCorrect, 4) * 0.05; // up to 20% bonus
-      const totalStreakMultiplier = 1.0 + streakBonus;
-
-      // Hint usage reduces evidence strength but does not punish excessively
-      const hintPenaltyMultiplier = attempt.hintUsed ? 0.5 : 1.0;
-
-      const baseGain = 0.10 * difficultyWeight * speedMultiplier * totalStreakMultiplier * hintPenaltyMultiplier;
-      newScore = Math.min(1.0, Number((prevScore + baseGain).toFixed(3)));
-      
-      explanationCode = attempt.hintUsed ? "CORRECT_ATTEMPT_WITH_HINT" : "CORRECT_ATTEMPT_STANDARD";
-
-      // Safety Constraint: one correct answer cannot produce MASTERED
+      // Safety Constraint: one single correct answer cannot produce MASTERED
       if (totalAttempts <= 1 && newScore >= 0.85) {
         newScore = 0.25; // limit to INTRODUCED
         explanationCode = "CORRECT_ATTEMPT_SINGLE_ANSWER_LIMIT";
@@ -131,20 +203,28 @@ export class AdaptiveLearningEngine {
       // INCORRECT ANSWER: stable mastery protection
       let difficultyWeight = 1.0;
       switch (difficulty) {
-        case DifficultyLevel.FOUNDATION: difficultyWeight = 0.8; break;
-        case DifficultyLevel.EASY: difficultyWeight = 1.0; break;
-        case DifficultyLevel.STANDARD: difficultyWeight = 1.5; break;
-        case DifficultyLevel.CHALLENGING: difficultyWeight = 2.0; break;
-        case DifficultyLevel.ADVANCED: difficultyWeight = 2.5; break;
+        case DifficultyLevel.FOUNDATION:
+          difficultyWeight = 0.8;
+          break;
+        case DifficultyLevel.EASY:
+          difficultyWeight = 1.0;
+          break;
+        case DifficultyLevel.STANDARD:
+          difficultyWeight = 1.5;
+          break;
+        case DifficultyLevel.CHALLENGING:
+          difficultyWeight = 2.0;
+          break;
+        case DifficultyLevel.ADVANCED:
+          difficultyWeight = 2.5;
+          break;
       }
 
-      // One failure cannot destroy stable mastery. 
-      // If student is at stable high mastery, apply moderate decay
       const baseDecay = 0.12 / difficultyWeight;
-      
+
       if (prevScore >= 0.85) {
         // Safe guard stable mastery: decay is halved
-        newScore = Math.max(0.65, Number((prevScore - (baseDecay * 0.5)).toFixed(3)));
+        newScore = Math.max(0.65, Number((prevScore - baseDecay * 0.5).toFixed(3)));
         explanationCode = "INCORRECT_ATTEMPT_STABLE_GUARD";
       } else {
         newScore = Math.max(0.0, Number((prevScore - baseDecay).toFixed(3)));
@@ -152,30 +232,30 @@ export class AdaptiveLearningEngine {
       }
     }
 
-    // Determine Status
-    let status = MasteryStatus.NOT_STARTED;
-    if (newScore === 0.0) {
-      status = MasteryStatus.NOT_STARTED;
-    } else if (newScore < 0.25) {
-      status = MasteryStatus.INTRODUCED;
-    } else if (newScore < 0.6) {
-      status = MasteryStatus.DEVELOPING;
-    } else if (newScore < 0.85) {
-      status = MasteryStatus.PROFICIENT;
-    } else {
-      status = MasteryStatus.MASTERED;
-    }
+    // 3. 5-Tier Mastery Status Determination
+    let status = this.determineMasteryTier(newScore, totalAttempts);
 
-    // If previously Mastered/Proficient but dropped below 0.75 due to a wrong attempt, flag as Review Needed
+    // If previously Mastered or Proficient but dropped below 0.75, flag for review
     if (
-      !isCorrect && 
+      !isCorrect &&
       !attempt.isPassiveView &&
-      previous && 
-      (previous.status === MasteryStatus.MASTERED || previous.status === MasteryStatus.PROFICIENT) && 
+      basePrevious &&
+      (basePrevious.status === MasteryStatus.MASTERED ||
+        basePrevious.status === MasteryStatus.PROFICIENT) &&
       newScore < 0.75
     ) {
       status = MasteryStatus.NEEDS_REVIEW;
     }
+
+    // 4. Spaced Repetition (SM-2) Interval Calculation
+    const sm2Quality = this.getSM2Quality(isCorrect, speedFlag, attempt.hintUsed);
+    const sm2 = this.calculateSM2Interval(
+      isCorrect,
+      basePrevious?.repetitionCount || 0,
+      basePrevious?.intervalDays || 1,
+      basePrevious?.stabilityFactor || 2.5,
+      sm2Quality
+    );
 
     return {
       conceptId,
@@ -185,58 +265,454 @@ export class AdaptiveLearningEngine {
       totalAttempts,
       lastAttemptedAt: new Date().toISOString(),
       history,
-      lastChangeExplanation: explanationCode
+      lastChangeExplanation: explanationCode,
+      lastReviewedAt: new Date().toISOString(),
+      nextReviewDue: sm2.nextReviewDue,
+      stabilityFactor: sm2.newStabilityFactor,
+      intervalDays: sm2.nextIntervalDays,
+      repetitionCount: sm2.newRepetitionCount,
+      ddi,
+      responseTimePercentiles: percentiles,
+      speedFlag
     };
   }
 
   /**
-   * Detect recurring misconceptions based on consecutive wrong answers and response content.
+   * Calculates new mastery state and returns a comprehensive MasteryCalculationResult
+   * including score delta, explanationCode, speedFlag, ddi, and adaptive recommendation.
+   *
+   * @param previous Previous ConceptMasteryState
+   * @param attempt MasteryAttemptInput
+   * @param profile Optional StudentMasteryProfile for holistic recommendation generation
+   * @returns MasteryCalculationResult
+   */
+  public static calculateMasteryWithResult(
+    previous: ConceptMasteryState | null,
+    attempt: MasteryAttemptInput,
+    profile?: StudentMasteryProfile
+  ): MasteryCalculationResult {
+    const prevScore = previous?.masteryScore || 0.0;
+    const newState = this.calculateNewMastery(previous, attempt);
+    const scoreChange = Number((newState.masteryScore - prevScore).toFixed(3));
+
+    let recommendation: AdaptiveRecommendation | undefined;
+    if (profile) {
+      const updatedProfile: StudentMasteryProfile = {
+        ...profile,
+        conceptMasteries: {
+          ...profile.conceptMasteries,
+          [newState.conceptId]: newState
+        }
+      };
+      recommendation = this.generateRecommendation(
+        profile.studentId,
+        newState.conceptId,
+        newState.conceptId,
+        updatedProfile
+      );
+    }
+
+    return {
+      newState,
+      scoreChange,
+      explanationCode: newState.lastChangeExplanation || "MASTERY_EVALUATED",
+      speedFlag: newState.speedFlag,
+      recommendation,
+      ddi: newState.ddi,
+      nextReviewDue: newState.nextReviewDue,
+      stabilityFactor: newState.stabilityFactor
+    };
+  }
+
+  /**
+   * Applies the Ebbinghaus forgetting curve decay to a concept's mastery score over time.
+   * Decay rate: 15% per day for scores below 0.7, 5% per day for scores above or equal to 0.7.
+   *
+   * @param state ConceptMasteryState to evaluate
+   * @param asOf Reference time for evaluation (defaults to current date)
+   * @returns ConceptMasteryState with decayed masteryScore and recalibrated status
+   */
+  public static applyForgettingCurve(
+    state: ConceptMasteryState,
+    asOf: Date | string = new Date()
+  ): ConceptMasteryState {
+    const referenceDate = typeof asOf === "string" ? new Date(asOf) : asOf;
+    const lastDateStr = state.lastReviewedAt || state.lastAttemptedAt;
+    if (!lastDateStr) return { ...state };
+
+    const lastDate = new Date(lastDateStr);
+    const msElapsed = referenceDate.getTime() - lastDate.getTime();
+    if (msElapsed <= 0) return { ...state };
+
+    const daysElapsed = msElapsed / (24 * 60 * 60 * 1000);
+    // Apply decay only if at least 1 day has elapsed
+    if (daysElapsed < 1) return { ...state };
+
+    const decayRatePerDay = state.masteryScore < 0.7 ? 0.15 : 0.05;
+    const retentionFactor = Math.pow(1 - decayRatePerDay, daysElapsed);
+    const decayedScore = Number(
+      Math.max(0.0, Math.min(1.0, state.masteryScore * retentionFactor)).toFixed(3)
+    );
+
+    let status = state.status;
+    if (
+      (state.status === MasteryStatus.MASTERED || state.status === MasteryStatus.PROFICIENT) &&
+      decayedScore < 0.75
+    ) {
+      status = MasteryStatus.NEEDS_REVIEW;
+    } else {
+      status = this.determineMasteryTier(decayedScore, state.totalAttempts);
+    }
+
+    return {
+      ...state,
+      masteryScore: decayedScore,
+      status,
+      lastChangeExplanation: "FORGETTING_CURVE_DECAY"
+    };
+  }
+
+  /**
+   * Calculates the next review interval and stability factor using the SuperMemo-2 (SM-2) algorithm.
+   *
+   * @param isCorrect Whether the attempt was correct
+   * @param currentRepetitions Previous count of consecutive successful repetitions
+   * @param currentInterval Previous interval in days
+   * @param currentStability Previous stability factor (EF, default 2.5, min 1.3)
+   * @param quality Quality rating (0 to 5)
+   * @param fromDate Reference anchor date for next review due
+   * @returns Object containing interval in days, updated repetitions, updated stability factor, and ISO due date
+   */
+  public static calculateSM2Interval(
+    isCorrect: boolean,
+    currentRepetitions: number = 0,
+    currentInterval: number = 1,
+    currentStability: number = 2.5,
+    quality: number = 4,
+    fromDate: Date = new Date()
+  ): {
+    nextIntervalDays: number;
+    newRepetitionCount: number;
+    newStabilityFactor: number;
+    nextReviewDue: string;
+  } {
+    const q = Math.max(0, Math.min(5, quality));
+    // SM-2 formula: EF' = EF + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02))
+    let newStability = currentStability + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02));
+    newStability = Number(Math.max(1.3, Math.min(3.2, newStability)).toFixed(3));
+
+    let nextIntervalDays: number;
+    let newRepetitionCount: number;
+
+    if (!isCorrect || q < 3) {
+      newRepetitionCount = 0;
+      nextIntervalDays = 1;
+    } else {
+      newRepetitionCount = currentRepetitions + 1;
+      if (newRepetitionCount === 1) {
+        nextIntervalDays = 1;
+      } else if (newRepetitionCount === 2) {
+        nextIntervalDays = 6;
+      } else {
+        nextIntervalDays = Math.max(1, Math.round(currentInterval * newStability));
+      }
+    }
+
+    const nextDueDate = new Date(fromDate.getTime() + nextIntervalDays * 24 * 60 * 60 * 1000);
+
+    return {
+      nextIntervalDays,
+      newRepetitionCount,
+      newStabilityFactor: newStability,
+      nextReviewDue: nextDueDate.toISOString()
+    };
+  }
+
+  /**
+   * Internal mapper for SM-2 quality (0-5) based on correctness, response speed, and hint usage.
+   */
+  private static getSM2Quality(
+    isCorrect: boolean,
+    speedFlag?: ResponseSpeedFlag,
+    hintUsed?: boolean
+  ): number {
+    if (!isCorrect) {
+      return speedFlag === "FAST_INCORRECT" ? 1 : 2;
+    }
+    if (hintUsed) {
+      return 3;
+    }
+    if (speedFlag === "SLOW_CORRECT" || speedFlag === "VERY_SLOW_CORRECT") {
+      return 3;
+    }
+    if (speedFlag === "FAST_CORRECT") {
+      return 5;
+    }
+    return 4; // NORMAL_CORRECT
+  }
+
+  /**
+   * Determines the 5-tier mastery status according to score brackets and minimum attempt gating:
+   * - NOT_STARTED (0.0-0.10)
+   * - INTRODUCED (0.10-0.35, min 1 attempt)
+   * - DEVELOPING (0.35-0.60, min 3 attempts)
+   * - PROFICIENT (0.60-0.80, min 5 attempts)
+   * - MASTERED (0.80-1.00, min 7 attempts)
+   *
+   * @param score Mastery score between 0.0 and 1.0
+   * @param totalAttempts Total attempts recorded for the concept
+   * @returns Calibrated MasteryStatus
+   */
+  public static determineMasteryTier(score: number, totalAttempts: number): MasteryStatus {
+    if (score < 0.1) {
+      return MasteryStatus.NOT_STARTED;
+    }
+    if (score < 0.35) {
+      return MasteryStatus.INTRODUCED;
+    }
+    if (score < 0.6) {
+      return totalAttempts >= 3 ? MasteryStatus.DEVELOPING : MasteryStatus.INTRODUCED;
+    }
+    if (score < 0.8) {
+      if (totalAttempts >= 5) return MasteryStatus.PROFICIENT;
+      if (totalAttempts >= 3) return MasteryStatus.DEVELOPING;
+      return MasteryStatus.INTRODUCED;
+    }
+    // score >= 0.80
+    if (totalAttempts >= 7) return MasteryStatus.MASTERED;
+    if (totalAttempts >= 5) return MasteryStatus.PROFICIENT;
+    if (totalAttempts >= 3) return MasteryStatus.DEVELOPING;
+    return MasteryStatus.INTRODUCED;
+  }
+
+  /**
+   * Calculates the Dynamic Difficulty Index (DDI) as a running average of accuracy
+   * over the last N attempts (default window: 10 attempts).
+   *
+   * @param history Array of past attempts with isCorrect status
+   * @param windowSize Window size for running average (default: 10)
+   * @returns Running accuracy between 0.0 and 1.0 (defaults to 0.5 when empty)
+   */
+  public static calculateDDI(
+    history: { isCorrect: boolean }[],
+    windowSize: number = 10
+  ): number {
+    if (!history || history.length === 0) return 0.5;
+    const window = history.slice(-windowSize);
+    const correct = window.filter((h) => h.isCorrect).length;
+    return Number((correct / window.length).toFixed(3));
+  }
+
+  /**
+   * Evaluates multi-session DDI history to recommend content difficulty adjustments:
+   * - If DDI > 0.85 for 3 consecutive sessions -> recommend 'HARDER'
+   * - If DDI < 0.40 for 2 consecutive sessions -> recommend 'EASIER'
+   * - Otherwise -> 'MAINTAIN'
+   *
+   * @param sessionDDIs Array of session-level DDIs in chronological order
+   * @returns 'HARDER' | 'EASIER' | 'MAINTAIN'
+   */
+  public static evaluateSessionDifficultyCalibration(
+    sessionDDIs: number[] = []
+  ): "HARDER" | "EASIER" | "MAINTAIN" {
+    if (sessionDDIs.length >= 3) {
+      const last3 = sessionDDIs.slice(-3);
+      if (last3.every((d) => d > 0.85)) {
+        return "HARDER";
+      }
+    }
+    if (sessionDDIs.length >= 2) {
+      const last2 = sessionDDIs.slice(-2);
+      if (last2.every((d) => d < 0.4)) {
+        return "EASIER";
+      }
+    }
+    return "MAINTAIN";
+  }
+
+  /**
+   * Calculates or estimates response time percentiles (p50, p75, p95) from attempt history.
+   *
+   * @param times Historical response times in milliseconds
+   * @param difficulty Difficulty level used for baseline fallback
+   * @returns Percentile object { p50, p75, p95 }
+   */
+  public static calculateResponseTimePercentiles(
+    times: number[],
+    difficulty: DifficultyLevel = DifficultyLevel.STANDARD
+  ): { p50: number; p75: number; p95: number } {
+    const baseline =
+      this.DEFAULT_TIME_PERCENTILES[difficulty] ||
+      this.DEFAULT_TIME_PERCENTILES[DifficultyLevel.STANDARD];
+    if (!times || times.length < 5) {
+      return baseline;
+    }
+
+    const sorted = [...times].sort((a, b) => a - b);
+    const getPercentile = (p: number) => {
+      const idx = Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length));
+      return sorted[idx];
+    };
+
+    return {
+      p50: getPercentile(50),
+      p75: getPercentile(75),
+      p95: getPercentile(95)
+    };
+  }
+
+  /**
+   * Classifies a student attempt's response speed based on percentile boundaries:
+   * - FAST_CORRECT (<= p50)
+   * - NORMAL_CORRECT (<= p75)
+   * - SLOW_CORRECT (<= p95)
+   * - VERY_SLOW_CORRECT (> p95)
+   *
+   * @param responseTimeMs Response time of the attempt in milliseconds
+   * @param isCorrect Whether the attempt was correct
+   * @param percentiles Target percentiles { p50, p75, p95 }
+   * @returns ResponseSpeedFlag
+   */
+  public static classifyResponseSpeed(
+    responseTimeMs: number,
+    isCorrect: boolean,
+    percentiles: { p50: number; p75: number; p95: number }
+  ): ResponseSpeedFlag {
+    if (isCorrect) {
+      if (responseTimeMs <= percentiles.p50) return "FAST_CORRECT";
+      if (responseTimeMs <= percentiles.p75) return "NORMAL_CORRECT";
+      if (responseTimeMs <= percentiles.p95) return "SLOW_CORRECT";
+      return "VERY_SLOW_CORRECT";
+    } else {
+      if (responseTimeMs <= percentiles.p50) return "FAST_INCORRECT";
+      if (responseTimeMs <= percentiles.p75) return "NORMAL_INCORRECT";
+      return "SLOW_INCORRECT";
+    }
+  }
+
+  /**
+   * Detects recurring misconceptions and pattern failures (e.g. 3x consecutive failure on same concept).
+   * Categorizes by misconceptionType ('conceptual' | 'procedural' | 'factual'),
+   * flags as ACTIVE_MISCONCEPTION with timestamp, and persists until 3 consecutive correct answers.
+   *
+   * @param attempt The current exercise attempt
+   * @param currentMisconceptions List of already known or tracked misconceptions
+   * @param conceptHistory Optional recent attempt history on this concept
+   * @param consecutiveCorrect Optional consecutive correct count on this concept
+   * @returns Updated or newly detected MisconceptionState, or null if none detected/resolved
    */
   public static detectMisconception(
     attempt: ExerciseAttempt,
-    currentMisconceptions: MisconceptionState[]
+    currentMisconceptions: MisconceptionState[] = [],
+    conceptHistory: { isCorrect: boolean }[] = [],
+    consecutiveCorrect: number = 0
   ): MisconceptionState | null {
-    // 1. Textual trigger parsing (checking common Kurdish math/science mistakes)
+    // 1. Resolution Check: If student has 3 consecutive correct answers on this concept, resolve active misconception
+    if (consecutiveCorrect >= 3) {
+      const activeOnConcept = currentMisconceptions.find(
+        (m) =>
+          m.conceptId === attempt.conceptId &&
+          (m.status !== MisconceptionStatus.RESOLVED || m.isActive)
+      );
+      if (activeOnConcept) {
+        return {
+          ...activeOnConcept,
+          status: MisconceptionStatus.RESOLVED,
+          isActive: false,
+          resolvedAt: new Date().toISOString(),
+          consecutiveCorrectSinceDetection: consecutiveCorrect
+        };
+      }
+    }
+
+    // 2. Textual trigger parsing (checking common Kurdish math/science mistakes)
     let detectedId: string | null = null;
     let nameKu = "";
     let interventionKu = "";
+    let misconceptionType: MisconceptionType = "conceptual";
 
-    const ans = attempt.studentResponse.trim().toLowerCase();
-    const qText = attempt.questionText.trim().toLowerCase();
+    const ans = (attempt.studentResponse || "").trim().toLowerCase();
+    const qText = (attempt.questionText || "").trim().toLowerCase();
 
-    // Check common algebraic sign flip misconception
+    // Check algebraic sign flip misconception (procedural)
     if (!attempt.isCorrect && (ans.includes("-") || ans.includes("+")) && qText.includes("هاوکێشە")) {
       detectedId = "misc_sign_flip";
       nameKu = "هەڵەی پێچەوانەکردنەوەی هێما لە گواستنەوەدا (Sign Flip)";
-      interventionKu = "تێبینی دەکەین لەوانەیە پێویستت بە کەمێک پاڵپشتی بێت لە گواستنەوەی هێماکاندا. با پێکەوە فێری بین!";
-    } 
-    // Check common division instead of multiplication misconception
-    else if (!attempt.isCorrect && (ans.includes("/") || ans.includes("دابەش")) && (qText.includes(" can ") || qText.includes("هاوکێشە") || qText.includes("لێکدان"))) {
+      interventionKu =
+        "تێبینی دەکەین لەوانەیە پێویستت بە کەمێک پاڵپشتی بێت لە گواستنەوەی هێماکاندا. با پێکەوە فێری بین!";
+      misconceptionType = "procedural";
+    }
+    // Check operation inverse misconception (procedural)
+    else if (
+      !attempt.isCorrect &&
+      (ans.includes("/") || ans.includes("دابەش")) &&
+      (qText.includes(" can ") || qText.includes("هاوکێشە") || qText.includes("لێکدان"))
+    ) {
       detectedId = "misc_op_inverse";
       nameKu = "هەڵە تێکەڵکردنی کرداری لێکدان و دابەشکردنی پێچەوانە";
-      interventionKu = "کرداری لێکدان و دابەشکردن زۆر گرنگن، وەرە با پێکەوە پێداچوونەوەیەکی خێرا بە شێوازی پێچەوانەکردنیان بکەین.";
+      interventionKu =
+        "کرداری لێکدان و دابەشکردن زۆر گرنگن، وەرە با پێکەوە پێداچوونەوەیەکی خێرا بە شێوازی پێچەوانەکردنیان بکەین.";
+      misconceptionType = "procedural";
+    }
+    // Check factual/definition misconception (factual)
+    else if (
+      !attempt.isCorrect &&
+      (qText.includes("پێناسەی") || qText.includes("بەروار") || qText.includes("یەکە"))
+    ) {
+      if (attempt.misconceptionDetected) {
+        detectedId = "misc_" + attempt.conceptId;
+        nameKu = attempt.misconceptionDetected;
+        interventionKu = "با کەمێک پێداچوونەوە بە پێناسە و یاسا سەرەکییەکانی ئەم بابەتەدا بکەین.";
+        misconceptionType = "factual";
+      }
     }
 
-    // Fallback trigger if specified in the attempt directly
-    if (!detectedId && !attempt.isCorrect && attempt.misconceptionDetected) {
-      detectedId = "misc_" + attempt.conceptId;
-      nameKu = attempt.misconceptionDetected;
-      interventionKu = "با کەمێک پێداچوونەوە بکەین بە یاساکانی ئەم بابەتە بۆ بەهێزکردنی تێگەیشتنت.";
+    // 3. Pattern detection: Check if student fails same concept 3x in a row
+    const recentFailures = conceptHistory.slice(-3);
+    const hasThreeConsecutiveFails =
+      !attempt.isCorrect &&
+      ((recentFailures.length >= 2 && recentFailures.every((h) => !h.isCorrect)) ||
+        (!attempt.isCorrect &&
+          currentMisconceptions.some(
+            (m) => m.conceptId === attempt.conceptId && m.count >= 2
+          )));
+
+    // Fallback trigger if specified in the attempt directly or 3 consecutive fails
+    if (!detectedId && !attempt.isCorrect) {
+      if (attempt.misconceptionDetected) {
+        detectedId = "misc_" + attempt.conceptId;
+        nameKu = attempt.misconceptionDetected;
+        interventionKu = "با کەمێک پێداچوونەوە بکەین بە یاساکانی ئەم بابەتە بۆ بەهێزکردنی تێگەیشتنت.";
+        misconceptionType = "conceptual";
+      } else if (hasThreeConsecutiveFails) {
+        detectedId = "misc_consecutive_fail_" + attempt.conceptId;
+        nameKu = `تێنەگەیشتنی چڕ لە چەمکی: ${attempt.conceptId} (٣ هەڵەی لەسەریەک)`;
+        interventionKu =
+          "تێبینی دەکرێت کێشەی سەرەکی لەم چەمکەدا هەیە بەهۆی ئەنجامدانی ٣ هەڵەی لەسەریەک. ڕێنمایی تایبەت پێشنیار دەکرێت.";
+        misconceptionType = "conceptual";
+      }
     }
 
     if (detectedId) {
-      const existing = currentMisconceptions.find(m => m.misconceptionId === detectedId);
+      const existing = currentMisconceptions.find((m) => m.misconceptionId === detectedId);
       if (existing) {
         const newCount = existing.count + 1;
         let newStatus = MisconceptionStatus.SUSPECTED;
         let newConfidence: "low" | "medium" | "high" = "low";
+        let isActive = false;
 
         if (newCount >= 3) {
           newStatus = MisconceptionStatus.CONFIRMED;
           newConfidence = "high";
+          isActive = true;
         } else if (newCount === 2) {
           newStatus = MisconceptionStatus.SUSPECTED;
           newConfidence = "medium";
+          isActive = true;
+        } else if (hasThreeConsecutiveFails) {
+          newStatus = MisconceptionStatus.CONFIRMED;
+          newConfidence = "high";
+          isActive = true;
         }
 
         return {
@@ -244,48 +720,36 @@ export class AdaptiveLearningEngine {
           count: newCount,
           status: newStatus,
           confidence: newConfidence,
+          misconceptionType: existing.misconceptionType || misconceptionType,
+          isActive,
+          activeFlag: isActive ? "ACTIVE_MISCONCEPTION" : undefined,
+          flaggedAt: isActive ? (existing.flaggedAt || new Date().toISOString()) : undefined,
           lastDetectedAt: new Date().toISOString(),
           evidenceAttempts: [...existing.evidenceAttempts, attempt.id],
-          resolvedAt: null
+          resolvedAt: null,
+          consecutiveCorrectSinceDetection: 0
         };
       } else {
-        // One failure: no misconception created (return null, require repeated evidence)
-        // To be production-safe and robust, we don't save or report misconceptions with count = 1.
-        // Let's create it with status SUSPECTED only when count >= 2, or start it as a tracked entry.
-        // We will return it with count = 1 but track it, but the UI should only show SUSPECTED/CONFIRMED when count >= 2.
-        // Wait, "one failure: no misconception" means detectMisconception returns null or tracks it as pending.
-        // Let's return it with count = 1 but status = SUSPECTED only if we want to track, but wait,
-        // let's return a SUSPECTED misconception only when the count actually reaches 2!
-        // So for the very first failure, we don't trigger the active misconception in the list, or we return null.
-        // Wait! Let's check how the caller uses it.
-        // In the caller, if we return null on count = 1, how do we know it happened once so we can increment it next time?
-        // Ah! If the caller passes currentMisconceptions, and we don't add count=1, then it will always remain count=1!
-        // To fix this, we can return a misconception with count = 1 but status pending, or we can add it to the list with count=1 but with a non-visible status or keep it as low-confidence and the UI only displays SUSPECTED or CONFIRMED when count >= 2.
-        // Let's do:
-        // - Count = 1: status = MisconceptionStatus.SUSPECTED (but confidence "low", we can keep count 1. But wait, "one failure: no misconception" means we don't create it or we treat it as no active misconception).
-        // Let's write the count = 1 with no active misconception by returning null unless there is previous evidence, or return a state with status SUSPECTED only if count is 2 or more.
-        // Wait! Let's allow returning a misconception with count = 1 but status pending/none, or just start at SUSPECTED at count >= 2!
-        // Let's implement: if existing exists, increment count and update status. If it doesn't exist, we can return it with count = 1, but set status = MisconceptionStatus.SUSPECTED only if it is repeated.
-        // Actually, let's look at the contract:
-        // - one failure: no misconception
-        // - repeated same error pattern (count = 2): SUSPECTED
-        // - stronger repeated evidence (count >= 3): CONFIRMED
-        // So we can return a new MisconceptionState with count = 1, but we assign status = MisconceptionStatus.SUSPECTED only when count is 2!
-        // Let's make the state:
-        // - count = 1: status = MisconceptionStatus.SUSPECTED (wait, "one failure: no misconception" implies count=1 should have status = undefined or not be returned as active. Let's make status = MisconceptionStatus.SUSPECTED only when count = 2).
-        // Let's do:
+        const isActive = hasThreeConsecutiveFails;
         return {
           conceptId: attempt.conceptId,
           misconceptionId: detectedId,
           nameKu,
           count: 1,
-          status: MisconceptionStatus.SUSPECTED, // We'll set it as SUSPECTED but count is 1. If we want "one failure: no misconception", let's make it so count must be >= 2 for active status. Let's track count starting at 1.
-          confidence: "low",
+          status: isActive
+            ? MisconceptionStatus.CONFIRMED
+            : MisconceptionStatus.SUSPECTED,
+          confidence: isActive ? "high" : "low",
+          misconceptionType,
+          isActive,
+          activeFlag: isActive ? "ACTIVE_MISCONCEPTION" : undefined,
+          flaggedAt: isActive ? new Date().toISOString() : undefined,
           evidenceAttempts: [attempt.id],
           firstDetectedAt: new Date().toISOString(),
           lastDetectedAt: new Date().toISOString(),
           resolvedAt: null,
-          interventionKu
+          interventionKu,
+          consecutiveCorrectSinceDetection: 0
         };
       }
     }
@@ -294,28 +758,92 @@ export class AdaptiveLearningEngine {
   }
 
   /**
-   * Determine adaptation difficulty for the next exercise (FOUNDATION, EASY, STANDARD, CHALLENGING, ADVANCED).
+   * Updates an entire list of misconceptions after an attempt, resolving misconceptions
+   * if 3 consecutive correct answers are met, or recording/updating detected ones.
+   *
+   * @param currentMisconceptions List of current misconceptions
+   * @param attempt Recent attempt
+   * @param consecutiveCorrect Consecutive correct answers on the concept
+   * @param conceptHistory Concept history
+   * @returns Updated array of MisconceptionState
    */
-  public static adaptDifficulty(conceptId: string, history: { isCorrect: boolean }[]): DifficultyLevel {
-    if (history.length === 0) return DifficultyLevel.EASY;
-    
-    const recent = history.slice(-4); // last 4 attempts
-    const correctCount = recent.filter(h => h.isCorrect).length;
+  public static updateMisconceptions(
+    currentMisconceptions: MisconceptionState[],
+    attempt: ExerciseAttempt,
+    consecutiveCorrect: number,
+    conceptHistory: { isCorrect: boolean }[] = []
+  ): MisconceptionState[] {
+    const detected = this.detectMisconception(
+      attempt,
+      currentMisconceptions,
+      conceptHistory,
+      consecutiveCorrect
+    );
+    if (!detected) return currentMisconceptions;
 
-    if (correctCount === recent.length && recent.length >= 3) {
-      return DifficultyLevel.CHALLENGING;
-    } else if (correctCount >= 2) {
-      return DifficultyLevel.STANDARD;
-    } else if (correctCount === 1) {
-      return DifficultyLevel.EASY;
-    } else {
-      return DifficultyLevel.FOUNDATION;
+    const exists = currentMisconceptions.some(
+      (m) => m.misconceptionId === detected.misconceptionId
+    );
+    if (exists) {
+      return currentMisconceptions.map((m) =>
+        m.misconceptionId === detected.misconceptionId ? detected : m
+      );
     }
+    return [...currentMisconceptions, detected];
   }
 
   /**
-   * Perform prerequisite checks and cycle prevention.
-   * If concept A requires B, and B requires A, there is a cycle.
+   * Determines adaptation difficulty for the next exercise (FOUNDATION, EASY, STANDARD, CHALLENGING, ADVANCED),
+   * combining recent 4-attempt local accuracy with multi-session DDI calibration.
+   *
+   * @param conceptId Concept identifier
+   * @param history Attempt history
+   * @param sessionDDIs Multi-session DDI history
+   * @returns DifficultyLevel
+   */
+  public static adaptDifficulty(
+    conceptId: string,
+    history: { isCorrect: boolean }[],
+    sessionDDIs: number[] = []
+  ): DifficultyLevel {
+    if (!history || history.length === 0) return DifficultyLevel.EASY;
+
+    const recent = history.slice(-4);
+    const correctCount = recent.filter((h) => h.isCorrect).length;
+
+    let baseDifficulty: DifficultyLevel;
+    if (correctCount === recent.length && recent.length >= 3) {
+      baseDifficulty = DifficultyLevel.CHALLENGING;
+    } else if (correctCount >= 2) {
+      baseDifficulty = DifficultyLevel.STANDARD;
+    } else if (correctCount === 1) {
+      baseDifficulty = DifficultyLevel.EASY;
+    } else {
+      baseDifficulty = DifficultyLevel.FOUNDATION;
+    }
+
+    const sessionAdjustment = this.evaluateSessionDifficultyCalibration(sessionDDIs);
+    if (sessionAdjustment === "HARDER") {
+      if (baseDifficulty === DifficultyLevel.FOUNDATION) return DifficultyLevel.EASY;
+      if (baseDifficulty === DifficultyLevel.EASY) return DifficultyLevel.STANDARD;
+      if (baseDifficulty === DifficultyLevel.STANDARD) return DifficultyLevel.CHALLENGING;
+      return DifficultyLevel.ADVANCED;
+    } else if (sessionAdjustment === "EASIER") {
+      if (baseDifficulty === DifficultyLevel.CHALLENGING) return DifficultyLevel.STANDARD;
+      if (baseDifficulty === DifficultyLevel.STANDARD) return DifficultyLevel.EASY;
+      return DifficultyLevel.FOUNDATION;
+    }
+
+    return baseDifficulty;
+  }
+
+  /**
+   * Performs prerequisite dependency cycle detection using Depth-First Search (DFS).
+   * Returns true if a cycle exists (e.g. A requires B, and B requires A).
+   *
+   * @param prereqMap Map of concept IDs to their prerequisite array
+   * @param startId Starting concept ID
+   * @returns boolean
    */
   public static hasPrerequisiteCycle(
     prereqMap: Record<string, string[]>,
@@ -344,7 +872,14 @@ export class AdaptiveLearningEngine {
   }
 
   /**
-   * Generate highly personalized adaptive learning recommendations in Kurdish with pedagogical reasons.
+   * Generates highly personalized adaptive learning recommendations in Kurdish with pedagogical reasoning.
+   *
+   * @param studentId Student ID
+   * @param conceptId Target concept ID
+   * @param conceptTitleKu Concept title in Kurdish
+   * @param profile Complete StudentMasteryProfile
+   * @param prerequisites Prerequisite concept IDs
+   * @returns AdaptiveRecommendation
    */
   public static generateRecommendation(
     studentId: string,
@@ -374,16 +909,26 @@ export class AdaptiveLearningEngine {
     }
 
     if (weakPrereqId && score < 0.6) {
-      // Prerequisite review is recommended due to evidence of poor prerequisite mastery
       type = "PREREQUISITE_REVIEW";
       priority = "high";
       titleKu = `پێداچوونەوە بە پێویستیی یەکەم: فێربوونی چەمکی بنەڕەتی`;
       explanationKu = `سەرەتا پێویستە پێداچوونەوە بە چەمکی بنەڕەتیی "${weakPrereqId}" بکەیت پێش ئەوەی بەردەوام بیت لەسەر "${conceptTitleKu}"، چونکە تێگەیشتن لەم بابەتە نوێیە پێویستی بە جێگیربوونی زانیارییە بنەڕەتییەکەیە.`;
       reasoningKu = `قوتابی لە چەمکی داهاتوودا تووشی کێشە بووە چونکە چەمکی بنچینەیی پێشینەی بە تەواوی جێگیر نەکردووە. پێشنیار کراوە بگەڕێتەوە بۆ بەهێزکردنی بابەتە بنەڕەتییەکە.`;
-    } 
+    }
     // 2. Active Misconception Remedial Explanation
-    else if (profile.activeMisconceptions.some(m => m.conceptId === conceptId && m.resolvedAt === null)) {
-      const activeMisc = profile.activeMisconceptions.find(m => m.conceptId === conceptId && m.resolvedAt === null)!;
+    else if (
+      profile.activeMisconceptions.some(
+        (m) =>
+          m.conceptId === conceptId &&
+          (m.status === MisconceptionStatus.ACTIVE_MISCONCEPTION ||
+            m.status === MisconceptionStatus.CONFIRMED ||
+            m.isActive) &&
+          m.resolvedAt === null
+      )
+    ) {
+      const activeMisc = profile.activeMisconceptions.find(
+        (m) => m.conceptId === conceptId && m.resolvedAt === null
+      )!;
       type = "REMEDIAL_EXPLANATION";
       priority = "high";
       titleKu = `ڕوونکردنەوەی چارەسەری بۆ: ${activeMisc.nameKu}`;
@@ -407,7 +952,7 @@ export class AdaptiveLearningEngine {
       reasoningKu = `ئاستی تێگەیشتنی قوتابی لە خوار ٤٠٪ دایە، پێویستە پێش ڕاهێنانی چڕ سەرەتا بنچینە تیۆرییەکە بە تەواوی فێربێت.`;
     }
     // 5. Ready to practice
-    else if (score >= 0.4 && score < 0.85) {
+    else if (score >= 0.4 && score < 0.8) {
       type = "PRACTICE_DRILL";
       priority = "medium";
       titleKu = `ڕاهێنانی چڕ لەسەر چەمکی: ${conceptTitleKu}`;
@@ -420,7 +965,7 @@ export class AdaptiveLearningEngine {
       priority = "low";
       titleKu = `پێشڕەوی بۆ بابەتی داهاتوو دوای تەواوکردنی: ${conceptTitleKu}`;
       explanationKu = `پیرۆزە! تۆ متمانە و لێهاتوویی نایابت بەدەستهێنا لەسەر ئەم چەمکە. ئێستا کاتی ئەوەیە بچین بەرەو خوێندنی وانە یان چەمکە نوێیەکانی داهاتوو.`;
-      reasoningKu = `قوتابی نمرەی لێهاتوویی سەروو ٨٥٪ی بەدەستهێناوە و متمانەی تەواوە. سیستمەکە پێشنیاری جووڵەی دەکات بۆ بابەتی داهاتوو تا لە خاڵی خۆیدا چەق نەبەستێت.`;
+      reasoningKu = `قوتابی نمرەی لێهاتوویی سەروو ٨٠٪ی بەدەستهێناوە و متمانەی تەواوە. سیستمەکە پێشنیاری جووڵەی دەکات بۆ بابەتی داهاتوو تا لە خاڵی خۆیدا چەق نەبەستێت.`;
     }
 
     return {

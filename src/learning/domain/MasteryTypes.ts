@@ -15,6 +15,16 @@ export enum MasteryStatus {
   NEEDS_REVIEW = "NEEDS_REVIEW"
 }
 
+export type ResponseSpeedFlag =
+  | "FAST_CORRECT"
+  | "NORMAL_CORRECT"
+  | "SLOW_CORRECT"
+  | "VERY_SLOW_CORRECT"
+  | "FAST_INCORRECT"
+  | "NORMAL_INCORRECT"
+  | "SLOW_INCORRECT"
+  | "VERY_SLOW_INCORRECT";
+
 export interface ConceptMasteryState {
   conceptId: string;
   masteryScore: number; // 0.0 to 1.0
@@ -24,14 +34,28 @@ export interface ConceptMasteryState {
   lastAttemptedAt: string | null;
   history: { isCorrect: boolean; timestamp: string; responseTimeMs: number; difficulty: DifficultyLevel }[];
   lastChangeExplanation?: string; // Phase 15 change explanation code
+  // Spaced Repetition (SM-2 Integration)
+  lastReviewedAt?: string | null;
+  nextReviewDue?: string | null;
+  stabilityFactor?: number; // SM-2 ease factor (default 2.5)
+  intervalDays?: number; // interval in days until next review
+  repetitionCount?: number; // count of successful spaced repetitions
+  // Adaptive Difficulty Calibration (DDI)
+  ddi?: number; // Dynamic Difficulty Index: running accuracy
+  // Response Time Intelligence
+  responseTimePercentiles?: { p50: number; p75: number; p95: number };
+  speedFlag?: ResponseSpeedFlag;
 }
 
 export enum MisconceptionStatus {
   SUSPECTED = "SUSPECTED",
   CONFIRMED = "CONFIRMED",
   IMPROVING = "IMPROVING",
-  RESOLVED = "RESOLVED"
+  RESOLVED = "RESOLVED",
+  ACTIVE_MISCONCEPTION = "ACTIVE_MISCONCEPTION"
 }
+
+export type MisconceptionType = "conceptual" | "procedural" | "factual";
 
 export interface MisconceptionState {
   conceptId: string;
@@ -45,6 +69,12 @@ export interface MisconceptionState {
   lastDetectedAt: string;
   resolvedAt: string | null;
   interventionKu: string;
+  // Misconception Tracking Enhancement
+  misconceptionType?: MisconceptionType;
+  isActive?: boolean;
+  activeFlag?: "ACTIVE_MISCONCEPTION" | string;
+  flaggedAt?: string;
+  consecutiveCorrectSinceDetection?: number;
 }
 
 export interface StudentStreakData {
@@ -86,6 +116,9 @@ export interface StudentMasteryProfile {
   unlockedAchievements?: string[]; // IDs of unlocked milestone badges
   updatedAt?: string;
   schemaVersion?: number;
+  studentDDI?: number; // running average accuracy over recent attempts
+  sessionDDIHistory?: number[]; // history of session DDIs
+  difficultyRecommendation?: "HARDER" | "EASIER" | "MAINTAIN";
 }
 
 export type LearningEventType =
@@ -146,4 +179,19 @@ export interface LearningSession {
   endTime: string | null;
   events: LearningEvent[];
   focusScore: number; // 0.0 to 1.0
+}
+
+/**
+ * Result returned by AdaptiveLearningEngine mastery calculations,
+ * containing explanation codes, score delta, and pedagogical recommendations.
+ */
+export interface MasteryCalculationResult {
+  newState: ConceptMasteryState;
+  scoreChange: number;
+  explanationCode: string;
+  speedFlag?: ResponseSpeedFlag;
+  recommendation?: AdaptiveRecommendation;
+  ddi?: number;
+  nextReviewDue?: string | null;
+  stabilityFactor?: number;
 }
