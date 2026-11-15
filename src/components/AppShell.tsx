@@ -12,6 +12,7 @@ export interface AppShellProps {
   children: ReactNode;
   activeTab?: NavItemKey;
   onTabChange?: (tab: NavItemKey) => void;
+  onPrefetch?: (tab: NavItemKey) => void;
   pageTitle?: string;
   className?: string;
   isPermanentUser?: boolean;
@@ -24,6 +25,7 @@ export function AppShell({
   children,
   activeTab = "home",
   onTabChange,
+  onPrefetch,
   pageTitle,
   className = "",
   isPermanentUser,
@@ -155,6 +157,7 @@ export function AppShell({
             <Sidebar
               activeTab={activeTab}
               onNavigate={handleNav}
+              onPrefetch={onPrefetch}
               isPermanentUser={isPermanentUser}
               onNavigateToLogin={onNavigateToLogin}
               onLogout={onLogout}
@@ -169,6 +172,7 @@ export function AppShell({
         <Sidebar
           activeTab={activeTab}
           onNavigate={handleNav}
+          onPrefetch={onPrefetch}
           isPermanentUser={isPermanentUser}
           onNavigateToLogin={onNavigateToLogin}
           onLogout={onLogout}

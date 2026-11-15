@@ -34,7 +34,7 @@ interface HistoryChapter {
   lessons: ChapterLesson[];
 }
 
-export const Grade12HistoryBookViewer: React.FC<Grade12HistoryBookViewerProps> = ({
+export const Grade12HistoryBookViewer: React.FC<Grade12HistoryBookViewerProps> = React.memo(({
   onSelectTopicForStudy,
   onNavigateToChat,
 }) => {
@@ -818,4 +818,4 @@ export const Grade12HistoryBookViewer: React.FC<Grade12HistoryBookViewerProps> =
       )}
     </div>
   );
-};
+});

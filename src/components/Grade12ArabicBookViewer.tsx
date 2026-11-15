@@ -36,7 +36,7 @@ interface BookUnit {
   lessons: ChapterLesson[];
 }
 
-export const Grade12ArabicBookViewer: React.FC<Grade12ArabicBookViewerProps> = ({
+export const Grade12ArabicBookViewer: React.FC<Grade12ArabicBookViewerProps> = React.memo(({
   onSelectTopicForStudy,
   onNavigateToChat,
 }) => {
@@ -648,4 +648,4 @@ export const Grade12ArabicBookViewer: React.FC<Grade12ArabicBookViewerProps> = (
       )}
     </div>
   );
-};
+});

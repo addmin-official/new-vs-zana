@@ -21,7 +21,7 @@ export interface BarChartProps {
   className?: string;
 }
 
-export function BarChart({
+export const BarChart = React.memo(function BarChart({
   data,
   series,
   height = 260,
@@ -256,5 +256,5 @@ export function BarChart({
       </div>
     </div>
   );
-}
+});
 export default BarChart;

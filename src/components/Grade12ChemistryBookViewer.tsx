@@ -19,7 +19,7 @@ interface Grade12ChemistryBookViewerProps {
   onNavigateToChat?: () => void;
 }
 
-export const Grade12ChemistryBookViewer: React.FC<Grade12ChemistryBookViewerProps> = ({
+export const Grade12ChemistryBookViewer: React.FC<Grade12ChemistryBookViewerProps> = React.memo(({
   onSelectTopicForStudy,
   onNavigateToChat,
 }) => {
@@ -487,4 +487,4 @@ export const Grade12ChemistryBookViewer: React.FC<Grade12ChemistryBookViewerProp
       </div>
     </div>
   );
-};
+});

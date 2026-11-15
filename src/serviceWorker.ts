@@ -1,0 +1,135 @@
+/**
+ * ZANA Platform - PWA Service Worker Registration & Offline Management
+ * Configures service worker lifecycle, background sync triggers, and cache revalidation.
+ */
+
+export interface ServiceWorkerState {
+  isRegistered: boolean;
+  isOnline: boolean;
+  hasUpdate: boolean;
+  registration: ServiceWorkerRegistration | null;
+}
+
+type StateListener = (state: ServiceWorkerState) => void;
+
+class ServiceWorkerManager {
+  private state: ServiceWorkerState = {
+    isRegistered: false,
+    isOnline: typeof navigator !== "undefined" ? navigator.onLine : true,
+    hasUpdate: false,
+    registration: null,
+  };
+
+  private listeners = new Set<StateListener>();
+
+  constructor() {
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", () => this.updateOnlineStatus(true));
+      window.addEventListener("offline", () => this.updateOnlineStatus(false));
+    }
+  }
+
+  public subscribe(listener: StateListener): () => void {
+    this.listeners.add(listener);
+    listener(this.state);
+    return () => this.listeners.delete(listener);
+  }
+
+  private notify(): void {
+    this.listeners.forEach((listener) => {
+      try {
+        listener(this.state);
+      } catch (err) {
+        console.error("[SW Manager] Listener error:", err);
+      }
+    });
+  }
+
+  private updateOnlineStatus(isOnline: boolean): void {
+    this.state = { ...this.state, isOnline };
+    this.notify();
+
+    if (isOnline) {
+      // Trigger background sync for queued mastery updates
+      this.triggerOfflineSync();
+    }
+  }
+
+  public async register(): Promise<ServiceWorkerRegistration | null> {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) {
+      return null;
+    }
+
+    try {
+      const registration = await navigator.serviceWorker.register("/sw.js", {
+        scope: "/",
+      });
+
+      this.state = {
+        ...this.state,
+        isRegistered: true,
+        registration,
+      };
+
+      // Detect service worker updates
+      registration.addEventListener("updatefound", () => {
+        const installingWorker = registration.installing;
+        if (!installingWorker) return;
+
+        installingWorker.addEventListener("statechange", () => {
+          if (
+            installingWorker.state === "installed" &&
+            navigator.serviceWorker.controller
+          ) {
+            this.state = { ...this.state, hasUpdate: true };
+            this.notify();
+          }
+        });
+      });
+
+      this.notify();
+      return registration;
+    } catch (err) {
+      console.warn("[SW Manager] ServiceWorker registration failed:", err);
+      return null;
+    }
+  }
+
+  /**
+   * Triggers background sync for offline queued operations (e.g. mastery updates).
+   */
+  public async triggerOfflineSync(): Promise<void> {
+    if (!this.state.registration || !("sync" in this.state.registration)) {
+      return;
+    }
+
+    try {
+      const syncReg = this.state.registration as ServiceWorkerRegistration & {
+        sync: { register: (tag: string) => Promise<void> };
+      };
+      await syncReg.sync.register("sync-mastery-updates");
+    } catch (err) {
+      console.warn("[SW Manager] Background sync registration skipped:", err);
+    }
+  }
+
+  public skipWaiting(): void {
+    if (this.state.registration?.waiting) {
+      this.state.registration.waiting.postMessage({ type: "SKIP_WAITING" });
+    }
+  }
+
+  public getState(): ServiceWorkerState {
+    return this.state;
+  }
+}
+
+export const swManager = new ServiceWorkerManager();
+
+export function registerServiceWorker(): void {
+  if (typeof window !== "undefined") {
+    window.addEventListener("load", () => {
+      swManager.register();
+    });
+  }
+}

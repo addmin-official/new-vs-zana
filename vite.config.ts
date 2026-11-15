@@ -2,6 +2,8 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
+import { visualizer } from 'rollup-plugin-visualizer';
+import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(({ mode }) => {
   // Load from .env file
@@ -13,7 +15,73 @@ export default defineConfig(({ mode }) => {
   };
 
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      react(),
+      tailwindcss(),
+      VitePWA({
+        registerType: 'autoUpdate',
+        injectRegister: null,
+        manifest: false,
+        workbox: {
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
+          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB limit
+          runtimeCaching: [
+            {
+              // Cache curriculum data (CacheFirst, 7 days)
+              urlPattern: /^https?:\/\/.*\/api\/curriculum\/.*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'curriculum-cache',
+                expiration: {
+                  maxEntries: 100,
+                  maxAgeSeconds: 7 * 24 * 60 * 60, // 7 days
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
+              },
+            },
+            {
+              // Cache static assets (CacheFirst, 30 days)
+              urlPattern: /\.(?:png|jpg|jpeg|svg|webp|gif|woff2?|ttf)$/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'static-assets-cache',
+                expiration: {
+                  maxEntries: 150,
+                  maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
+              },
+            },
+            {
+              // Cache API responses (NetworkFirst, 1 hour)
+              urlPattern: /^https?:\/\/.*\/api\/(?!chat|assessment|feedback).*/i,
+              handler: 'NetworkFirst',
+              options: {
+                cacheName: 'api-responses-cache',
+                networkTimeoutSeconds: 5,
+                expiration: {
+                  maxEntries: 50,
+                  maxAgeSeconds: 60 * 60, // 1 hour
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
+              },
+            },
+          ],
+        },
+      }),
+      visualizer({
+        filename: 'dist/client/stats.html',
+        open: false,
+        gzipSize: true,
+        brotliSize: true,
+      }),
+    ],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
@@ -22,15 +90,48 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist/client',
       target: 'es2022',
+      sourcemap: false,
+      minify: 'terser',
+      terserOptions: {
+        compress: {
+          drop_console: false,
+          drop_debugger: true,
+        },
+        format: {
+          comments: false,
+        },
+      },
       rollupOptions: {
         output: {
           manualChunks(id) {
             if (id.includes('node_modules')) {
               if (id.includes('firebase')) return 'firebase-vendor';
-              if (id.includes('lucide-react')) return 'lucide-vendor';
-              if (id.includes('react-markdown') || id.includes('remark') || id.includes('unified')) return 'markdown-vendor';
-              if (id.includes('motion')) return 'motion-vendor';
               if (id.includes('react') || id.includes('scheduler')) return 'react-vendor';
+              if (id.includes('lucide-react')) return 'lucide-vendor';
+            }
+
+            // Application component chunks
+            if (id.includes('/components/charts/')) {
+              return 'charts';
+            }
+            if (id.includes('BookViewer')) {
+              return 'books';
+            }
+            if (
+              id.includes('Simulation') ||
+              id.includes('VirtualScienceLab') ||
+              id.includes('PracticeLab') ||
+              id.includes('/labs/')
+            ) {
+              return 'labs';
+            }
+            if (
+              id.includes('Dashboard') ||
+              id.includes('ParentPortal') ||
+              id.includes('ParentReport') ||
+              id.includes('/analytics/')
+            ) {
+              return 'dashboards';
             }
           },
         },

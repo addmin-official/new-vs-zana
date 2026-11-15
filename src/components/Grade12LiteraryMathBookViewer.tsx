@@ -37,7 +37,7 @@ interface LiteraryMathChapter {
   lessons: ChapterLesson[];
 }
 
-export const Grade12LiteraryMathBookViewer: React.FC<Grade12LiteraryMathBookViewerProps> = ({
+export const Grade12LiteraryMathBookViewer: React.FC<Grade12LiteraryMathBookViewerProps> = React.memo(({
   onSelectTopicForStudy,
   onNavigateToChat,
 }) => {
@@ -836,4 +836,4 @@ export const Grade12LiteraryMathBookViewer: React.FC<Grade12LiteraryMathBookView
       </div>
     </div>
   );
-};
+});

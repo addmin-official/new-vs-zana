@@ -39,7 +39,7 @@ interface EconomicsChapter {
   lessons: ChapterLesson[];
 }
 
-export const Grade12EconomicsBookViewer: React.FC<Grade12EconomicsBookViewerProps> = ({
+export const Grade12EconomicsBookViewer: React.FC<Grade12EconomicsBookViewerProps> = React.memo(({
   onSelectTopicForStudy,
   onNavigateToChat,
 }) => {
@@ -831,4 +831,4 @@ export const Grade12EconomicsBookViewer: React.FC<Grade12EconomicsBookViewerProp
       </div>
     </div>
   );
-};
+});

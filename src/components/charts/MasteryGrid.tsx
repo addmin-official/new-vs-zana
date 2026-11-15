@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { ArrowUpDown, HelpCircle } from "lucide-react";
 
 export interface StudentConceptMastery {
@@ -15,7 +15,7 @@ export interface MasteryGridProps {
   title?: string;
 }
 
-export function MasteryGrid({
+export const MasteryGrid = React.memo(function MasteryGrid({
   students,
   concepts,
   className = "",
@@ -28,11 +28,13 @@ export function MasteryGrid({
     score: number;
   } | null>(null);
 
-  const sortedStudents = [...students].sort((a, b) => {
-    if (sortBy === "lowest") return a.averageScore - b.averageScore;
-    if (sortBy === "highest") return b.averageScore - a.averageScore;
-    return a.studentName.localeCompare(b.studentName);
-  });
+  const sortedStudents = useMemo(() => {
+    return [...students].sort((a, b) => {
+      if (sortBy === "lowest") return a.averageScore - b.averageScore;
+      if (sortBy === "highest") return b.averageScore - a.averageScore;
+      return a.studentName.localeCompare(b.studentName);
+    });
+  }, [students, sortBy]);
 
   const getTierBadge = (score: number) => {
     if (score < 0.35) {
@@ -207,6 +209,6 @@ export function MasteryGrid({
       )}
     </div>
   );
-}
+});
 
 export default MasteryGrid;

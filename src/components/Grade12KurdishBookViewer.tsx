@@ -34,7 +34,7 @@ interface BookPart {
   lessons: ChapterLesson[];
 }
 
-export const Grade12KurdishBookViewer: React.FC<Grade12KurdishBookViewerProps> = ({
+export const Grade12KurdishBookViewer: React.FC<Grade12KurdishBookViewerProps> = React.memo(({
   onSelectTopicForStudy,
   onNavigateToChat,
 }) => {
@@ -531,4 +531,4 @@ export const Grade12KurdishBookViewer: React.FC<Grade12KurdishBookViewerProps> =
       )}
     </div>
   );
-};
+});

@@ -37,7 +37,7 @@ interface GeographyChapter {
   lessons: ChapterLesson[];
 }
 
-export const Grade12GeographyBookViewer: React.FC<Grade12GeographyBookViewerProps> = ({
+export const Grade12GeographyBookViewer: React.FC<Grade12GeographyBookViewerProps> = React.memo(({
   onSelectTopicForStudy,
   onNavigateToChat,
 }) => {
@@ -922,4 +922,4 @@ export const Grade12GeographyBookViewer: React.FC<Grade12GeographyBookViewerProp
       </div>
     </div>
   );
-};
+});

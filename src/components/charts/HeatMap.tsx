@@ -23,7 +23,7 @@ const DEFAULT_DAYS_KU = [
   "هەینی",
 ];
 
-export function HeatMap({
+export const HeatMap = React.memo(function HeatMap({
   data,
   daysKu = DEFAULT_DAYS_KU,
   title = "نەخشەی گەرمیی چالاکی (ڕۆژ و کاتژمێر)",
@@ -194,6 +194,6 @@ export function HeatMap({
       </div>
     </div>
   );
-}
+});
 
 export default HeatMap;

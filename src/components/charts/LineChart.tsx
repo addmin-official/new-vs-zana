@@ -15,7 +15,7 @@ export interface LineChartProps {
   className?: string;
 }
 
-export function LineChart({
+export const LineChart = React.memo(function LineChart({
   data,
   height = 240,
   lineColor = "#6366f1",
@@ -222,6 +222,6 @@ export function LineChart({
       </div>
     </div>
   );
-}
+});
 
 export default LineChart;

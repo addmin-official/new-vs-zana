@@ -35,7 +35,7 @@ interface BookSection {
   lessons: ChapterLesson[];
 }
 
-export const Grade12SportsBookViewer: React.FC<Grade12SportsBookViewerProps> = ({
+export const Grade12SportsBookViewer: React.FC<Grade12SportsBookViewerProps> = React.memo(({
   onSelectTopicForStudy,
   onNavigateToChat,
 }) => {
@@ -562,4 +562,4 @@ export const Grade12SportsBookViewer: React.FC<Grade12SportsBookViewerProps> = (
       )}
     </div>
   );
-};
+});

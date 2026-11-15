@@ -42,7 +42,7 @@ interface SunriseUnit {
   lessons: UnitLesson[];
 }
 
-export const Grade12EnglishBookViewer: React.FC<Grade12EnglishBookViewerProps> = ({
+export const Grade12EnglishBookViewer: React.FC<Grade12EnglishBookViewerProps> = React.memo(({
   initialBookType = "student",
   onSelectTopicForStudy,
   onNavigateToChat,
@@ -1166,4 +1166,4 @@ export const Grade12EnglishBookViewer: React.FC<Grade12EnglishBookViewerProps> =
       </div>
     </div>
   );
-};
+});

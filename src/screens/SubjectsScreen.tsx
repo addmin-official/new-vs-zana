@@ -1115,16 +1115,20 @@ export function SubjectsScreen({ profile, onSelectSubject, onNavigate }: Subject
                       <div className="absolute top-0 inset-x-0 h-10 bg-gradient-to-b from-white/10 to-transparent z-10 pointer-events-none" />
 
                       {/* Cover Image */}
-                      <img
-                        src={book.coverImage}
-                        alt={book.title}
-                        loading="lazy"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                        onError={(e) => {
-                          // Fallback to elegant SVG vector cover if image not yet loaded
-                          (e.target as HTMLElement).style.display = "none";
-                        }}
-                      />
+                      <picture className="w-full h-full block">
+                        <source srcSet={book.coverImage.replace(/\.png$/i, ".webp")} type="image/webp" />
+                        <img
+                          src={book.coverImage}
+                          alt={book.title}
+                          loading="lazy"
+                          decoding="async"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          onError={(e) => {
+                            // Fallback to elegant SVG vector cover if image not yet loaded
+                            (e.target as HTMLElement).style.display = "none";
+                          }}
+                        />
+                      </picture>
 
                       {/* Fallback Graphic (rendered behind img) */}
                       <div
@@ -1231,11 +1235,16 @@ export function SubjectsScreen({ profile, onSelectSubject, onNavigate }: Subject
             <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 border-b border-cyan-900/50 pb-6">
               {/* 3D Cover Thumbnail */}
               <div className="w-28 sm:w-32 aspect-[3/4] rounded-xl overflow-hidden shrink-0 shadow-2xl border border-cyan-500/30 bg-slate-900 relative">
-                <img
-                  src={selectedBookForModal.coverImage}
-                  alt={selectedBookForModal.title}
-                  className="w-full h-full object-cover"
-                />
+                <picture className="w-full h-full block">
+                  <source srcSet={selectedBookForModal.coverImage.replace(/\.png$/i, ".webp")} type="image/webp" />
+                  <img
+                    src={selectedBookForModal.coverImage}
+                    alt={selectedBookForModal.title}
+                    loading="lazy"
+                    decoding="async"
+                    className="w-full h-full object-cover"
+                  />
+                </picture>
               </div>
 
               {/* Book Metadata */}

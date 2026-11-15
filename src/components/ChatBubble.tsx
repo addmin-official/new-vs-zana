@@ -63,7 +63,7 @@ export function detectMultimodalType(content: string): MultimodalType {
   return "EXPLANATION";
 }
 
-export function ChatBubble({
+export const ChatBubble = React.memo(function ChatBubble({
   message,
   isLatestAi = false,
   suggestions = [],
@@ -325,7 +325,7 @@ export function ChatBubble({
       )}
     </div>
   );
-}
+});
 
 export default ChatBubble;
 

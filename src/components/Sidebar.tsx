@@ -63,15 +63,17 @@ export const NAV_ITEMS: NavItem[] = [
 export interface SidebarProps {
   activeTab: NavItemKey;
   onNavigate: (tab: NavItemKey) => void;
+  onPrefetch?: (tab: NavItemKey) => void;
   className?: string;
   isPermanentUser?: boolean;
   onNavigateToLogin?: () => void;
   onLogout?: () => void;
 }
 
-export function Sidebar({
+export const Sidebar = React.memo(function Sidebar({
   activeTab,
   onNavigate,
+  onPrefetch,
   className = "",
   isPermanentUser,
   onNavigateToLogin,
@@ -104,6 +106,7 @@ export function Sidebar({
         <div className="mb-3">
           <button
             onClick={() => onNavigate("pedagogy")}
+            onMouseEnter={() => onPrefetch?.("pedagogy")}
             className={`w-full p-3 rounded-2xl border transition-all cursor-pointer text-right flex items-center justify-between ${
               activeTab === "pedagogy"
                 ? "bg-gradient-to-r from-amber-500/20 to-indigo-500/20 border-amber-500/60 text-amber-900 dark:text-amber-200 shadow-xs"
@@ -135,6 +138,7 @@ export function Sidebar({
             <button
               key={item.key}
               onClick={() => onNavigate(item.key)}
+              onMouseEnter={() => onPrefetch?.(item.key)}
               className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm transition-all cursor-pointer text-right ${
                 isActive
                   ? "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 font-bold border-r-3 border-indigo-600 shadow-2xs"
@@ -215,7 +219,7 @@ export function Sidebar({
       </div>
     </aside>
   );
-}
+});
 
 export default Sidebar;
 

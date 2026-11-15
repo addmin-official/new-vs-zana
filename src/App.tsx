@@ -11,6 +11,10 @@ import { deleteStudentProfile } from "./features/student/studentStorage.ts";
 import { useAppStore } from "./store/appStore.ts";
 import { NavItemKey } from "./components/Sidebar.tsx";
 import { DevQuickToolbar } from "./components/DevQuickToolbar.tsx";
+import { usePerformanceMonitor } from "./hooks/usePerformanceMonitor.ts";
+import { OfflineBanner } from "./components/pwa/OfflineBanner.tsx";
+import { PwaInstallPrompt } from "./components/pwa/PwaInstallPrompt.tsx";
+import { ErrorBoundary } from "./client/components/common/ErrorBoundary.tsx";
 
 // Lazy-loaded routes for code-splitting and performance (LCP/FCP < 2s)
 const Home = lazy(() => import("./pages/Home.tsx").then((m) => ({ default: m.Home })));
@@ -97,8 +101,35 @@ function resolveTabFromPath(pathname: string): NavItemKey {
   return "home";
 }
 
+// Prefetch route chunks on link/nav hover for instant transition
+const routePrefetchMap: Partial<Record<NavItemKey, () => Promise<unknown>>> = {
+  home: () => import("./pages/Home.tsx"),
+  chat: () => import("./pages/Chat.tsx"),
+  subjects: () => import("./screens/SubjectsScreen.tsx"),
+  practice: () => import("./pages/PracticeLab.tsx"),
+  pedagogy: () => import("./screens/PedagogicalHubScreen.tsx"),
+  labs: () => import("./pages/VirtualScienceLab.tsx"),
+  assessment: () => import("./pages/AdaptiveAssessment.tsx"),
+  plan: () => import("./pages/StudyPathManager.tsx"),
+  rooms: () => import("./pages/StudyRooms.tsx"),
+  report: () => import("./pages/ParentReport.tsx"),
+  teacher: () => import("./pages/TeacherDashboard.tsx"),
+  parent: () => import("./pages/ParentPortal.tsx"),
+  admin: () => import("./pages/BrainAdminDashboard.tsx"),
+  profile: () => import("./pages/ProfileAndSettings.tsx"),
+  settings: () => import("./pages/ProfileAndSettings.tsx"),
+};
+
+function prefetchTab(tab: NavItemKey): void {
+  const loader = routePrefetchMap[tab];
+  if (loader) {
+    void loader();
+  }
+}
+
 export default function App() {
   const { profile, updateProfile, completeOnboarding, resetProfileOnly } = useStudentProfile();
+  usePerformanceMonitor();
 
   // Authentication State
   const [currentUser, setCurrentUser] = useState<User | null>(() => getCurrentUser());
@@ -605,22 +636,27 @@ export default function App() {
 
   return (
     <ThemeProvider>
+      <OfflineBanner />
       <AppShell
         activeTab={activeTab}
         onTabChange={(tab) => {
           setIsBrainActive(false);
           setActiveTab(tab);
         }}
+        onPrefetch={prefetchTab}
         pageTitle={pageTitle}
         isPermanentUser={isPermanentUser}
         onNavigateToLogin={() => navigateAuth("login")}
         onNavigateToRegister={() => navigateAuth("register")}
         onLogout={handleLogout}
       >
-        <Suspense fallback={<ScreenLoadingFallback />}>
-          {renderScreen()}
-        </Suspense>
+        <ErrorBoundary>
+          <Suspense fallback={<ScreenLoadingFallback />}>
+            {renderScreen()}
+          </Suspense>
+        </ErrorBoundary>
       </AppShell>
+      <PwaInstallPrompt />
       {import.meta.env.DEV && (
         <DevQuickToolbar
           activeTab={activeTab}

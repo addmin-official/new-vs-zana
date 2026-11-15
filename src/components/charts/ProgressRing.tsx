@@ -11,7 +11,7 @@ export interface ProgressRingProps {
   className?: string;
 }
 
-export function ProgressRing({
+export const ProgressRing = React.memo(function ProgressRing({
   progress,
   size = 120,
   strokeWidth = 10,
@@ -71,6 +71,6 @@ export function ProgressRing({
       </div>
     </div>
   );
-}
+});
 
 export default ProgressRing;
