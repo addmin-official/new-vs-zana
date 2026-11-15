@@ -33,40 +33,96 @@ import { SubscriptionModal } from "../components/SubscriptionModal.tsx";
 import { useAppStore } from "../store/appStore.ts";
 import { useSoundEffects } from "../hooks/useSoundEffects.ts";
 import { ku } from "../i18n/translations.ts";
-// Dynamic imports for Grade 12 book viewers to optimize initial bundle and split chunks
-const Grade12ChemistryBookViewer = React.lazy(() =>
-  import("../components/Grade12ChemistryBookViewer.tsx").then((m) => ({ default: m.Grade12ChemistryBookViewer }))
-);
-const Grade12PhysicsBookViewer = React.lazy(() =>
-  import("../components/Grade12PhysicsBookViewer.tsx").then((m) => ({ default: m.Grade12PhysicsBookViewer }))
-);
-const Grade12MathBookViewer = React.lazy(() =>
-  import("../components/Grade12MathBookViewer.tsx").then((m) => ({ default: m.Grade12MathBookViewer }))
-);
-const Grade12LiteraryMathBookViewer = React.lazy(() =>
-  import("../components/Grade12LiteraryMathBookViewer.tsx").then((m) => ({ default: m.Grade12LiteraryMathBookViewer }))
-);
-const Grade12KurdishBookViewer = React.lazy(() =>
-  import("../components/Grade12KurdishBookViewer.tsx").then((m) => ({ default: m.Grade12KurdishBookViewer }))
-);
-const Grade12ArabicBookViewer = React.lazy(() =>
-  import("../components/Grade12ArabicBookViewer.tsx").then((m) => ({ default: m.Grade12ArabicBookViewer }))
-);
-const Grade12HistoryBookViewer = React.lazy(() =>
-  import("../components/Grade12HistoryBookViewer.tsx").then((m) => ({ default: m.Grade12HistoryBookViewer }))
-);
-const Grade12EconomicsBookViewer = React.lazy(() =>
-  import("../components/Grade12EconomicsBookViewer.tsx").then((m) => ({ default: m.Grade12EconomicsBookViewer }))
-);
-const Grade12GeographyBookViewer = React.lazy(() =>
-  import("../components/Grade12GeographyBookViewer.tsx").then((m) => ({ default: m.Grade12GeographyBookViewer }))
-);
-const Grade12SportsBookViewer = React.lazy(() =>
-  import("../components/Grade12SportsBookViewer.tsx").then((m) => ({ default: m.Grade12SportsBookViewer }))
-);
-const Grade12EnglishBookViewer = React.lazy(() =>
-  import("../components/Grade12EnglishBookViewer.tsx").then((m) => ({ default: m.Grade12EnglishBookViewer }))
-);
+import { getFirestoreDb } from "../services/firebase.ts";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { useStudentMastery } from "../learning/hooks/useStudentMastery.ts";
+import { DifficultyLevel } from "../learning/domain/MasteryTypes.ts";
+
+interface DynamicBookViewerProps {
+  subject: string;
+  stream?: string;
+  onSelectTopicForStudy: (title: string, pages: string) => void;
+  onNavigateToChat: () => void;
+}
+
+const DynamicBookViewer: React.FC<DynamicBookViewerProps> = ({
+  subject,
+  stream,
+  onSelectTopicForStudy,
+  onNavigateToChat,
+}) => {
+  const ViewerComponent = useMemo(() => {
+    return React.lazy(() => {
+      switch (subject) {
+        case "physics":
+          return import("../components/Grade12PhysicsBookViewer.tsx").then((m) => ({
+            default: m.Grade12PhysicsBookViewer,
+          }));
+        case "math":
+        case "mathematics":
+          if (stream === "literary") {
+            return import("../components/Grade12LiteraryMathBookViewer.tsx").then((m) => ({
+              default: m.Grade12LiteraryMathBookViewer,
+            }));
+          }
+          return import("../components/Grade12MathBookViewer.tsx").then((m) => ({
+            default: m.Grade12MathBookViewer,
+          }));
+        case "kurdish":
+          return import("../components/Grade12KurdishBookViewer.tsx").then((m) => ({
+            default: m.Grade12KurdishBookViewer,
+          }));
+        case "arabic":
+          return import("../components/Grade12ArabicBookViewer.tsx").then((m) => ({
+            default: m.Grade12ArabicBookViewer,
+          }));
+        case "history":
+          return import("../components/Grade12HistoryBookViewer.tsx").then((m) => ({
+            default: m.Grade12HistoryBookViewer,
+          }));
+        case "economy":
+          return import("../components/Grade12EconomicsBookViewer.tsx").then((m) => ({
+            default: m.Grade12EconomicsBookViewer,
+          }));
+        case "geography":
+          return import("../components/Grade12GeographyBookViewer.tsx").then((m) => ({
+            default: m.Grade12GeographyBookViewer,
+          }));
+        case "sports":
+          return import("../components/Grade12SportsBookViewer.tsx").then((m) => ({
+            default: m.Grade12SportsBookViewer,
+          }));
+        case "english":
+          return import("../components/Grade12EnglishBookViewer.tsx").then((m) => ({
+            default: m.Grade12EnglishBookViewer,
+          }));
+        case "chemistry":
+        default:
+          return import("../components/Grade12ChemistryBookViewer.tsx").then((m) => ({
+            default: m.Grade12ChemistryBookViewer,
+          }));
+      }
+    });
+  }, [subject, stream]);
+
+  return (
+    <React.Suspense
+      fallback={
+        <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-slate-200">
+          <Spinner size="lg" />
+          <span className="font-sans text-xs text-slate-500 mt-3 font-bold">
+            پەڕتووکی خوێندن باردەکرێت...
+          </span>
+        </div>
+      }
+    >
+      <ViewerComponent
+        onSelectTopicForStudy={onSelectTopicForStudy}
+        onNavigateToChat={onNavigateToChat}
+      />
+    </React.Suspense>
+  );
+};
 import { StudentProfile, SubjectKey } from "../features/student/studentTypes.ts";
 import { getValidatedSubject } from "../features/student/studentDefaults.ts";
 import { useServerHealth } from "../hooks/useServerHealth.ts";
@@ -75,6 +131,18 @@ import { getChapterData } from "../data/curriculum/chapterDrills.ts";
 import { VisionCapturePanel } from "../features/vision/VisionCapturePanel.tsx";
 
 export type WorkspaceMode = "ask" | "socratic" | "explain" | "practice";
+
+export interface ChatSessionMemory {
+  conceptsDiscussed: string[];
+  questionsAsked: string[];
+  errorsMade: string[];
+}
+
+export const DEFAULT_SESSION_MEMORY: ChatSessionMemory = {
+  conceptsDiscussed: [],
+  questionsAsked: [],
+  errorsMade: [],
+};
 
 // ─── Feature 1 state types ───────────────────────────────────────────────────
 type ViewMode = "tutor" | "workspace";
@@ -189,15 +257,66 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
   const [socraticChainCount, setSocraticChainCount] = useState<number>(0);
   const [hintsUsed, setHintsUsed] = useState<number>(0);
 
-  // ─── Session Memory (Concepts Discussed) ──────────────────────────────────
-  const [sessionConcepts, setSessionConcepts] = useState<string[]>(() => {
+  // ─── Student Mastery & Diagnostic Insights ────────────────────────────────
+  const studentId = user?.id || profile?.id || "guest_student";
+  const { profile: masteryProfile, recordAttempt } = useStudentMastery(studentId);
+
+  // Detect Mastery Gaps from Student Profile
+  const masteryGaps = useMemo(() => {
+    if (!masteryProfile?.conceptMasteries) return [];
+    return Object.values(masteryProfile.conceptMasteries)
+      .filter((c) => c.status === "NEEDS_REVIEW" || c.status === "DEVELOPING" || c.masteryScore < 0.6)
+      .map((c) => c.conceptId);
+  }, [masteryProfile]);
+
+  // ─── Session Memory (Concepts Discussed, Questions Asked, Errors Made) ────
+  const [sessionMemory, setSessionMemory] = useState<ChatSessionMemory>(() => {
     try {
-      const stored = sessionStorage.getItem("zana_chat_session_concepts");
-      return stored ? JSON.parse(stored) : [];
+      const stored = sessionStorage.getItem("zana_chat_session_memory");
+      if (stored) return JSON.parse(stored);
+      const legacy = sessionStorage.getItem("zana_chat_session_concepts");
+      if (legacy) return { ...DEFAULT_SESSION_MEMORY, conceptsDiscussed: JSON.parse(legacy) };
+      return DEFAULT_SESSION_MEMORY;
     } catch {
-      return [];
+      return DEFAULT_SESSION_MEMORY;
     }
   });
+
+  const sessionConcepts = sessionMemory.conceptsDiscussed;
+
+  const syncSessionToFirestore = async (mem: ChatSessionMemory) => {
+    try {
+      const db = getFirestoreDb();
+      const studentUid = user?.id || profile?.id;
+      if (db && studentUid) {
+        await setDoc(
+          doc(db, "students", studentUid, "sessions", "latest"),
+          {
+            conceptsDiscussed: mem.conceptsDiscussed,
+            questionsAsked: mem.questionsAsked.slice(-10),
+            errorsMade: mem.errorsMade.slice(-5),
+            lastUpdated: new Date().toISOString(),
+            activeSubject: currentSubject,
+          },
+          { merge: true }
+        );
+      }
+    } catch {
+      // Ignore offline/guest sync error
+    }
+  };
+
+  const updateSessionMemory = (updater: (prev: ChatSessionMemory) => ChatSessionMemory) => {
+    setSessionMemory((prev) => {
+      const next = updater(prev);
+      try {
+        sessionStorage.setItem("zana_chat_session_memory", JSON.stringify(next));
+        sessionStorage.setItem("zana_chat_session_concepts", JSON.stringify(next.conceptsDiscussed));
+      } catch {}
+      void syncSessionToFirestore(next);
+      return next;
+    });
+  };
 
   // ─── Virtualization for Long Conversations (Last 30 messages) ─────────────
   const [showAllMessages, setShowAllMessages] = useState<boolean>(false);
@@ -246,16 +365,13 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
 
   // Track active chapter into session memory concepts
   useEffect(() => {
-    if (activeChapter?.title && !sessionConcepts.includes(activeChapter.title)) {
-      setSessionConcepts((prev) => {
-        const next = [...prev, activeChapter.title];
-        try {
-          sessionStorage.setItem("zana_chat_session_concepts", JSON.stringify(next));
-        } catch {}
-        return next;
-      });
+    if (activeChapter?.title && !sessionMemory.conceptsDiscussed.includes(activeChapter.title)) {
+      updateSessionMemory((prev) => ({
+        ...prev,
+        conceptsDiscussed: [...prev.conceptsDiscussed, activeChapter.title],
+      }));
     }
-  }, [activeChapter?.title, sessionConcepts]);
+  }, [activeChapter?.title, sessionMemory.conceptsDiscussed]);
 
   const _isPhysics = currentSubject === "physics";
   const _isChemistry = currentSubject === "chemistry";
@@ -266,33 +382,45 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
   const bookLabel = `پەڕتووکی ${activeSubjectMeta.label} 📖`;
 
   // ─── Smart Prompt Suggestions ─────────────────────────────────────────────
+  // Dynamic generation based on: Current Concept + Student Level + Mastery Gaps
   const smartSuggestions = useMemo(() => {
     const chapterName = activeChapter?.title || "ئەم بەندە";
+    const gradeLevel = user.grade || profile?.grade || "12";
+    const weakTopic = masteryGaps.length > 0 ? masteryGaps[0] : null;
+
     if (currentSubject === "chemistry") {
       return [
-        `چۆن پێوەری pH لە پرسیارەکانی وەزاریدا دەهێندرێتەوە؟`,
-        `سەرەکیترین هەڵەی باوی قوتابیان لە «${chapterName}» چییە؟`,
+        weakTopic
+          ? `چۆن تێنەگەیشتن لە چەمکی «${weakTopic}» لە تاقیکردنەوەی وەزاریدا چارەسەر بکەم؟`
+          : `چۆن پێوەری pH لە پرسیارەکانی وەزاریدا دەهێندرێتەوە؟`,
+        `سەرەکیترین هەڵەی باوی قوتابیانی پۆلی ${gradeLevel} لە «${chapterName}» چییە؟`,
         `نموونەیەکی پراکتیکی لەسەر هاوکێشەی کاردانەوە شیبکەرەوە.`,
       ];
     } else if (currentSubject === "physics") {
       return [
-        `یاسا سەرەکییەکانی «${chapterName}» لەگەڵ یەکەکانیان ڕوونبکەرەوە.`,
-        `چۆن کێشەی تەوژم و ڤۆڵتیە لە تاقیکردنەوەی وەزاری شیبکەمەوە؟`,
+        weakTopic
+          ? `یاسا و کێشەی سەرەکی «${weakTopic}» بۆ من شیبکەرەوە.`
+          : `یاسا سەرەکییەکانی «${chapterName}» لەگەڵ یەکەکانیان ڕوونبکەرەوە.`,
+        `چۆن کێشەی تەوژم و ڤۆڵتیە لە تاقیکردنەوەی وەزاری پۆلی ${gradeLevel} شیبکەمەوە؟`,
         `نموونەیەکی شیکارکراوی هەنگاو بە هەنگاو بخەرەڕوو.`,
       ];
     } else if (currentSubject === "math" || currentSubject === "mathematics") {
       return [
-        `هەنگاوەکانی دۆزینەوەی داتاشراو لە «${chapterName}» چین؟`,
-        `چ ڕێگایەکی خێرا هەیە بۆ شیکارکردنی ئەم جۆرە هاوکێشانە؟`,
+        weakTopic
+          ? `تەڵە و هەڵە باوەکانی تاقیکردنەوە لە «${weakTopic}» چین؟`
+          : `هەنگاوەکانی دۆزینەوەی داتاشراو لە «${chapterName}» چین؟`,
+        `چ ڕێگایەکی خێرا هەیە بۆ شیکارکردنی ئەم جۆرە هاوکێشانە لە پۆلی ${gradeLevel}؟`,
         `نموونەیەکی وەزاری لەگەڵ تەڵە بیرکارییەکان شیبکەرەوە.`,
       ];
     }
     return [
-      `گرنگترین پێناسەکانی «${chapterName}» چین؟`,
-      `پوختەی ئەم وانەیە بە ٣ خاڵی سەرەکی دەستنیشان بکە.`,
+      weakTopic
+        ? `پێداچوونەوەیەکی خێرا بە «${weakTopic}» بکەین؟`
+        : `گرنگترین پێناسەکانی «${chapterName}» چین؟`,
+      `پوختەی ئەم وانەیەی پۆلی ${gradeLevel} بە ٣ خاڵی سەرەکی دەستنیشان بکە.`,
       `چۆن خۆم بۆ تاقیکردنەوەی ئەم بەشە ئامادە بکەم؟`,
     ];
-  }, [currentSubject, activeChapter?.title]);
+  }, [currentSubject, activeChapter?.title, masteryGaps, user.grade, profile?.grade]);
 
   // ─── Workspace action tabs config (Feature 2) ─────────────────────────────
   const workspaceActionTabs: { id: ActiveAction; label: string; icon: React.ElementType }[] = [
@@ -325,11 +453,22 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
     }
     setHintLevel(0);
 
-    // Context Injection: Last 3 session concepts
-    const memoryContext =
-      sessionConcepts.length > 0
-        ? `[چەمکەکانی ئەم دانیشتنە: ${sessionConcepts.slice(-3).join("، ")}]\n`
-        : "";
+    // Track Question in Session Memory
+    updateSessionMemory((prev) => ({
+      ...prev,
+      questionsAsked: [...prev.questionsAsked.slice(-9), rawText],
+    }));
+
+    // Context Injection: Last 3 session concepts & recent errors
+    const lastConcepts = sessionMemory.conceptsDiscussed.slice(-3);
+    const recentErrors = sessionMemory.errorsMade.slice(-2);
+    let memoryContext = "";
+    if (lastConcepts.length > 0) {
+      memoryContext += `[چەمکەکانی ئەم دانیشتنە: ${lastConcepts.join("، ")}]\n`;
+    }
+    if (recentErrors.length > 0) {
+      memoryContext += `[خاڵە لاوازە تاقیکراوەکان: ${recentErrors.join("، ")}]\n`;
+    }
 
     let finalPrompt = rawText;
     if (currentMode === "socratic") {
@@ -340,6 +479,10 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
       } else {
         finalPrompt = `${memoryContext}[شێوازی فێرکاری سوقراتی - گەیشتن بە ئەنجام]: قوتابی ٤ پرسیاری سوقراتی تەواو کرد. ئێستا تەواوی چەمکەکە و وەڵامە دروستەکە بە فراوانی شیبکەرەوە و دەستخۆشی لێبکە. پرسیاری قوتابی: "${rawText}"`;
         setSocraticChainCount(0);
+        // Award XP on successful completion of 4-step chain!
+        const bonus = Math.max(5, 20 - hintsUsed * 3);
+        useAppStore.getState().addProgressScore(bonus);
+        playSuccess();
       }
     } else if (memoryContext) {
       finalPrompt = `${memoryContext}${rawText}`;
@@ -359,8 +502,32 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
     }
   };
 
-  const handleContinueLastSession = () => {
-    const lastConcept = sessionConcepts.length > 0 ? sessionConcepts[sessionConcepts.length - 1] : activeChapter?.title;
+  const handleContinueLastSession = async () => {
+    let loadedConcepts = sessionMemory.conceptsDiscussed;
+    let lastConcept = loadedConcepts.length > 0 ? loadedConcepts[loadedConcepts.length - 1] : activeChapter?.title;
+
+    // Pull from Firestore session if available
+    try {
+      const db = getFirestoreDb();
+      const studentUid = user?.id || profile?.id;
+      if (db && studentUid) {
+        const snap = await getDoc(doc(db, "students", studentUid, "sessions", "latest"));
+        if (snap.exists()) {
+          const data = snap.data();
+          if (Array.isArray(data?.conceptsDiscussed) && data.conceptsDiscussed.length > 0) {
+            loadedConcepts = data.conceptsDiscussed;
+            lastConcept = loadedConcepts[loadedConcepts.length - 1];
+            updateSessionMemory((prev) => ({
+              ...prev,
+              conceptsDiscussed: Array.from(new Set([...prev.conceptsDiscussed, ...data.conceptsDiscussed])),
+            }));
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Could not pull last session from Firestore, using local fallback", err);
+    }
+
     const prompt = `مامۆستا زانا، دەمەوێت لەو شوێنەی کە لە دانیشتنی پێشوو لێی وەستابووین بەردەوام بم (${lastConcept || activeSubjectMeta.label}). کورتەیەکی خێرای ئەوەم پێبڵێ و بەردەوام بین.`;
     void handleSend(prompt);
   };
@@ -446,6 +613,10 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
     } else {
       playError();
       setStreakCount(0);
+      updateSessionMemory((prev) => ({
+        ...prev,
+        errorsMade: [...prev.errorsMade.slice(-4), currentStep.stepTitle || activeChapter?.title || "هەڵەی پرسیار"],
+      }));
       setStepFeedback({
         isCorrect: false,
         message: `هەڵەیە، تکایە سەرنج بدە: ${currentStep.hint}`,
@@ -839,7 +1010,20 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                     <button
                       type="button"
                       onClick={() => {
-                        setHintsUsed((prev) => prev + 1);
+                        const nextHintCount = hintsUsed + 1;
+                        setHintsUsed(nextHintCount);
+                        // Track hint usage affecting mastery score
+                        useAppStore.getState().addProgressScore(-2);
+                        void recordAttempt?.({
+                          conceptId: activeChapter?.title || currentSubject,
+                          conceptTitleKu: activeChapter?.title || currentSubject,
+                          isCorrect: true,
+                          responseTimeMs: 6000,
+                          difficulty: DifficultyLevel.STANDARD,
+                          questionText: "Socratic Hint Request",
+                          studentResponse: "داوای سەرەداو",
+                          hintUsed: true,
+                        });
                         void handleSend("مامۆستا زانا، تکایە سەرەداوێک یان ڕێنماییەکم بدەرێ بۆ دۆزینەوەی وەڵامەکە.");
                       }}
                       className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 font-bold text-[11px] transition cursor-pointer shadow-2xs"
@@ -1148,108 +1332,15 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
               {/* ─── Official Curriculum Book Viewer Panel ─────────────────────── */}
               {activeAction === "book" && (
                 <div className="space-y-4">
-                  <React.Suspense
-                    fallback={
-                      <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-slate-200">
-                        <Spinner size="lg" />
-                        <span className="font-sans text-xs text-slate-500 mt-3 font-bold">
-                          پەڕتووکی خوێندن باردەکرێت...
-                        </span>
-                      </div>
-                    }
-                  >
-                    {currentSubject === "physics" ? (
-                      <Grade12PhysicsBookViewer
-                        onSelectTopicForStudy={(title, pages) => {
-                          setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
-                          setViewMode("tutor");
-                        }}
-                        onNavigateToChat={() => setViewMode("tutor")}
-                      />
-                    ) : currentSubject === "math" || currentSubject === "mathematics" ? (
-                      profile?.stream === "literary" ? (
-                        <Grade12LiteraryMathBookViewer
-                          onSelectTopicForStudy={(title, pages) => {
-                            setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
-                            setViewMode("tutor");
-                          }}
-                          onNavigateToChat={() => setViewMode("tutor")}
-                        />
-                      ) : (
-                        <Grade12MathBookViewer
-                          onSelectTopicForStudy={(title, pages) => {
-                            setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
-                            setViewMode("tutor");
-                          }}
-                          onNavigateToChat={() => setViewMode("tutor")}
-                        />
-                      )
-                    ) : currentSubject === "kurdish" ? (
-                      <Grade12KurdishBookViewer
-                        onSelectTopicForStudy={(title, pages) => {
-                          setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
-                          setViewMode("tutor");
-                        }}
-                        onNavigateToChat={() => setViewMode("tutor")}
-                      />
-                    ) : currentSubject === "arabic" ? (
-                      <Grade12ArabicBookViewer
-                        onSelectTopicForStudy={(title, pages) => {
-                          setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
-                          setViewMode("tutor");
-                        }}
-                        onNavigateToChat={() => setViewMode("tutor")}
-                      />
-                    ) : currentSubject === "history" ? (
-                      <Grade12HistoryBookViewer
-                        onSelectTopicForStudy={(title, pages) => {
-                          setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
-                          setViewMode("tutor");
-                        }}
-                        onNavigateToChat={() => setViewMode("tutor")}
-                      />
-                    ) : currentSubject === "economy" ? (
-                      <Grade12EconomicsBookViewer
-                        onSelectTopicForStudy={(title, pages) => {
-                          setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
-                          setViewMode("tutor");
-                        }}
-                        onNavigateToChat={() => setViewMode("tutor")}
-                      />
-                    ) : currentSubject === "geography" ? (
-                      <Grade12GeographyBookViewer
-                        onSelectTopicForStudy={(title, pages) => {
-                          setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
-                          setViewMode("tutor");
-                        }}
-                        onNavigateToChat={() => setViewMode("tutor")}
-                      />
-                    ) : currentSubject === "sports" ? (
-                      <Grade12SportsBookViewer
-                        onSelectTopicForStudy={(title, pages) => {
-                          setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
-                          setViewMode("tutor");
-                        }}
-                        onNavigateToChat={() => setViewMode("tutor")}
-                      />
-                    ) : currentSubject === "english" ? (
-                      <Grade12EnglishBookViewer
-                        onSelectTopicForStudy={(title, pages) => {
-                          setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
-                          setViewMode("tutor");
-                        }}
-                        onNavigateToChat={() => setViewMode("tutor")}
-                      />
-                    ) : (
-                      <Grade12ChemistryBookViewer
-                        onSelectTopicForStudy={(title, pages) => {
-                          setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
-                          setViewMode("tutor");
-                        }}
-                        onNavigateToChat={() => setViewMode("tutor")}
-                      />
-                    )}
-                  </React.Suspense>
+                  <DynamicBookViewer
+                    subject={currentSubject}
+                    stream={profile?.stream}
+                    onSelectTopicForStudy={(title, pages) => {
+                      setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
+                      setViewMode("tutor");
+                    }}
+                    onNavigateToChat={() => setViewMode("tutor")}
+                  />
                 </div>
               )}
 
