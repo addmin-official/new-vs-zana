@@ -2,6 +2,7 @@ import { ZANA_AI_CONSTITUTION } from "./constitutions/zana-ai-constitution.ts";
 import { SORANI_LANGUAGE_CONSTITUTION } from "./constitutions/sorani-language-constitution.ts";
 import { TEACHING_CONSTITUTION } from "./constitutions/teaching-constitution.ts";
 import { CurriculumEvidence } from "../curriculum/retrieval/CurriculumEvidence.ts";
+import { buildPersonaPromptBlock } from "./tutorPersona.ts";
 
 export interface CurriculumPromptContext {
   curriculumId: string;
@@ -157,6 +158,7 @@ ${curriculumGroundingInstructions ? `ڕێسا و دەستوورەکانی پڕۆ
 ${stream ? `- ڕێڕەوی خوێندن: ${stream}\n` : ""}- بابەتی خوێندن: ${subject}
 - ئاستی زانستیی ئێستا: ${level}
 ${lessonTitle ? `- وانەی خوێندن: ${lessonTitle}\n` : ""}${conceptTitle ? `- چەمکی خوێندن: ${conceptTitle}\n` : ""}
+${buildPersonaPromptBlock()}
 
 تێبینی کۆتایی:
 ئەم زانیارییانەی سەرەوە هێڵی سوورن. پێویستە بە تەواوی پابەندی شێوازی دەستوورەکان بێت بە بێ هیچ کەمتەرخەمییەک.
