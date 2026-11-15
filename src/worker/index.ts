@@ -2435,6 +2435,388 @@ export default {
         }
       }
 
+      // ==========================================
+      // NOTIFICATION SYSTEM ROUTES
+      // ==========================================
+      if (pathname.startsWith("/api/notifications")) {
+        const authResult = await verifyAuthWorker(request, env, responseHeaders);
+        if (authResult instanceof Response) return authResult;
+        const studentId = authResult.user.uid;
+
+        // GET /api/notifications
+        if (pathname === "/api/notifications" && request.method === "GET") {
+          const unreadOnly = url.searchParams.get("unreadOnly") === "true";
+          const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "50", 10), 1), 100);
+
+          if (!env.DB) {
+            return new Response(JSON.stringify({ ok: true, notifications: [], unreadCount: 0 }), {
+              status: 200,
+              headers: responseHeaders,
+            });
+          }
+
+          try {
+            const query = unreadOnly
+              ? `SELECT id, student_id as studentId, type, title, message, action_label as actionLabel, action_url as actionUrl, created_at as createdAt, read_at as readAt, priority, deduplication_key as deduplicationKey, expires_at as expiresAt
+                 FROM notifications WHERE student_id = ? AND read_at IS NULL ORDER BY created_at DESC LIMIT ?`
+              : `SELECT id, student_id as studentId, type, title, message, action_label as actionLabel, action_url as actionUrl, created_at as createdAt, read_at as readAt, priority, deduplication_key as deduplicationKey, expires_at as expiresAt
+                 FROM notifications WHERE student_id = ? ORDER BY created_at DESC LIMIT ?`;
+
+            const rows = await env.DB.prepare(query).bind(studentId, limit).all<{
+              id: string;
+              studentId: string;
+              type: string;
+              title: string;
+              message: string;
+              actionLabel?: string;
+              actionUrl?: string;
+              createdAt: number;
+              readAt?: number | null;
+              priority: string;
+              deduplicationKey: string;
+              expiresAt?: number | null;
+            }>();
+
+            const countRes = await env.DB.prepare(
+              `SELECT COUNT(*) as count FROM notifications WHERE student_id = ? AND read_at IS NULL`
+            ).bind(studentId).first<{ count: number }>();
+
+            return new Response(
+              JSON.stringify({
+                ok: true,
+                notifications: rows.results || [],
+                unreadCount: countRes?.count || 0,
+              }),
+              { status: 200, headers: responseHeaders }
+            );
+          } catch (dbErr: unknown) {
+            return new Response(
+              JSON.stringify({ error: "DATABASE_ERROR", detail: (dbErr as Error)?.message || String(dbErr) }),
+              { status: 500, headers: responseHeaders }
+            );
+          }
+        }
+
+        // POST /api/notifications/read-all
+        if (pathname === "/api/notifications/read-all" && request.method === "POST") {
+          if (!env.DB) {
+            return new Response(JSON.stringify({ ok: true, updatedCount: 0 }), {
+              status: 200,
+              headers: responseHeaders,
+            });
+          }
+
+          try {
+            const now = Date.now();
+            const res = await env.DB.prepare(
+              `UPDATE notifications SET read_at = ? WHERE student_id = ? AND read_at IS NULL`
+            ).bind(now, studentId).run();
+
+            const changes = (res as unknown as { meta?: { changes?: number } })?.meta?.changes ?? 1;
+            return new Response(
+              JSON.stringify({ ok: true, updatedCount: changes }),
+              { status: 200, headers: responseHeaders }
+            );
+          } catch (dbErr: unknown) {
+            return new Response(
+              JSON.stringify({ error: "DATABASE_ERROR", detail: (dbErr as Error)?.message || String(dbErr) }),
+              { status: 500, headers: responseHeaders }
+            );
+          }
+        }
+
+        // POST /api/notifications/:id/read
+        const readMatch = pathname.match(/^\/api\/notifications\/([^/]+)\/read$/);
+        if (readMatch && request.method === "POST") {
+          const notificationId = decodeURIComponent(readMatch[1]);
+          if (!env.DB) {
+            return new Response(JSON.stringify({ ok: true, id: notificationId }), {
+              status: 200,
+              headers: responseHeaders,
+            });
+          }
+
+          try {
+            const now = Date.now();
+            await env.DB.prepare(
+              `UPDATE notifications SET read_at = ? WHERE id = ? AND student_id = ?`
+            ).bind(now, notificationId, studentId).run();
+
+            return new Response(
+              JSON.stringify({ ok: true, id: notificationId, readAt: now }),
+              { status: 200, headers: responseHeaders }
+            );
+          } catch (dbErr: unknown) {
+            return new Response(
+              JSON.stringify({ error: "DATABASE_ERROR", detail: (dbErr as Error)?.message || String(dbErr) }),
+              { status: 500, headers: responseHeaders }
+            );
+          }
+        }
+
+        // POST /api/notifications/batch
+        if (pathname === "/api/notifications/batch" && request.method === "POST") {
+          if (!env.DB) {
+            return new Response(JSON.stringify({ ok: true, insertedCount: 0 }), {
+              status: 200,
+              headers: responseHeaders,
+            });
+          }
+
+          try {
+            const body = (await request.json().catch(() => ({}))) as {
+              notifications?: Array<{
+                id: string;
+                type: string;
+                title: string;
+                message: string;
+                actionLabel?: string;
+                actionUrl?: string;
+                priority?: string;
+                deduplicationKey: string;
+                expiresAt?: number | null;
+              }>;
+            };
+
+            const notifs = Array.isArray(body?.notifications) ? body.notifications : [];
+            let insertedCount = 0;
+
+            for (const n of notifs) {
+              if (!n.id || !n.type || !n.title || !n.message || !n.deduplicationKey) continue;
+              const now = Date.now();
+              await env.DB.prepare(
+                `INSERT OR IGNORE INTO notifications
+                 (id, student_id, type, title, message, action_label, action_url, created_at, read_at, priority, deduplication_key, expires_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)`
+              ).bind(
+                n.id,
+                studentId,
+                n.type,
+                n.title,
+                n.message,
+                n.actionLabel || null,
+                n.actionUrl || null,
+                now,
+                n.priority || "normal",
+                n.deduplicationKey,
+                n.expiresAt || null
+              ).run();
+              insertedCount++;
+            }
+
+            return new Response(
+              JSON.stringify({ ok: true, insertedCount }),
+              { status: 200, headers: responseHeaders }
+            );
+          } catch (dbErr: unknown) {
+            return new Response(
+              JSON.stringify({ error: "DATABASE_ERROR", detail: (dbErr as Error)?.message || String(dbErr) }),
+              { status: 500, headers: responseHeaders }
+            );
+          }
+        }
+
+        // GET /api/notifications/preferences
+        if (pathname === "/api/notifications/preferences" && request.method === "GET") {
+          if (!env.DB) {
+            return new Response(
+              JSON.stringify({
+                ok: true,
+                preferences: {
+                  studentId,
+                  inAppEnabled: true,
+                  dailyReminderTime: "18:00",
+                  quietHoursStart: "22:00",
+                  quietHoursEnd: "07:00",
+                  planRemindersEnabled: true,
+                  nextBestActionEnabled: true,
+                  deadlinesEnabled: true,
+                  taskRecoveryEnabled: true,
+                  achievementsEnabled: true,
+                  weakConceptEnabled: true,
+                  assessmentEnabled: true,
+                  systemEnabled: true,
+                  updatedAt: Date.now(),
+                },
+              }),
+              { status: 200, headers: responseHeaders }
+            );
+          }
+
+          try {
+            const row = await env.DB.prepare(
+              `SELECT student_id as studentId, in_app_enabled as inAppEnabled,
+                      daily_reminder_time as dailyReminderTime, quiet_hours_start as quietHoursStart, quiet_hours_end as quietHoursEnd,
+                      plan_reminders_enabled as planRemindersEnabled, next_best_action_enabled as nextBestActionEnabled,
+                      deadlines_enabled as deadlinesEnabled, task_recovery_enabled as taskRecoveryEnabled,
+                      achievements_enabled as achievementsEnabled, weak_concept_enabled as weakConceptEnabled,
+                      assessment_enabled as assessmentEnabled, system_enabled as systemEnabled, updated_at as updatedAt
+               FROM notification_preferences WHERE student_id = ?`
+            ).bind(studentId).first<{
+              studentId: string;
+              inAppEnabled: number;
+              dailyReminderTime: string;
+              quietHoursStart: string;
+              quietHoursEnd: string;
+              planRemindersEnabled: number;
+              nextBestActionEnabled: number;
+              deadlinesEnabled: number;
+              taskRecoveryEnabled: number;
+              achievementsEnabled: number;
+              weakConceptEnabled: number;
+              assessmentEnabled: number;
+              systemEnabled: number;
+              updatedAt: number;
+            }>();
+
+            if (row) {
+              return new Response(
+                JSON.stringify({
+                  ok: true,
+                  preferences: {
+                    studentId: row.studentId,
+                    inAppEnabled: Boolean(row.inAppEnabled),
+                    dailyReminderTime: row.dailyReminderTime,
+                    quietHoursStart: row.quietHoursStart,
+                    quietHoursEnd: row.quietHoursEnd,
+                    planRemindersEnabled: Boolean(row.planRemindersEnabled),
+                    nextBestActionEnabled: Boolean(row.nextBestActionEnabled),
+                    deadlinesEnabled: Boolean(row.deadlinesEnabled),
+                    taskRecoveryEnabled: Boolean(row.taskRecoveryEnabled),
+                    achievementsEnabled: Boolean(row.achievementsEnabled),
+                    weakConceptEnabled: Boolean(row.weakConceptEnabled),
+                    assessmentEnabled: Boolean(row.assessmentEnabled),
+                    systemEnabled: Boolean(row.systemEnabled),
+                    updatedAt: row.updatedAt,
+                  },
+                }),
+                { status: 200, headers: responseHeaders }
+              );
+            }
+
+            return new Response(
+              JSON.stringify({
+                ok: true,
+                preferences: {
+                  studentId,
+                  inAppEnabled: true,
+                  dailyReminderTime: "18:00",
+                  quietHoursStart: "22:00",
+                  quietHoursEnd: "07:00",
+                  planRemindersEnabled: true,
+                  nextBestActionEnabled: true,
+                  deadlinesEnabled: true,
+                  taskRecoveryEnabled: true,
+                  achievementsEnabled: true,
+                  weakConceptEnabled: true,
+                  assessmentEnabled: true,
+                  systemEnabled: true,
+                  updatedAt: Date.now(),
+                },
+              }),
+              { status: 200, headers: responseHeaders }
+            );
+          } catch (dbErr: unknown) {
+            return new Response(
+              JSON.stringify({ error: "DATABASE_ERROR", detail: (dbErr as Error)?.message || String(dbErr) }),
+              { status: 500, headers: responseHeaders }
+            );
+          }
+        }
+
+        // POST /api/notifications/preferences
+        if (pathname === "/api/notifications/preferences" && request.method === "POST") {
+          if (!env.DB) {
+            return new Response(JSON.stringify({ ok: true, preferences: {} }), {
+              status: 200,
+              headers: responseHeaders,
+            });
+          }
+
+          try {
+            const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+            const now = Date.now();
+            const inAppEnabled = body.inAppEnabled !== false ? 1 : 0;
+            const dailyReminderTime = typeof body.dailyReminderTime === "string" ? body.dailyReminderTime : "18:00";
+            const quietHoursStart = typeof body.quietHoursStart === "string" ? body.quietHoursStart : "22:00";
+            const quietHoursEnd = typeof body.quietHoursEnd === "string" ? body.quietHoursEnd : "07:00";
+            const planRemindersEnabled = body.planRemindersEnabled !== false ? 1 : 0;
+            const nextBestActionEnabled = body.nextBestActionEnabled !== false ? 1 : 0;
+            const deadlinesEnabled = body.deadlinesEnabled !== false ? 1 : 0;
+            const taskRecoveryEnabled = body.taskRecoveryEnabled !== false ? 1 : 0;
+            const achievementsEnabled = body.achievementsEnabled !== false ? 1 : 0;
+            const weakConceptEnabled = body.weakConceptEnabled !== false ? 1 : 0;
+            const assessmentEnabled = body.assessmentEnabled !== false ? 1 : 0;
+            const systemEnabled = body.systemEnabled !== false ? 1 : 0;
+
+            await env.DB.prepare(
+              `INSERT INTO notification_preferences
+               (student_id, in_app_enabled, daily_reminder_time, quiet_hours_start, quiet_hours_end,
+                plan_reminders_enabled, next_best_action_enabled, deadlines_enabled, task_recovery_enabled,
+                achievements_enabled, weak_concept_enabled, assessment_enabled, system_enabled, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(student_id) DO UPDATE SET
+                in_app_enabled = excluded.in_app_enabled,
+                daily_reminder_time = excluded.daily_reminder_time,
+                quiet_hours_start = excluded.quiet_hours_start,
+                quiet_hours_end = excluded.quiet_hours_end,
+                plan_reminders_enabled = excluded.plan_reminders_enabled,
+                next_best_action_enabled = excluded.next_best_action_enabled,
+                deadlines_enabled = excluded.deadlines_enabled,
+                task_recovery_enabled = excluded.task_recovery_enabled,
+                achievements_enabled = excluded.achievements_enabled,
+                weak_concept_enabled = excluded.weak_concept_enabled,
+                assessment_enabled = excluded.assessment_enabled,
+                system_enabled = excluded.system_enabled,
+                updated_at = excluded.updated_at`
+            ).bind(
+              studentId,
+              inAppEnabled,
+              dailyReminderTime,
+              quietHoursStart,
+              quietHoursEnd,
+              planRemindersEnabled,
+              nextBestActionEnabled,
+              deadlinesEnabled,
+              taskRecoveryEnabled,
+              achievementsEnabled,
+              weakConceptEnabled,
+              assessmentEnabled,
+              systemEnabled,
+              now
+            ).run();
+
+            return new Response(
+              JSON.stringify({
+                ok: true,
+                preferences: {
+                  studentId,
+                  inAppEnabled: Boolean(inAppEnabled),
+                  dailyReminderTime,
+                  quietHoursStart,
+                  quietHoursEnd,
+                  planRemindersEnabled: Boolean(planRemindersEnabled),
+                  nextBestActionEnabled: Boolean(nextBestActionEnabled),
+                  deadlinesEnabled: Boolean(deadlinesEnabled),
+                  taskRecoveryEnabled: Boolean(taskRecoveryEnabled),
+                  achievementsEnabled: Boolean(achievementsEnabled),
+                  weakConceptEnabled: Boolean(weakConceptEnabled),
+                  assessmentEnabled: Boolean(assessmentEnabled),
+                  systemEnabled: Boolean(systemEnabled),
+                  updatedAt: now,
+                },
+              }),
+              { status: 200, headers: responseHeaders }
+            );
+          } catch (dbErr: unknown) {
+            return new Response(
+              JSON.stringify({ error: "DATABASE_ERROR", detail: (dbErr as Error)?.message || String(dbErr) }),
+              { status: 500, headers: responseHeaders }
+            );
+          }
+        }
+      }
+
       // /api/study-rooms*
       if (pathname.startsWith("/api/study-rooms")) {
         const roomsRes = await handleStudyRoomsRoute(request);

@@ -1070,3 +1070,53 @@ test("Worker - Strict 401 Unauthorized on student AI routes without valid token"
     assert.strictEqual(res.headers.get("www-authenticate"), 'Bearer realm="zana-ai", error="invalid_token"');
   }
 });
+
+test("Worker - Notification endpoints require authentication and return 401 without Bearer token", async () => {
+  const env = createMockEnv();
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/notifications", {
+    method: "GET",
+    headers: {
+      Origin: "https://zana.idggov.tech",
+    },
+  });
+
+  const res = await worker.fetch(req, env);
+  assert.strictEqual(res.status, 401, "Expected 401 on /api/notifications without token");
+});
+
+test("Worker - GET /api/notifications with valid Bearer token returns 200 and unreadCount", async () => {
+  const env = createMockEnv();
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/notifications", {
+    method: "GET",
+    headers: {
+      Origin: "https://zana.idggov.tech",
+      Authorization: "Bearer test-student-token",
+    },
+  });
+
+  const res = await worker.fetch(req, env);
+  assert.strictEqual(res.status, 200);
+  const body = (await res.json()) as { ok: boolean; notifications: unknown[]; unreadCount: number };
+  assert.strictEqual(body.ok, true);
+  assert.ok(Array.isArray(body.notifications));
+  assert.strictEqual(typeof body.unreadCount, "number");
+});
+
+test("Worker - GET /api/notifications/preferences returns 200 with student preferences", async () => {
+  const env = createMockEnv();
+  const req = new Request("https://new-vs-zana.zana-platform.workers.dev/api/notifications/preferences", {
+    method: "GET",
+    headers: {
+      Origin: "https://zana.idggov.tech",
+      Authorization: "Bearer test-student-token",
+    },
+  });
+
+  const res = await worker.fetch(req, env);
+  assert.strictEqual(res.status, 200);
+  const body = (await res.json()) as { ok: boolean; preferences: { inAppEnabled: boolean; quietHoursStart: string } };
+  assert.strictEqual(body.ok, true);
+  assert.strictEqual(body.preferences.inAppEnabled, true);
+  assert.strictEqual(body.preferences.quietHoursStart, "22:00");
+});
+

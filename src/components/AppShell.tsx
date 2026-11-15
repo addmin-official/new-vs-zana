@@ -5,6 +5,8 @@ import { Sidebar, NavItemKey } from "./Sidebar.tsx";
 import { BottomNav } from "./BottomNav.tsx";
 import { Toast } from "./Toast.tsx";
 import { useAppStore } from "../store/appStore.ts";
+import { NotificationCenter } from "./notifications/NotificationCenter.tsx";
+import { notificationService } from "../services/notificationService.ts";
 
 export interface AppShellProps {
   children: ReactNode;
@@ -34,10 +36,18 @@ export function AppShell({
   const removeNotification = useAppStore((state) => state.removeNotification);
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const [isOnline, setIsOnline] = useState<boolean>(
     typeof navigator !== "undefined" ? navigator.onLine : true
   );
   const [showRestoredNotice, setShowRestoredNotice] = useState(false);
+
+  useEffect(() => {
+    notificationService.getNotifications(true).then((res) => {
+      setUnreadNotificationsCount(res.unreadCount);
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const handleOnline = () => {
@@ -98,8 +108,30 @@ export function AppShell({
           onNavigateToLogin={onNavigateToLogin}
           onLogout={onLogout}
           onOpenMobileNav={() => setMobileMenuOpen(!mobileMenuOpen)}
+          onOpenNotifications={() => setIsNotificationCenterOpen(true)}
+          unreadNotificationsCount={unreadNotificationsCount}
         />
       </div>
+
+      {/* In-App Notification Center Drawer/Modal */}
+      <NotificationCenter
+        isOpen={isNotificationCenterOpen}
+        onClose={() => setIsNotificationCenterOpen(false)}
+        unreadCount={unreadNotificationsCount}
+        onUnreadCountChange={setUnreadNotificationsCount}
+        onNavigateToAction={(url) => {
+          setIsNotificationCenterOpen(false);
+          if (url.startsWith("/plan")) handleNav("plan");
+          else if (url.startsWith("/chat")) handleNav("chat");
+          else if (url.startsWith("/practice")) handleNav("practice");
+          else if (url.startsWith("/profile") || url.startsWith("/settings")) handleNav("profile");
+          else if (url.startsWith("/assessment")) handleNav("assessment");
+          else if (url.startsWith("/subjects")) handleNav("subjects");
+          else if (url.startsWith("/report")) handleNav("report");
+          else if (url.startsWith("/rooms")) handleNav("rooms");
+          else handleNav("home");
+        }}
+      />
 
       {/* Mobile Drawer Overlay */}
       {mobileMenuOpen && (

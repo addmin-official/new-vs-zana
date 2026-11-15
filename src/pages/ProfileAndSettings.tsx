@@ -23,6 +23,8 @@ import { deleteStudentProfile } from "../features/student/studentStorage.ts";
 import { StudentProfile } from "../features/student/studentTypes.ts";
 import { useStudentProfile } from "../features/student/useStudentProfile.ts";
 import { useStudentMastery } from "../learning/hooks/useStudentMastery.ts";
+import { notificationService } from "../services/notificationService.ts";
+import { NotificationPreferences, DEFAULT_NOTIFICATION_PREFERENCES } from "../domain/notification.ts";
 
 export interface ProfileAndSettingsProps {
   profile?: StudentProfile;
@@ -118,6 +120,36 @@ export function ProfileAndSettings({
   });
 
   // Preferences states
+  const [notifPrefs, setNotifPrefs] = useState<NotificationPreferences>(() =>
+    DEFAULT_NOTIFICATION_PREFERENCES(studentProfile?.id || user.id)
+  );
+  const [isSavingNotifs, setIsSavingNotifs] = useState(false);
+
+  React.useEffect(() => {
+    const studentId = studentProfile?.id || user.id;
+    if (studentId) {
+      notificationService.getPreferences(studentId).then((p) => {
+        setNotifPrefs(p);
+      }).catch(() => {});
+    }
+  }, [studentProfile?.id, user.id]);
+
+  const handleSaveNotifPrefs = async () => {
+    setIsSavingNotifs(true);
+    try {
+      const studentId = studentProfile?.id || user.id;
+      const saved = await notificationService.savePreferences(notifPrefs, studentId);
+      setNotifPrefs(saved);
+      setSaveToast("ڕێکخستنەکانی ئاگادارکردنەوە بە سەرکەوتوویی پاشەکەوت کران ✅");
+      setTimeout(() => setSaveToast(null), 3500);
+    } catch {
+      setSaveToast("هەڵەیەک لە پاشەکەوتکردندا ڕوویدا");
+      setTimeout(() => setSaveToast(null), 3500);
+    } finally {
+      setIsSavingNotifs(false);
+    }
+  };
+
   const [dailyReminders, setDailyReminders] = useState(true);
   const [assessmentResultsNotif, setAssessmentResultsNotif] = useState(true);
   const [socialActivityNotif, setSocialActivityNotif] = useState(false);
@@ -460,42 +492,152 @@ export function ProfileAndSettings({
           </div>
 
           {/* Notifications */}
-          <div className="space-y-3">
-            <h3 className="font-sans font-bold text-xs text-slate-800 flex items-center gap-1.5">
-              <Bell className="w-4 h-4 text-indigo-600" />
-              <span>ئاگادارکردنەوە و بیرخستنەوەکان</span>
-            </h3>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-sans font-bold text-xs sm:text-sm text-slate-800 flex items-center gap-1.5">
+                <Bell className="w-4 h-4 text-indigo-600" />
+                <span>ناوەندی هەڵبژاردەی ئاگادارییەکان</span>
+              </h3>
+              <label className="flex items-center gap-2 text-xs font-bold font-sans cursor-pointer">
+                <span className={notifPrefs.inAppEnabled ? "text-indigo-600" : "text-slate-400"}>
+                  {notifPrefs.inAppEnabled ? "ئاگاداری کارایە" : "ئاگاداری ناچالاکە"}
+                </span>
+                <input
+                  type="checkbox"
+                  checked={notifPrefs.inAppEnabled}
+                  onChange={(e) =>
+                    setNotifPrefs((prev) => ({ ...prev, inAppEnabled: e.target.checked }))
+                  }
+                  className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                />
+              </label>
+            </div>
 
+            {/* Quiet Hours & Timing */}
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+              <span className="font-sans font-bold text-xs text-slate-800 block">
+                کاتەکانی پشوو و بیرخستنەوە 🌙
+              </span>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                لە کاتەکانی پشوودا، هیچ ئاگادارییەکی بێزارکەر دەرناکەوێت و تەنها لە ناوەندی ئاگادارییەکان لە هێمنیدا پاشەکەوت دەکرێن.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-600 block">دەستپێکی پشوو:</label>
+                  <input
+                    type="time"
+                    value={notifPrefs.quietHoursStart}
+                    onChange={(e) =>
+                      setNotifPrefs((prev) => ({ ...prev, quietHoursStart: e.target.value }))
+                    }
+                    className="w-full p-2 bg-white rounded-xl border border-slate-200 text-xs font-mono text-center font-bold"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-600 block">کۆتایی پشوو:</label>
+                  <input
+                    type="time"
+                    value={notifPrefs.quietHoursEnd}
+                    onChange={(e) =>
+                      setNotifPrefs((prev) => ({ ...prev, quietHoursEnd: e.target.value }))
+                    }
+                    className="w-full p-2 bg-white rounded-xl border border-slate-200 text-xs font-mono text-center font-bold"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-600 block">بیرخستنەوەی ڕۆژانە:</label>
+                  <input
+                    type="time"
+                    value={notifPrefs.dailyReminderTime}
+                    onChange={(e) =>
+                      setNotifPrefs((prev) => ({ ...prev, dailyReminderTime: e.target.value }))
+                    }
+                    className="w-full p-2 bg-white rounded-xl border border-slate-200 text-xs font-mono text-center font-bold"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Category Toggles */}
             <div className="space-y-2">
-              <label className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-sans cursor-pointer">
-                <span>ئاگادارکردنەوەی ڕۆژانەی کاتی خوێندن</span>
-                <input
-                  type="checkbox"
-                  checked={dailyReminders}
-                  onChange={(e) => setDailyReminders(e.target.checked)}
-                  className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
-                />
-              </label>
+              <span className="font-sans font-bold text-xs text-slate-800 block">
+                جۆرەکانی ئاگادارکردنەوە:
+              </span>
 
-              <label className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-sans cursor-pointer">
-                <span>ئاگادارکردنەوەی ئەنجامی تاقیکردنەوەکان</span>
-                <input
-                  type="checkbox"
-                  checked={assessmentResultsNotif}
-                  onChange={(e) => setAssessmentResultsNotif(e.target.checked)}
-                  className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
-                />
-              </label>
+              {[
+                {
+                  key: "planRemindersEnabled",
+                  label: "پلانی خوێندنی ڕۆژانە",
+                  desc: "بیرخستنەوەی کورت بۆ دەستپێکردنی وانەکانی ئەمڕۆ",
+                },
+                {
+                  key: "nextBestActionEnabled",
+                  label: "هەنگاوی پێشنیارکراوی داهاتوو",
+                  desc: "ڕێنمایی زیرەکی مامۆستا زانا بۆ هەنگاوی داهاتووت",
+                },
+                {
+                  key: "deadlinesEnabled",
+                  label: "نزیکبوونەوە لە وادەی دیاریکراو",
+                  desc: "ئاگادارکردنەوە پێش گەیشتن بە وادەی کۆتایی تاقیکردنەوە یان ئامانج",
+                },
+                {
+                  key: "taskRecoveryEnabled",
+                  label: "هاوسەنگکردنەوەی وانە لەدەستچووەکان",
+                  desc: "پێشنیاری ئارام بۆ قەرەبووکردنەوەی ئەو وانانەی بەجێماون",
+                },
+                {
+                  key: "achievementsEnabled",
+                  label: "دەستکەوت و بەرزبوونەوەی لێهاتوویی",
+                  desc: "پەیامی هاندان کاتێک لە چەمکێکدا لێهاتوویی بەدەستدەهێنیت",
+                },
+                {
+                  key: "weakConceptEnabled",
+                  label: "پێداچوونەوەی چەمکە لاوازەکان",
+                  desc: "ڕێنمایی بۆ بەهێزکردنی ئەو بابەتانەی تێگەیشتنیان تەواو نەبووە",
+                },
+                {
+                  key: "assessmentEnabled",
+                  label: "ئەنجامی تاقیکردنەوە و ڕێنمایی",
+                  desc: "پێشنیاری هەنگاوی دواتر دوای تەواوکردنی تاقیکردنەوەکان",
+                },
+              ].map((item) => (
+                <label
+                  key={item.key}
+                  className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-slate-50 text-xs font-sans cursor-pointer transition"
+                >
+                  <div>
+                    <span className="font-bold text-slate-800 block">{item.label}</span>
+                    <span className="text-[11px] text-slate-500">{item.desc}</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(notifPrefs[item.key as keyof NotificationPreferences])}
+                    onChange={(e) =>
+                      setNotifPrefs((prev) => ({
+                        ...prev,
+                        [item.key]: e.target.checked,
+                      }))
+                    }
+                    className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                  />
+                </label>
+              ))}
+            </div>
 
-              <label className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-sans cursor-pointer">
-                <span>چالاکی ژوورەکان کاتێک هاوپۆلەکانت دەست پێدەکەن</span>
-                <input
-                  type="checkbox"
-                  checked={socialActivityNotif}
-                  onChange={(e) => setSocialActivityNotif(e.target.checked)}
-                  className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
-                />
-              </label>
+            {/* Save Notification Preferences Button */}
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={handleSaveNotifPrefs}
+                disabled={isSavingNotifs}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition cursor-pointer disabled:opacity-50"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>{isSavingNotifs ? "پاشەکەوت دەکرێت..." : "پاشەکەوتکردنی هەڵبژاردەی ئاگادارییەکان"}</span>
+              </button>
             </div>
           </div>
 

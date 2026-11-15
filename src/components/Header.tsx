@@ -1,5 +1,5 @@
 import React from "react";
-import { User, Menu, Cpu, Award, ArrowLeftRight, LogIn, LogOut } from "lucide-react";
+import { User, Menu, Cpu, Award, ArrowLeftRight, LogIn, LogOut, Bell } from "lucide-react";
 import { UserProfile } from "../store/appStore.ts";
 import { SoundToggle } from "./SoundToggle.tsx";
 import { ThemeToggle } from "./ThemeToggle.tsx";
@@ -29,6 +29,7 @@ export interface HeaderProps {
   onLogout?: () => void;
   onOpenMobileNav?: () => void;
   onOpenNotifications?: () => void;
+  unreadNotificationsCount?: number;
   onOpenBrain?: () => void;
 }
 
@@ -41,6 +42,8 @@ export function Header({
   onNavigateToLogin,
   onLogout,
   onOpenMobileNav,
+  onOpenNotifications,
+  unreadNotificationsCount,
   onOpenBrain,
 }: HeaderProps) {
   const { isAdmin } = useIsAdmin();
@@ -140,6 +143,24 @@ export function Header({
 
         <SoundToggle className="!w-9 !h-9 !rounded-lg" />
         <ThemeToggle showMenu={false} className="!w-9 !h-9 !rounded-lg" />
+
+        {/* Notifications Bell */}
+        {onOpenNotifications && (
+          <button
+            type="button"
+            onClick={onOpenNotifications}
+            title="ئاگادارییەکان"
+            aria-label="ئاگادارییەکان"
+            className="relative w-9 h-9 rounded-lg flex items-center justify-center text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+          >
+            <Bell className="w-4 h-4" />
+            {typeof unreadNotificationsCount === "number" && unreadNotificationsCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white font-sans font-black text-[10px] flex items-center justify-center border-2 border-white dark:border-slate-900 shadow-xs animate-in zoom-in-75">
+                {unreadNotificationsCount > 9 ? "9+" : unreadNotificationsCount}
+              </span>
+            )}
+          </button>
+        )}
 
         {/* Student Mini Badge */}
         <div className="hidden lg:flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 rounded-xl px-2.5 py-1">
