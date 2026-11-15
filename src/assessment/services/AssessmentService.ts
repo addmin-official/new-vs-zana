@@ -9,7 +9,8 @@ import {
   ScoreBreakdown,
   AssessmentRecommendation,
   PublicQuestion,
-  QuestionType
+  QuestionType,
+  AssessmentQuestion
 } from "../domain/AssessmentTypes.ts";
 import { AssessmentRecordProvider } from "../providers/AssessmentRecordProvider.ts";
 import { QuestionBankProvider } from "../providers/QuestionBankProvider.ts";
@@ -19,6 +20,7 @@ import { AdaptiveQuizEngine } from "../adaptive/AdaptiveQuizEngine.ts";
 import { LearningRecordProvider } from "../../learning/providers/LearningRecordProvider.ts";
 import { AdaptiveLearningEngine } from "../../learning/engine/AdaptiveLearningEngine.ts";
 import { DifficultyLevel, LearningEvent } from "../../learning/domain/MasteryTypes.ts";
+import { AssessmentIntelligence } from "../AssessmentIntelligence.ts";
 
 export class AssessmentService {
   private recordProvider: AssessmentRecordProvider;
@@ -123,9 +125,19 @@ export class AssessmentService {
     attempt.updatedAt = new Date().toISOString();
 
     // 2. Sync Mastery Evidence back into Phase 15
-    if (question.conceptId) {
+    const isRapidGuess = submission.responseTimeMs < 3000 && (question.estimatedDurationSeconds || 60) >= 60;
+
+    if (question.conceptId && !isRapidGuess) {
       const prevProfile = await learningRecordProvider.getStudentMasteryProfile(attempt.studentId);
       const prevMastery = prevProfile.conceptMasteries[question.conceptId] || null;
+
+      // Preserve baseline mastery for anti-guessing rollback
+      if (!attempt.previousMasteries) {
+        attempt.previousMasteries = {};
+      }
+      if (attempt.previousMasteries[question.conceptId] === undefined) {
+        attempt.previousMasteries[question.conceptId] = prevMastery ? { ...prevMastery } : null;
+      }
 
       // Update concept mastery state via AdaptiveLearningEngine
       const newMastery = AdaptiveLearningEngine.calculateNewMastery(prevMastery, {
@@ -363,6 +375,71 @@ export class AssessmentService {
         interventionKu: m.interventionKu
       }));
 
+    // Calculate total duration in seconds
+    const started = new Date(attempt.startedAt).getTime();
+    const finished = new Date(attempt.submittedAt || new Date().toISOString()).getTime();
+    const totalDurationSeconds = Math.max(1, Math.round((finished - started) / 1000));
+
+    // Construct attempts with full question objects
+    const attemptsWithQuestions = attemptsArray.map(att => {
+      const q = bank.getQuestion(att.questionId);
+      return q ? { question: q, submission: att.submission, isCorrect: att.isCorrect } : null;
+    }).filter((x): x is { question: AssessmentQuestion; submission: AnswerSubmission; isCorrect: boolean } => x !== null);
+
+    // 1. Item Response Theory (IRT) - 3PL Model Ability Estimation
+    const irtResponses = attemptsWithQuestions.map(item => {
+      const irt = AssessmentIntelligence.getEffectiveIRTParameters(item.question);
+      return {
+        isCorrect: item.isCorrect,
+        a: irt.discrimination,
+        b: irt.difficulty,
+        c: irt.guessing
+      };
+    });
+    const { theta: irtTheta, standardError: irtStandardError } = AssessmentIntelligence.estimateThetaMLE(irtResponses);
+
+    // 2. Diagnostic Assessment (Bloom's Taxonomy)
+    const cognitiveProfile = AssessmentIntelligence.generateCognitiveProfile(attemptsWithQuestions);
+
+    // 3. Anti-Guessing Detection
+    const antiGuessingVerdict = AssessmentIntelligence.detectAntiGuessing(
+      attemptsWithQuestions,
+      totalDurationSeconds,
+      blueprint.targetDurationSeconds
+    );
+
+    // 4. Feedback Generation (3-point summary)
+    const feedbackSummary = AssessmentIntelligence.generatePostAssessmentSummary(attemptsWithQuestions);
+
+    let nextRecommendedActionKu = passed 
+      ? "پیرۆزە! تۆ توانیت بە سەرکەوتوویی ئەم بەشە تێپەڕێنیت. ئێستا دەتوانیت بەردەوام بیت لە خوێندنی وانە نوێیەکان."
+      : "پێشنیار دەکەین پێداچوونەوەیەکی خێرا بکەیت بەو چەمکانەی نمرەت تێیاندا کەمە پێش ئەوەی دووبارە تاقیکردنەوە ئەنجام بدەیتەوە.";
+
+    let interpretationConfidence: "low" | "medium" | "high" = attemptsArray.length >= 5 ? "high" : "medium";
+
+    if (antiGuessingVerdict.isUnreliable) {
+      interpretationConfidence = "low";
+      nextRecommendedActionKu = "وەڵامەکانت زۆر خێرا بوون. تکایە بە وردی پرسیارەکان بخوێنەوە";
+
+      // Roll back any mastery changes made during this attempt so student mastery profile is not corrupted
+      if (attempt.previousMasteries) {
+        const studentProfile = await learningRecordProvider.getStudentMasteryProfile(attempt.studentId);
+        let modified = false;
+        for (const [cId, prev] of Object.entries(attempt.previousMasteries)) {
+          if (prev === null) {
+            delete studentProfile.conceptMasteries[cId];
+            modified = true;
+          } else {
+            studentProfile.conceptMasteries[cId] = prev;
+            modified = true;
+          }
+        }
+        if (modified) {
+          await learningRecordProvider.saveStudentMasteryProfile(attempt.studentId, studentProfile);
+        }
+      }
+    }
+
     const result: AssessmentResult = {
       attemptId: attempt.id,
       assessmentId: attempt.assessmentId,
@@ -372,11 +449,14 @@ export class AssessmentService {
       weaknessesKu,
       masteryChanges: [], // populated downstream if needed
       misconceptionsDetected,
-      nextRecommendedActionKu: passed 
-        ? "پیرۆزە! تۆ توانیت بە سەرکەوتوویی ئەم بەشە تێپەڕێنیت. ئێستا دەتوانیت بەردەوام بیت لە خوێندنی وانە نوێیەکان."
-        : "پێشنیار دەکەین پێداچوونەوەیەکی خێرا بکەیت بەو چەمکانەی نمرەت تێیاندا کەمە پێش ئەوەی دووبارە تاقیکردنەوە ئەنجام بدەیتەوە.",
+      nextRecommendedActionKu,
       recommendations,
-      interpretationConfidence: attemptsArray.length >= 5 ? "high" : "medium"
+      interpretationConfidence,
+      irtTheta,
+      irtStandardError,
+      cognitiveProfile,
+      antiGuessingVerdict,
+      feedbackSummary
     };
 
     await this.recordProvider.saveResult(result);

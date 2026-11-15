@@ -11,3 +11,5 @@ export * from "./adaptive/QuizTerminationPolicy.ts";
 export * from "./services/AssessmentService.ts";
 export * from "./generation/QuestionGenerator.ts";
 export * from "./generation/QuestionSelectionEngine.ts";
+export * from "./AssessmentIntelligence.ts";
+

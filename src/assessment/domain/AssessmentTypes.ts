@@ -42,6 +42,27 @@ export enum GenerationReviewStatus {
   REJECTED = "REJECTED"
 }
 
+/**
+ * Bloom's Taxonomy Cognitive Hierarchy Levels for Diagnostic Assessment
+ */
+export enum CognitiveLevel {
+  RECALL = "RECALL",
+  COMPREHENSION = "COMPREHENSION",
+  APPLICATION = "APPLICATION",
+  ANALYSIS = "ANALYSIS",
+  SYNTHESIS = "SYNTHESIS",
+  EVALUATION = "EVALUATION"
+}
+
+/**
+ * Item Response Theory (IRT) 3-Parameter Logistic (3PL) Model Parameters
+ */
+export interface IRTParameters {
+  discrimination: number; // a: item discrimination (typical range 0.5 - 2.5)
+  difficulty: number; // b: item difficulty (typical range -3.0 to +3.0)
+  guessing: number; // c: pseudo-guessing probability (0.0 to 0.35)
+}
+
 export interface QuestionOption {
   id: string;
   textKu: string;
@@ -93,6 +114,8 @@ export interface AssessmentQuestion {
   createdAt: string;
   updatedAt: string;
   generationMetadata?: QuestionGenerationMetadata;
+  cognitiveLevel?: CognitiveLevel;
+  irt?: IRTParameters;
 }
 
 // Separate public student-facing representation of a question (hiding answers and grading patterns)
@@ -108,6 +131,8 @@ export interface PublicQuestion {
   conceptId?: string;
   skillId?: string;
   lessonId?: string;
+  cognitiveLevel?: CognitiveLevel;
+  irt?: IRTParameters;
 }
 
 export interface AssessmentSection {
@@ -206,6 +231,7 @@ export interface AssessmentAttempt {
   expiresAt?: string;
   createdAt: string;
   updatedAt: string;
+  previousMasteries?: Record<string, any>;
 }
 
 export interface ScoreBreakdown {
@@ -226,6 +252,30 @@ export interface AssessmentRecommendation {
   conceptId: string;
 }
 
+export interface CognitiveProfile {
+  strongLevels: CognitiveLevel[];
+  weakLevels: CognitiveLevel[];
+  recommendedFocus: string;
+  levelBreakdown: Record<CognitiveLevel, { correct: number; total: number; percentage: number }>;
+}
+
+export interface AntiGuessingVerdict {
+  isSuspicious: boolean;
+  isUnreliable: boolean;
+  reasons: string[];
+  flags: {
+    invertedDifficultyAccuracy: boolean;
+    rapidResponseTime: boolean;
+    unrealisticScoreSpeed: boolean;
+  };
+}
+
+export interface AssessmentFeedbackSummary {
+  masteredConcepts: string[];
+  reviewConcepts: string[];
+  recommendedNextSessionPlanKu: string;
+}
+
 export interface AssessmentResult {
   attemptId: string;
   assessmentId: string;
@@ -238,4 +288,10 @@ export interface AssessmentResult {
   nextRecommendedActionKu: string;
   recommendations: AssessmentRecommendation[];
   interpretationConfidence: "low" | "medium" | "high";
+  irtTheta?: number;
+  irtStandardError?: number;
+  cognitiveProfile?: CognitiveProfile;
+  antiGuessingVerdict?: AntiGuessingVerdict;
+  feedbackSummary?: AssessmentFeedbackSummary;
 }
+
