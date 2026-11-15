@@ -33,17 +33,40 @@ import { SubscriptionModal } from "../components/SubscriptionModal.tsx";
 import { useAppStore } from "../store/appStore.ts";
 import { useSoundEffects } from "../hooks/useSoundEffects.ts";
 import { ku } from "../i18n/translations.ts";
-import { Grade12ChemistryBookViewer } from "../components/Grade12ChemistryBookViewer.tsx";
-import { Grade12PhysicsBookViewer } from "../components/Grade12PhysicsBookViewer.tsx";
-import { Grade12MathBookViewer } from "../components/Grade12MathBookViewer.tsx";
-import { Grade12LiteraryMathBookViewer } from "../components/Grade12LiteraryMathBookViewer.tsx";
-import { Grade12KurdishBookViewer } from "../components/Grade12KurdishBookViewer.tsx";
-import { Grade12ArabicBookViewer } from "../components/Grade12ArabicBookViewer.tsx";
-import { Grade12HistoryBookViewer } from "../components/Grade12HistoryBookViewer.tsx";
-import { Grade12EconomicsBookViewer } from "../components/Grade12EconomicsBookViewer.tsx";
-import { Grade12GeographyBookViewer } from "../components/Grade12GeographyBookViewer.tsx";
-import { Grade12SportsBookViewer } from "../components/Grade12SportsBookViewer.tsx";
-import { Grade12EnglishBookViewer } from "../components/Grade12EnglishBookViewer.tsx";
+// Dynamic imports for Grade 12 book viewers to optimize initial bundle and split chunks
+const Grade12ChemistryBookViewer = React.lazy(() =>
+  import("../components/Grade12ChemistryBookViewer.tsx").then((m) => ({ default: m.Grade12ChemistryBookViewer }))
+);
+const Grade12PhysicsBookViewer = React.lazy(() =>
+  import("../components/Grade12PhysicsBookViewer.tsx").then((m) => ({ default: m.Grade12PhysicsBookViewer }))
+);
+const Grade12MathBookViewer = React.lazy(() =>
+  import("../components/Grade12MathBookViewer.tsx").then((m) => ({ default: m.Grade12MathBookViewer }))
+);
+const Grade12LiteraryMathBookViewer = React.lazy(() =>
+  import("../components/Grade12LiteraryMathBookViewer.tsx").then((m) => ({ default: m.Grade12LiteraryMathBookViewer }))
+);
+const Grade12KurdishBookViewer = React.lazy(() =>
+  import("../components/Grade12KurdishBookViewer.tsx").then((m) => ({ default: m.Grade12KurdishBookViewer }))
+);
+const Grade12ArabicBookViewer = React.lazy(() =>
+  import("../components/Grade12ArabicBookViewer.tsx").then((m) => ({ default: m.Grade12ArabicBookViewer }))
+);
+const Grade12HistoryBookViewer = React.lazy(() =>
+  import("../components/Grade12HistoryBookViewer.tsx").then((m) => ({ default: m.Grade12HistoryBookViewer }))
+);
+const Grade12EconomicsBookViewer = React.lazy(() =>
+  import("../components/Grade12EconomicsBookViewer.tsx").then((m) => ({ default: m.Grade12EconomicsBookViewer }))
+);
+const Grade12GeographyBookViewer = React.lazy(() =>
+  import("../components/Grade12GeographyBookViewer.tsx").then((m) => ({ default: m.Grade12GeographyBookViewer }))
+);
+const Grade12SportsBookViewer = React.lazy(() =>
+  import("../components/Grade12SportsBookViewer.tsx").then((m) => ({ default: m.Grade12SportsBookViewer }))
+);
+const Grade12EnglishBookViewer = React.lazy(() =>
+  import("../components/Grade12EnglishBookViewer.tsx").then((m) => ({ default: m.Grade12EnglishBookViewer }))
+);
 import { StudentProfile, SubjectKey } from "../features/student/studentTypes.ts";
 import { getValidatedSubject } from "../features/student/studentDefaults.ts";
 import { useServerHealth } from "../hooks/useServerHealth.ts";
@@ -51,7 +74,7 @@ import { useSpeechToText } from "../hooks/useSpeechToText.ts";
 import { getChapterData } from "../data/curriculum/chapterDrills.ts";
 import { VisionCapturePanel } from "../features/vision/VisionCapturePanel.tsx";
 
-export type WorkspaceMode = "ask" | "explain" | "practice";
+export type WorkspaceMode = "ask" | "socratic" | "explain" | "practice";
 
 // ─── Feature 1 state types ───────────────────────────────────────────────────
 type ViewMode = "tutor" | "workspace";
@@ -159,6 +182,36 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
   });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const lastSendTimeRef = useRef<number>(0);
+
+  // ─── Socratic Mode State ──────────────────────────────────────────────────
+  const [socraticChainCount, setSocraticChainCount] = useState<number>(0);
+  const [hintsUsed, setHintsUsed] = useState<number>(0);
+
+  // ─── Session Memory (Concepts Discussed) ──────────────────────────────────
+  const [sessionConcepts, setSessionConcepts] = useState<string[]>(() => {
+    try {
+      const stored = sessionStorage.getItem("zana_chat_session_concepts");
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // ─── Virtualization for Long Conversations (Last 30 messages) ─────────────
+  const [showAllMessages, setShowAllMessages] = useState<boolean>(false);
+  const displayedMessages = useMemo(() => {
+    if (showAllMessages || chatMessages.length <= 30) return chatMessages;
+    return chatMessages.slice(-30);
+  }, [chatMessages, showAllMessages]);
+
+  const latestAiMessageId = useMemo(() => {
+    for (let i = chatMessages.length - 1; i >= 0; i--) {
+      if (chatMessages[i].sender === "zana") return chatMessages[i].id;
+    }
+    return null;
+  }, [chatMessages]);
 
   const [selectedSubject, setSelectedSubject] = useState<SubjectKey | null>(() => {
     return getValidatedSubject(user.activeSubject || profile?.activeSubject || "chemistry");
@@ -191,6 +244,19 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
 
   const activeChapter = chapters.find((c) => c.id === activeChapterId) || chapters[0];
 
+  // Track active chapter into session memory concepts
+  useEffect(() => {
+    if (activeChapter?.title && !sessionConcepts.includes(activeChapter.title)) {
+      setSessionConcepts((prev) => {
+        const next = [...prev, activeChapter.title];
+        try {
+          sessionStorage.setItem("zana_chat_session_concepts", JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+    }
+  }, [activeChapter?.title, sessionConcepts]);
+
   const _isPhysics = currentSubject === "physics";
   const _isChemistry = currentSubject === "chemistry";
   const _isMath = currentSubject === "math" || currentSubject === "mathematics";
@@ -198,6 +264,35 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
   const activeSubjectMeta = CHAT_SUBJECT_META[currentSubject] || { label: "کیمیا", icon: "⚗️" };
   const hasBook = true;
   const bookLabel = `پەڕتووکی ${activeSubjectMeta.label} 📖`;
+
+  // ─── Smart Prompt Suggestions ─────────────────────────────────────────────
+  const smartSuggestions = useMemo(() => {
+    const chapterName = activeChapter?.title || "ئەم بەندە";
+    if (currentSubject === "chemistry") {
+      return [
+        `چۆن پێوەری pH لە پرسیارەکانی وەزاریدا دەهێندرێتەوە؟`,
+        `سەرەکیترین هەڵەی باوی قوتابیان لە «${chapterName}» چییە؟`,
+        `نموونەیەکی پراکتیکی لەسەر هاوکێشەی کاردانەوە شیبکەرەوە.`,
+      ];
+    } else if (currentSubject === "physics") {
+      return [
+        `یاسا سەرەکییەکانی «${chapterName}» لەگەڵ یەکەکانیان ڕوونبکەرەوە.`,
+        `چۆن کێشەی تەوژم و ڤۆڵتیە لە تاقیکردنەوەی وەزاری شیبکەمەوە؟`,
+        `نموونەیەکی شیکارکراوی هەنگاو بە هەنگاو بخەرەڕوو.`,
+      ];
+    } else if (currentSubject === "math" || currentSubject === "mathematics") {
+      return [
+        `هەنگاوەکانی دۆزینەوەی داتاشراو لە «${chapterName}» چین؟`,
+        `چ ڕێگایەکی خێرا هەیە بۆ شیکارکردنی ئەم جۆرە هاوکێشانە؟`,
+        `نموونەیەکی وەزاری لەگەڵ تەڵە بیرکارییەکان شیبکەرەوە.`,
+      ];
+    }
+    return [
+      `گرنگترین پێناسەکانی «${chapterName}» چین؟`,
+      `پوختەی ئەم وانەیە بە ٣ خاڵی سەرەکی دەستنیشان بکە.`,
+      `چۆن خۆم بۆ تاقیکردنەوەی ئەم بەشە ئامادە بکەم؟`,
+    ];
+  }, [currentSubject, activeChapter?.title]);
 
   // ─── Workspace action tabs config (Feature 2) ─────────────────────────────
   const workspaceActionTabs: { id: ActiveAction; label: string; icon: React.ElementType }[] = [
@@ -212,23 +307,62 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
       : []),
   ];
 
-  const handleSend = async () => {
+  const handleSend = async (customPrompt?: string) => {
     if (isTrialExpired) {
       setIsTrialExpired(true);
       return;
     }
-    if (!inputContent.trim() || isLoading) return;
-    const text = inputContent.trim();
-    setInputContent("");
+    const rawText = (customPrompt !== undefined ? customPrompt : inputContent).trim();
+    if (!rawText || isLoading) return;
+
+    // 300ms Debounce Check
+    const now = Date.now();
+    if (now - lastSendTimeRef.current < 300) return;
+    lastSendTimeRef.current = now;
+
+    if (customPrompt === undefined) {
+      setInputContent("");
+    }
     setHintLevel(0);
+
+    // Context Injection: Last 3 session concepts
+    const memoryContext =
+      sessionConcepts.length > 0
+        ? `[چەمکەکانی ئەم دانیشتنە: ${sessionConcepts.slice(-3).join("، ")}]\n`
+        : "";
+
+    let finalPrompt = rawText;
+    if (currentMode === "socratic") {
+      const nextStep = socraticChainCount + 1;
+      if (nextStep <= 4) {
+        finalPrompt = `${memoryContext}[شێوازی فێرکاری سوقراتی - هەنگاوی ${nextStep} لە ٤]: تکایە وەڵامی ڕاستەوخۆ مەدە. پرسیارێکی هاندەر یان سەرەداوی ڕێبەریکردن بپرسە بۆ ئەوەی قوتابی خۆی وەڵامەکە بدۆزێتەوە. پرسیاری قوتابی: "${rawText}"`;
+        setSocraticChainCount(nextStep);
+      } else {
+        finalPrompt = `${memoryContext}[شێوازی فێرکاری سوقراتی - گەیشتن بە ئەنجام]: قوتابی ٤ پرسیاری سوقراتی تەواو کرد. ئێستا تەواوی چەمکەکە و وەڵامە دروستەکە بە فراوانی شیبکەرەوە و دەستخۆشی لێبکە. پرسیاری قوتابی: "${rawText}"`;
+        setSocraticChainCount(0);
+      }
+    } else if (memoryContext) {
+      finalPrompt = `${memoryContext}${rawText}`;
+    }
+
     try {
-      await void sendChatMessage(text, activeChapter?.id);
+      await void sendChatMessage(finalPrompt, activeChapter?.id);
     } catch (err: unknown) {
       if ((err as Error)?.message === "TRIAL_EXPIRED") {
         setIsTrialExpired(true);
         setIsStoreTrialExpired?.(true);
       }
+    } finally {
+      setTimeout(() => {
+        textareaRef.current?.focus();
+      }, 50);
     }
+  };
+
+  const handleContinueLastSession = () => {
+    const lastConcept = sessionConcepts.length > 0 ? sessionConcepts[sessionConcepts.length - 1] : activeChapter?.title;
+    const prompt = `مامۆستا زانا، دەمەوێت لەو شوێنەی کە لە دانیشتنی پێشوو لێی وەستابووین بەردەوام بم (${lastConcept || activeSubjectMeta.label}). کورتەیەکی خێرای ئەوەم پێبڵێ و بەردەوام بین.`;
+    void handleSend(prompt);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -548,6 +682,18 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                 {earnedXp > 0 ? `+${earnedXp} XP` : "مامۆستا زانا"}
               </span>
 
+              {/* Continue from last session button */}
+              <button
+                type="button"
+                onClick={handleContinueLastSession}
+                className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2.5 py-1 rounded-full transition shadow-2xs cursor-pointer"
+                title="بەردەوامبوون لە دانیشتنی پێشوو لەگەڵ زانا"
+                aria-label="بەردەوامبوون لە دانیشتنی پێشوو"
+              >
+                <RotateCcw className="w-3 h-3 text-amber-600" />
+                <span>دانیشتنی پێشوو</span>
+              </button>
+
               {/* Clear chat history for this specific lesson */}
               <button
                 type="button"
@@ -592,45 +738,131 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
             </div>
           </div>
 
-          {/* Segmented Mode Selector: Ask | Explain | Practice  (only in tutor mode) */}
+          {/* Segmented Mode Selector: Ask | Socratic | Explain | Practice  (only in tutor mode) */}
           {viewMode === "tutor" && (
-            <div className="grid grid-cols-3 text-center">
-              <button
-                onClick={() => setCurrentMode("ask")}
-                className={`py-2.5 font-sans text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center justify-center gap-1.5 ${
-                  currentMode === "ask"
-                    ? "border-indigo-600 text-indigo-600 bg-indigo-50/30"
-                    : "border-transparent text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                <HelpCircle className="w-4 h-4" />
-                <span>پرسیارکردن</span>
-              </button>
+            <>
+              <div className="grid grid-cols-4 text-center border-b border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setCurrentMode("ask")}
+                  className={`py-2.5 font-sans text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center justify-center gap-1.5 ${
+                    currentMode === "ask"
+                      ? "border-indigo-600 text-indigo-600 bg-indigo-50/30"
+                      : "border-transparent text-slate-600 hover:text-slate-900"
+                  }`}
+                  aria-label="پرسیارکردنی ڕاستەوخۆ"
+                >
+                  <HelpCircle className="w-4 h-4" />
+                  <span>پرسیارکردن</span>
+                </button>
 
-              <button
-                onClick={() => setCurrentMode("explain")}
-                className={`py-2.5 font-sans text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center justify-center gap-1.5 ${
-                  currentMode === "explain"
-                    ? "border-indigo-600 text-indigo-600 bg-indigo-50/30"
-                    : "border-transparent text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                <FileText className="w-4 h-4" />
-                <span>ڕوونکردنەوەی چەمک</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCurrentMode("socratic");
+                    setSocraticChainCount(0);
+                  }}
+                  className={`py-2.5 font-sans text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center justify-center gap-1.5 ${
+                    currentMode === "socratic"
+                      ? "border-purple-600 text-purple-700 bg-purple-50/40"
+                      : "border-transparent text-slate-600 hover:text-slate-900"
+                  }`}
+                  aria-label="شێوازی فێرکاری سوقراتی"
+                >
+                  <Brain className="w-4 h-4 text-purple-600" />
+                  <span>سوقراتی</span>
+                  <span className="text-[9px] bg-purple-100 text-purple-800 px-1 py-0.5 rounded-md font-black">نوێ</span>
+                </button>
 
-              <button
-                onClick={() => setCurrentMode("practice")}
-                className={`py-2.5 font-sans text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center justify-center gap-1.5 ${
-                  currentMode === "practice"
-                    ? "border-indigo-600 text-indigo-600 bg-indigo-50/30"
-                    : "border-transparent text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                <Award className="w-4 h-4" />
-                <span>ڕاهێنانی کارلێککارانە</span>
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={() => setCurrentMode("explain")}
+                  className={`py-2.5 font-sans text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center justify-center gap-1.5 ${
+                    currentMode === "explain"
+                      ? "border-indigo-600 text-indigo-600 bg-indigo-50/30"
+                      : "border-transparent text-slate-600 hover:text-slate-900"
+                  }`}
+                  aria-label="ڕوونکردنەوەی چەمک"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span>ڕوونکردنەوە</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCurrentMode("practice")}
+                  className={`py-2.5 font-sans text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center justify-center gap-1.5 ${
+                    currentMode === "practice"
+                      ? "border-indigo-600 text-indigo-600 bg-indigo-50/30"
+                      : "border-transparent text-slate-600 hover:text-slate-900"
+                  }`}
+                  aria-label="ڕاهێنانی کارلێککارانە"
+                >
+                  <Award className="w-4 h-4" />
+                  <span>ڕاهێنان</span>
+                </button>
+              </div>
+
+              {/* Socratic Mode Interactive Tracker Bar */}
+              {currentMode === "socratic" && (
+                <div className="bg-purple-50/90 border-b border-purple-200/70 px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs font-sans animate-in fade-in">
+                  <div className="flex items-center gap-2">
+                    <Brain className="w-4 h-4 text-purple-700 shrink-0" />
+                    <span className="font-black text-purple-900">
+                      شێوازی فێرکاری سوقراتی:
+                    </span>
+                    <span className="text-purple-700 text-[11px] hidden md:inline">
+                      مامۆستا وەڵامی ڕاستەوخۆ نادات، بە ٤ پرسیاری هاندەر دەتگەیەنێتە وەڵام.
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    {/* 4-Step Chain Indicator */}
+                    <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-lg border border-purple-200 shadow-2xs">
+                      <span className="text-[11px] font-bold text-purple-900 ml-1">
+                        قۆناغ {socraticChainCount} لە ٤:
+                      </span>
+                      {[1, 2, 3, 4].map((step) => (
+                        <span
+                          key={step}
+                          className={`w-2.5 h-2.5 rounded-full transition-all ${
+                            step <= socraticChainCount
+                              ? "bg-purple-600 ring-2 ring-purple-200 scale-110"
+                              : "bg-purple-200"
+                          }`}
+                          title={`هەنگاوی ${step} لە ٤`}
+                        />
+                      ))}
+                    </div>
+
+                    {/* Hints Used Counter */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHintsUsed((prev) => prev + 1);
+                        void handleSend("مامۆستا زانا، تکایە سەرەداوێک یان ڕێنماییەکم بدەرێ بۆ دۆزینەوەی وەڵامەکە.");
+                      }}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 font-bold text-[11px] transition cursor-pointer shadow-2xs"
+                      title="داوای سەرەداو (کاریگەری لەسەر نمرەی زیرەکی دەبێت)"
+                      aria-label="داوای سەرەداو لە شێوازی سوقراتی"
+                    >
+                      <Lightbulb className="w-3.5 h-3.5 text-amber-600" />
+                      <span>داوای سەرەداو ({hintsUsed})</span>
+                    </button>
+
+                    {/* Quick Direct Mode Toggle */}
+                    <button
+                      type="button"
+                      onClick={() => setCurrentMode("ask")}
+                      className="text-[11px] font-bold text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 px-2 py-1 rounded-lg border border-slate-200 transition cursor-pointer shadow-2xs"
+                      title="گۆڕین بۆ پرسیارکردنی ئاسایی"
+                    >
+                      گۆڕین بۆ وەڵامی ڕاستەوخۆ
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {/* ─── Feature 5: Concept Visualizer Bar (workspace mode) ──────── */}
@@ -916,17 +1148,92 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
               {/* ─── Official Curriculum Book Viewer Panel ─────────────────────── */}
               {activeAction === "book" && (
                 <div className="space-y-4">
-                  {currentSubject === "physics" ? (
-                    <Grade12PhysicsBookViewer
-                      onSelectTopicForStudy={(title, pages) => {
-                        setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
-                        setViewMode("tutor");
-                      }}
-                      onNavigateToChat={() => setViewMode("tutor")}
-                    />
-                  ) : currentSubject === "math" || currentSubject === "mathematics" ? (
-                    profile?.stream === "literary" ? (
-                      <Grade12LiteraryMathBookViewer
+                  <React.Suspense
+                    fallback={
+                      <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-slate-200">
+                        <Spinner size="lg" />
+                        <span className="font-sans text-xs text-slate-500 mt-3 font-bold">
+                          پەڕتووکی خوێندن باردەکرێت...
+                        </span>
+                      </div>
+                    }
+                  >
+                    {currentSubject === "physics" ? (
+                      <Grade12PhysicsBookViewer
+                        onSelectTopicForStudy={(title, pages) => {
+                          setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
+                          setViewMode("tutor");
+                        }}
+                        onNavigateToChat={() => setViewMode("tutor")}
+                      />
+                    ) : currentSubject === "math" || currentSubject === "mathematics" ? (
+                      profile?.stream === "literary" ? (
+                        <Grade12LiteraryMathBookViewer
+                          onSelectTopicForStudy={(title, pages) => {
+                            setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
+                            setViewMode("tutor");
+                          }}
+                          onNavigateToChat={() => setViewMode("tutor")}
+                        />
+                      ) : (
+                        <Grade12MathBookViewer
+                          onSelectTopicForStudy={(title, pages) => {
+                            setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
+                            setViewMode("tutor");
+                          }}
+                          onNavigateToChat={() => setViewMode("tutor")}
+                        />
+                      )
+                    ) : currentSubject === "kurdish" ? (
+                      <Grade12KurdishBookViewer
+                        onSelectTopicForStudy={(title, pages) => {
+                          setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
+                          setViewMode("tutor");
+                        }}
+                        onNavigateToChat={() => setViewMode("tutor")}
+                      />
+                    ) : currentSubject === "arabic" ? (
+                      <Grade12ArabicBookViewer
+                        onSelectTopicForStudy={(title, pages) => {
+                          setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
+                          setViewMode("tutor");
+                        }}
+                        onNavigateToChat={() => setViewMode("tutor")}
+                      />
+                    ) : currentSubject === "history" ? (
+                      <Grade12HistoryBookViewer
+                        onSelectTopicForStudy={(title, pages) => {
+                          setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
+                          setViewMode("tutor");
+                        }}
+                        onNavigateToChat={() => setViewMode("tutor")}
+                      />
+                    ) : currentSubject === "economy" ? (
+                      <Grade12EconomicsBookViewer
+                        onSelectTopicForStudy={(title, pages) => {
+                          setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
+                          setViewMode("tutor");
+                        }}
+                        onNavigateToChat={() => setViewMode("tutor")}
+                      />
+                    ) : currentSubject === "geography" ? (
+                      <Grade12GeographyBookViewer
+                        onSelectTopicForStudy={(title, pages) => {
+                          setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
+                          setViewMode("tutor");
+                        }}
+                        onNavigateToChat={() => setViewMode("tutor")}
+                      />
+                    ) : currentSubject === "sports" ? (
+                      <Grade12SportsBookViewer
+                        onSelectTopicForStudy={(title, pages) => {
+                          setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
+                          setViewMode("tutor");
+                        }}
+                        onNavigateToChat={() => setViewMode("tutor")}
+                      />
+                    ) : currentSubject === "english" ? (
+                      <Grade12EnglishBookViewer
                         onSelectTopicForStudy={(title, pages) => {
                           setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
                           setViewMode("tutor");
@@ -934,79 +1241,15 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                         onNavigateToChat={() => setViewMode("tutor")}
                       />
                     ) : (
-                      <Grade12MathBookViewer
+                      <Grade12ChemistryBookViewer
                         onSelectTopicForStudy={(title, pages) => {
                           setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
                           setViewMode("tutor");
                         }}
                         onNavigateToChat={() => setViewMode("tutor")}
                       />
-                    )
-                  ) : currentSubject === "kurdish" ? (
-                    <Grade12KurdishBookViewer
-                      onSelectTopicForStudy={(title, pages) => {
-                        setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
-                        setViewMode("tutor");
-                      }}
-                      onNavigateToChat={() => setViewMode("tutor")}
-                    />
-                  ) : currentSubject === "arabic" ? (
-                    <Grade12ArabicBookViewer
-                      onSelectTopicForStudy={(title, pages) => {
-                        setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
-                        setViewMode("tutor");
-                      }}
-                      onNavigateToChat={() => setViewMode("tutor")}
-                    />
-                  ) : currentSubject === "history" ? (
-                    <Grade12HistoryBookViewer
-                      onSelectTopicForStudy={(title, pages) => {
-                        setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
-                        setViewMode("tutor");
-                      }}
-                      onNavigateToChat={() => setViewMode("tutor")}
-                    />
-                  ) : currentSubject === "economy" ? (
-                    <Grade12EconomicsBookViewer
-                      onSelectTopicForStudy={(title, pages) => {
-                        setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
-                        setViewMode("tutor");
-                      }}
-                      onNavigateToChat={() => setViewMode("tutor")}
-                    />
-                  ) : currentSubject === "geography" ? (
-                    <Grade12GeographyBookViewer
-                      onSelectTopicForStudy={(title, pages) => {
-                        setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
-                        setViewMode("tutor");
-                      }}
-                      onNavigateToChat={() => setViewMode("tutor")}
-                    />
-                  ) : currentSubject === "sports" ? (
-                    <Grade12SportsBookViewer
-                      onSelectTopicForStudy={(title, pages) => {
-                        setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
-                        setViewMode("tutor");
-                      }}
-                      onNavigateToChat={() => setViewMode("tutor")}
-                    />
-                  ) : currentSubject === "english" ? (
-                    <Grade12EnglishBookViewer
-                      onSelectTopicForStudy={(title, pages) => {
-                        setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
-                        setViewMode("tutor");
-                      }}
-                      onNavigateToChat={() => setViewMode("tutor")}
-                    />
-                  ) : (
-                    <Grade12ChemistryBookViewer
-                      onSelectTopicForStudy={(title, pages) => {
-                        setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
-                        setViewMode("tutor");
-                      }}
-                      onNavigateToChat={() => setViewMode("tutor")}
-                    />
-                  )}
+                    )}
+                  </React.Suspense>
                 </div>
               )}
 
@@ -1215,22 +1458,67 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
               ════════════════════════════════════════════════════════════════ */}
           {viewMode === "tutor" && (
             <>
-              {/* MODE 1: Socratic Ask (Chat) */}
-              {currentMode === "ask" && (
+              {/* MODE 1 & 2: Socratic / Direct Ask (Chat) */}
+              {(currentMode === "ask" || currentMode === "socratic") && (
                 <>
+                  {/* Session Memory Context Banner */}
+                  {sessionConcepts.length > 0 && (
+                    <div className="bg-slate-100/70 border border-slate-200/80 rounded-xl px-3.5 py-1.5 flex items-center justify-between text-[11px] text-slate-600 font-sans">
+                      <div className="flex items-center gap-1.5 truncate">
+                        <Sparkles className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                        <span className="font-bold text-slate-700">تێڕوانینی دانیشتن:</span>
+                        <span className="truncate">{sessionConcepts.slice(-3).join(" • ")}</span>
+                      </div>
+                      <span className="text-[10px] text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full shrink-0 font-bold">
+                        پاشەکەوتکراو
+                      </span>
+                    </div>
+                  )}
+
                   {chatMessages.length === 0 && (
                     <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3">
                       <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
                         <Sparkles className="w-7 h-7" />
                       </div>
                       <p className="font-sans text-sm text-slate-600 max-w-sm leading-relaxed">
-                        سڵاو! من مامۆستا زانام. پرسیارێکت لەسەر {activeChapter?.title || "ئەم بەندە"} بپرسە، یاخود وێنەی پرسیارەکەت بگرە تاوەکو پێکەوە شیبکەینەوە.
+                        سڵاو! من مامۆستا زانام. پرسیارێکت لەسەر {activeChapter?.title || "ئەم بەندە"} بپرسە، یاخود شێوازی سوقراتی تاقی بکەرەوە تا پێکەوە شیبکەینەوە.
                       </p>
                     </div>
                   )}
 
-                  {chatMessages.map((msg) => (
-                    <ChatBubble key={msg.id} message={msg} />
+                  {/* Message Virtualization: Show button to expand older messages */}
+                  {chatMessages.length > 30 && !showAllMessages && (
+                    <div className="flex justify-center my-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setShowAllMessages(true)}
+                        className="text-xs font-sans font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3.5 py-1 rounded-full transition shadow-2xs cursor-pointer flex items-center gap-1"
+                        aria-label="بینینی پەیامە کۆنەکان"
+                      >
+                        <ChevronDown className="w-3.5 h-3.5 rotate-180" />
+                        <span>بینینی پەیامە کۆنەکان ({chatMessages.length - 30} پەیام)</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {displayedMessages.map((msg) => (
+                    <ChatBubble
+                      key={msg.id}
+                      message={msg}
+                      isLatestAi={msg.id === latestAiMessageId}
+                      suggestions={msg.id === latestAiMessageId ? smartSuggestions : []}
+                      onSelectSuggestion={(sug) => {
+                        void handleSend(sug);
+                      }}
+                      onOpenVirtualLab={() => {
+                        window.location.href = "/labs";
+                      }}
+                      socraticStep={
+                        currentMode === "socratic" && msg.sender === "zana"
+                          ? Math.max(1, socraticChainCount)
+                          : undefined
+                      }
+                    />
                   ))}
 
                   {isLoading && (
@@ -1487,8 +1775,8 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
           )}
         </div>
 
-        {/* 6. Sticky Chat Input Area (Shown in Ask mode or when user wants to query) */}
-        {viewMode === "tutor" && currentMode === "ask" && (
+        {/* 6. Sticky Chat Input Area (Shown in Ask and Socratic modes) */}
+        {viewMode === "tutor" && (currentMode === "ask" || currentMode === "socratic") && (
           <div className="p-3 sm:p-4 bg-white border-t border-slate-200 shadow-2xs">
             {/* ─── Feature 6: Quick Prompt Chips ──────────────────────── */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-2 no-scrollbar">
@@ -1607,6 +1895,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
 
               <div className="flex-1 relative">
                 <textarea
+                  ref={textareaRef}
                   value={inputContent}
                   onChange={(e) => setInputContent(e.target.value)}
                   onKeyDown={handleKeyDown}
@@ -1616,10 +1905,13 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                       ? "تاقیکردنەوەی ٣ ڕۆژەکەت بەسەرچوو. تکایە بەشداری بکە..."
                       : isListening
                       ? "دەنگت تۆمار دەکرێت..."
-                      : "پرسیارت لەسەر ئەم بەندە بپرسە (سوقراتی)..."
+                      : currentMode === "socratic"
+                      ? "وەڵام یان تێڕوانینی خۆت بنووسە بۆ مامۆستا زانا (سوقراتی)..."
+                      : "پرسیارت لەسەر ئەم بەندە بپرسە..."
                   }
                   className="w-full resize-none rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-sans text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-all max-h-32 leading-relaxed"
                   disabled={isLoading || isTrialExpired}
+                  aria-label="دەقی پرسیار یان وەڵام"
                 />
               </div>
 
