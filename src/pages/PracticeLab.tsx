@@ -21,6 +21,7 @@ import {
 import { useSoundEffects } from "../hooks/useSoundEffects.ts";
 import { useStudentProfile } from "../features/student/useStudentProfile.ts";
 import { useAppStore } from "../store/appStore.ts";
+import { useTranslation } from "../hooks/useTranslation.ts";
 import { useStudentMastery } from "../learning/hooks/useStudentMastery.ts";
 import { PracticeStorage } from "../features/practice/practiceStorage.ts";
 import {
@@ -789,6 +790,7 @@ export function PracticeLab({
   onNavigateToPedagogy,
   onNavigateToSubjects: _onNavigateToSubjects,
 }: PracticeLabProps = {}) {
+  const { t: _t } = useTranslation();
   const { playSuccess, playError } = useSoundEffects();
   const { profile } = useStudentProfile();
   const user = useAppStore((state) => state.user);

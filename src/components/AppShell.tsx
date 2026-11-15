@@ -7,6 +7,7 @@ import { Toast } from "./Toast.tsx";
 import { useAppStore } from "../store/appStore.ts";
 import { NotificationCenter } from "./notifications/NotificationCenter.tsx";
 import { notificationService } from "../services/notificationService.ts";
+import { useTranslation } from "../hooks/useTranslation.ts";
 
 export interface AppShellProps {
   children: ReactNode;
@@ -33,6 +34,7 @@ export function AppShell({
   onNavigateToRegister: _onNavigateToRegister,
   onLogout,
 }: AppShellProps) {
+  const { t } = useTranslation();
   const user = useAppStore((state) => state.user);
   const notifications = useAppStore((state) => state.notifications);
   const removeNotification = useAppStore((state) => state.removeNotification);
@@ -146,7 +148,7 @@ export function AppShell({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 mb-2">
-              <span className="font-sans font-bold text-base text-slate-900 dark:text-white">مینیوی سەرەکی</span>
+              <span className="font-sans font-bold text-base text-slate-900 dark:text-white">{t("common.appName")}</span>
               <button
                 onClick={() => setMobileMenuOpen(false)}
                 className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-lg cursor-pointer"

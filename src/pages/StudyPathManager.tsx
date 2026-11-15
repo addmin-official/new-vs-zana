@@ -20,6 +20,7 @@ import {
   GitBranch,
 } from "lucide-react";
 import { useAppStore } from "../store/appStore.ts";
+import { useTranslation } from "../hooks/useTranslation.ts";
 import {
   getEvaluatedKnowledgeGraph,
   generateIntelligentWeeklyPlan,
@@ -103,6 +104,7 @@ export function StudyPathManager({
   onNavigateToLabs,
   onNavigateToAssessment,
 }: StudyPathManagerProps = {}) {
+  const { t: _t } = useTranslation();
   const [activeTab, setActiveTab] = useState<"today" | "weekly" | "graph" | "forecast" | "goals">("today");
   const [weeklyGoalHours, setWeeklyGoalHours] = useState<number>(() => {
     if (typeof window !== "undefined") {

@@ -17,6 +17,7 @@ import {
   Cpu,
 } from "lucide-react";
 import { useAppStore, UserRole } from "../store/appStore.ts";
+import { useTranslation } from "../hooks/useTranslation.ts";
 
 export type NavItemKey =
   | "home"
@@ -78,6 +79,7 @@ export const Sidebar = React.memo(function Sidebar({
   onNavigateToLogin,
   onLogout,
 }: SidebarProps) {
+  const { t } = useTranslation();
   const userRole = useAppStore((state) => state.userRole);
   const setUserRole = useAppStore((state) => state.setUserRole);
 
@@ -147,7 +149,7 @@ export const Sidebar = React.memo(function Sidebar({
               <span className={isActive ? "text-indigo-600 dark:text-indigo-400" : "text-slate-500 dark:text-slate-400"}>
                 {item.icon}
               </span>
-              <span className="font-sans text-xs">{item.label}</span>
+              <span className="font-sans text-xs">{t(`navigation.${item.key}`) || item.label}</span>
             </button>
           );
         })}

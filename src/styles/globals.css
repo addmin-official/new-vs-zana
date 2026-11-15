@@ -1,10 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@400;500;600;700&family=Vazirmatn:wght@300;400;500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;600;700&family=Noto+Kufi+Arabic:wght@400;500;600;700&family=Vazirmatn:wght@300;400;500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --font-sans: "Noto Kufi Arabic", "Vazirmatn", "Segoe UI", system-ui, sans-serif;
+  --font-sans: "Noto Sans Arabic", "Noto Kufi Arabic", "Vazirmatn", "Segoe UI", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   
   --color-bg: #F8FAFC;
@@ -28,8 +28,10 @@
     padding: 0;
     background-color: #F8FAFC;
     color: #0F172A;
-    font-family: "Noto Kufi Arabic", "Vazirmatn", "Segoe UI", system-ui, sans-serif;
+    font-family: var(--font-primary, "Noto Sans Arabic", "Noto Kufi Arabic", "Vazirmatn", "Segoe UI", system-ui, sans-serif);
     font-variant-numeric: tabular-nums lining-nums;
+    line-height: var(--line-height-base, 1.8);
+    letter-spacing: var(--letter-spacing, 0.01em);
     direction: rtl;
     -webkit-tap-highlight-color: transparent;
     -webkit-overflow-scrolling: touch;
@@ -51,3 +53,18 @@
   }
 }
 
+/* Kurdish typography scales (10% larger baseline + 1.8 line height) */
+.text-ckb-sm {
+  font-size: 0.95rem;
+  line-height: 1.8;
+}
+
+.text-ckb-base {
+  font-size: 1.1rem;
+  line-height: 1.8;
+}
+
+.text-ckb-lg {
+  font-size: 1.25rem;
+  line-height: 1.8;
+}

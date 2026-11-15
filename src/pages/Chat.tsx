@@ -32,6 +32,7 @@ import { Modal } from "../components/Modal.tsx";
 import { SubscriptionModal } from "../components/SubscriptionModal.tsx";
 import { useAppStore } from "../store/appStore.ts";
 import { useSoundEffects } from "../hooks/useSoundEffects.ts";
+import { useTranslation } from "../hooks/useTranslation.ts";
 import { ku } from "../i18n/translations.ts";
 import { getFirestoreDb } from "../services/firebase.ts";
 import { doc, getDoc, setDoc } from "firebase/firestore";
@@ -171,6 +172,7 @@ export interface ChatProps {
 }
 
 export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatProps = {}) {
+  const { t: _t } = useTranslation();
   const chapters = useAppStore((state) => state.chapters);
   const activeChapterId = useAppStore((state) => state.activeChapter);
   const setActiveChapter = useAppStore((state) => state.setActiveChapter);

@@ -8,6 +8,7 @@ import {
   Users,
 } from "lucide-react";
 import { useAppStore } from "../store/appStore.ts";
+import { useTranslation } from "../hooks/useTranslation.ts";
 import {
   LabReportTemplate,
   PartnerSessionState,
@@ -59,6 +60,7 @@ const LabLoadingSkeleton = () => (
 );
 
 export function VirtualScienceLab() {
+  const { t: _t } = useTranslation();
   const user = useAppStore((state) => state.user);
   const rawSubj = (user.activeSubject || "chemistry").toLowerCase();
   const studentGrade = user.grade || "12";
