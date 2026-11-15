@@ -35,6 +35,7 @@ export const PedagogicalHubScreen: React.FC<PedagogicalHubScreenProps> = ({
   onNavigateToPractice
 }) => {
   const [activeTab, setActiveTab] = useState<PedagogyPillarTab>(initialTab);
+  const [selectedGrade, setSelectedGrade] = useState<'all' | '9' | '10' | '11' | '12'>('12');
 
   const pillars = [
     {
@@ -96,6 +97,31 @@ export const PedagogicalHubScreen: React.FC<PedagogicalHubScreenProps> = ({
             <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
               لە دیدگای پڕۆفیسۆرێکی پێداگۆجی و ئەندازیاریی فێربوون: لێرەدا چەمکە تیۆرییەکان دەگۆڕدرێن بۆ لێهاتوویی چەسپاو لە ڕێگەی فێرکردنی ساویلکە، دیبەیتی سۆکراتی، ماتریکسی لایتنەر و هاوشێوەکاری دەروونی وەزاری.
             </p>
+
+            {/* Grade selector pills */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-2">
+              <span className="text-[11px] text-slate-400 font-bold ml-1">پۆلی خوێندن:</span>
+              {[
+                { id: "all", label: "گشت پۆلەکان (٩-١٢)" },
+                { id: "9", label: "پۆلی ٩" },
+                { id: "10", label: "پۆلی ١٠" },
+                { id: "11", label: "پۆلی ١١" },
+                { id: "12", label: "پۆلی ١٢" },
+              ].map((g) => (
+                <button
+                  key={g.id}
+                  type="button"
+                  onClick={() => setSelectedGrade(g.id as typeof selectedGrade)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    selectedGrade === g.id
+                      ? "bg-amber-400 text-slate-950 font-black shadow-xs"
+                      : "bg-white/10 hover:bg-white/20 text-slate-200"
+                  }`}
+                >
+                  {g.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">

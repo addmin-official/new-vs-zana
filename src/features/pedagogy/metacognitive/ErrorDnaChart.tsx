@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { Brain, Sparkles } from "lucide-react";
+import { Brain, Sparkles, Plus } from "lucide-react";
 import { MetacognitiveDiagnosisEngine } from "./MetacognitiveDiagnosisEngine.ts";
 import { ErrorDnaProfile } from "./metacognitiveTypes.ts";
+import { MetacognitivePostMortemModal } from "./MetacognitivePostMortemModal.tsx";
 
 export function ErrorDnaChart() {
   const [profile, setProfile] = useState<ErrorDnaProfile | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     setProfile(MetacognitiveDiagnosisEngine.getProfile());
@@ -36,11 +38,21 @@ export function ErrorDnaChart() {
           </div>
         </div>
 
-        {profile.dominantErrorType && (
-          <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900">
-            هۆکاری سەرەکی: {profile.dominantErrorPercent}%
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {profile.dominantErrorType && (
+            <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900">
+              هۆکاری سەرەکی: {profile.dominantErrorPercent}%
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-xs transition cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>دەستنیشانکردنی هەڵە</span>
+          </button>
+        </div>
       </div>
 
       {/* 4 Error Types Horizontal Bar Chart */}
@@ -110,6 +122,19 @@ export function ErrorDnaChart() {
         </span>
         <p className="leading-relaxed text-[11px]">{profile.metaAdviceSummaryKu}</p>
       </div>
+
+      {/* Interactive 4-Quadrant Error Diagnosis Modal */}
+      <MetacognitivePostMortemModal
+        isOpen={isModalOpen}
+        problemId={"prob-" + Date.now()}
+        problemTitle={"شیکارکردنی پرسیاری هەڵە"}
+        subject={"کیمیا / فیزیا / بیرکاری"}
+        onComplete={() => {
+          setIsModalOpen(false);
+          setProfile(MetacognitiveDiagnosisEngine.getProfile());
+        }}
+        onClose={() => setIsModalOpen(false)}
+      />
     </div>
   );
 }

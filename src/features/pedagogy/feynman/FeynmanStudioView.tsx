@@ -6,7 +6,9 @@ import {
   Lightbulb,
   AlertTriangle,
   UserCheck,
-  GraduationCap
+  GraduationCap,
+  Mic,
+  MicOff,
 } from "lucide-react";
 import {
   FeynmanDialogueMessage,
@@ -14,6 +16,7 @@ import {
 } from "./feynmanTypes.ts";
 import { FEYNMAN_CONCEPTS_CATALOG, FeynmanEngine } from "./FeynmanEngine.ts";
 import { useSoundEffects } from "../../../hooks/useSoundEffects.ts";
+import { useSpeechToText } from "../../../hooks/useSpeechToText.ts";
 
 export interface FeynmanStudioViewProps {
   onAwardXp?: (amount: number) => void;
@@ -39,6 +42,18 @@ export function FeynmanStudioView({ onAwardXp, onClose, embedded = false }: Feyn
 
   const [clarityResult, setClarityResult] = useState<ConceptualClarityScore | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const {
+    isListening,
+    startListening,
+    stopListening,
+    isSupported: isSpeechSupported,
+    error: speechError,
+  } = useSpeechToText({
+    onResult: (text) => {
+      setInputExplanation(text);
+    },
+  });
 
   const handleSelectConcept = (index: number) => {
     setSelectedConceptIndex(index);
@@ -288,6 +303,29 @@ export function FeynmanStudioView({ onAwardXp, onClose, embedded = false }: Feyn
             </div>
           )}
 
+          {/* Voice status indicator */}
+          {isListening && (
+            <div className="px-3 py-1.5 bg-rose-50 dark:bg-rose-950/60 border-t border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs font-bold flex items-center justify-between animate-in fade-in">
+              <span className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+                <span>مایکرۆفۆن چالاکە: بە دەنگ یاساکە ڕوونبکەرەوە، زانا ڕاستەوخۆ دەیکاتە دەق...</span>
+              </span>
+              <button
+                type="button"
+                onClick={stopListening}
+                className="text-[11px] underline text-rose-800 dark:text-rose-200 font-normal cursor-pointer"
+              >
+                تەواوکردن
+              </button>
+            </div>
+          )}
+
+          {speechError && (
+            <div className="px-3 py-1 bg-amber-50 text-amber-800 text-[11px] border-t border-amber-200">
+              {speechError}
+            </div>
+          )}
+
           {/* Input Area */}
           <div className="p-3 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center gap-2">
             <textarea
@@ -297,14 +335,35 @@ export function FeynmanStudioView({ onAwardXp, onClose, embedded = false }: Feyn
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
+                  if (isListening) stopListening();
                   handleSendExplanation();
                 }
               }}
               placeholder="بە زمانی سادەی خۆت یاساکەی بۆ ڕوونبکەرەوە (وەک ئەوەی بۆ کەسێکی نائاشنا قسە بکەیت)..."
               className="flex-1 resize-none rounded-xl border border-slate-200 dark:border-slate-800 p-2.5 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-600 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans"
             />
+
+            {/* Voice Input Button */}
+            {isSpeechSupported && (
+              <button
+                type="button"
+                onClick={isListening ? stopListening : startListening}
+                title={isListening ? "ڕاگرتنی تۆمارکردنی دەنگ" : "شیکردنەوە بە دەنگ (Voice Recording)"}
+                className={`h-11 w-11 shrink-0 rounded-xl border flex items-center justify-center transition cursor-pointer ${
+                  isListening
+                    ? "bg-rose-500 hover:bg-rose-600 text-white border-rose-600 shadow-md animate-pulse"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700"
+                }`}
+              >
+                {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              </button>
+            )}
+
             <button
-              onClick={handleSendExplanation}
+              onClick={() => {
+                if (isListening) stopListening();
+                handleSendExplanation();
+              }}
               disabled={!inputExplanation.trim() || isSubmitting}
               className="h-11 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl font-bold text-xs cursor-pointer flex items-center gap-1.5 transition-colors shadow-xs"
             >

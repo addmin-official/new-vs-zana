@@ -20,7 +20,10 @@ firebase-applet-config.json
 bun.lock
 scripts/service-account.json
 
-# Backups
+# Backups and archives
 *.backup
 *.backup-*
 .backup-*/
+*.zip
+.vscode/
+.antigravity/
