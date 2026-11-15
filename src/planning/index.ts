@@ -8,3 +8,4 @@ export * from "./engine/ReviewScheduler.ts";
 export * from "./engine/PlanRebalancer.ts";
 export * from "./providers/LearningPlanProvider.ts";
 export * from "./services/LearningPlanService.ts";
+export * from "./planning.ts";
