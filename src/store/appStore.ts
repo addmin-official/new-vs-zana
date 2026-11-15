@@ -32,8 +32,11 @@ export interface ToastItem {
   duration?: number;
 }
 
+export type UserRole = "student" | "teacher" | "parent" | "admin";
+
 export interface AppState {
   user: UserProfile;
+  userRole: UserRole;
   chapters: ChapterOutlineItem[];
   activeChapter: number | null;
   chatMessages: ChatMessage[];
@@ -48,6 +51,7 @@ export interface AppState {
 
   // Actions
   setUser: (user: UserProfile) => void;
+  setUserRole: (role: UserRole) => void;
   fetchChapters: (subjectOverride?: string) => Promise<void>;
   setActiveSubject: (subject: string) => void;
   setActiveChapter: (id: number | null) => void;
@@ -150,6 +154,10 @@ const initialMsgs = loadLessonChatMessages(initialSubj, initialCh);
 
 let currentState: AppState = {
   user: stored.user || DEFAULT_USER,
+  userRole:
+    (typeof window !== "undefined" &&
+      (localStorage.getItem("zana_user_role") as UserRole)) ||
+    "admin",
   chapters: FALLBACK_CHEMISTRY_CHAPTERS,
   activeChapter: initialCh,
   chatMessages: initialMsgs,
@@ -164,6 +172,15 @@ let currentState: AppState = {
 
   setUser: (user) => {
     setState({ user });
+  },
+
+  setUserRole: (role: UserRole) => {
+    setState({ userRole: role });
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("zana_user_role", role);
+      } catch {}
+    }
   },
 
   fetchChapters: async (subjectOverride?: string) => {

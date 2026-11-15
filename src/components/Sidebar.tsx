@@ -13,7 +13,11 @@ import {
   GraduationCap,
   LogIn,
   LogOut,
+  Heart,
+  Cpu,
+  ShieldAlert,
 } from "lucide-react";
+import { useAppStore, UserRole } from "../store/appStore.ts";
 
 export type NavItemKey =
   | "home"
@@ -27,13 +31,17 @@ export type NavItemKey =
   | "rooms"
   | "report"
   | "profile"
-  | "settings";
+  | "settings"
+  | "teacher"
+  | "parent"
+  | "admin";
 
 export interface NavItem {
   key: NavItemKey;
   label: string;
   icon: React.ReactNode;
   path: string;
+  roles?: UserRole[];
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -46,6 +54,9 @@ export const NAV_ITEMS: NavItem[] = [
   { key: "plan", label: "پلانی فێربوون", icon: <Compass className="w-5 h-5 shrink-0 text-indigo-500" />, path: "/plan" },
   { key: "rooms", label: "ژوورەکانی خوێندن", icon: <Users className="w-5 h-5 shrink-0 text-blue-500" />, path: "/rooms" },
   { key: "report", label: "ڕاپۆرتی سەرپەرشتیار", icon: <FileText className="w-5 h-5 shrink-0 text-teal-600" />, path: "/report" },
+  { key: "teacher", label: "داشبۆردی مامۆستا", icon: <GraduationCap className="w-5 h-5 shrink-0 text-amber-600" />, path: "/teacher", roles: ["admin", "teacher"] },
+  { key: "parent", label: "دەروازەی سەرپەرشتیار", icon: <Heart className="w-5 h-5 shrink-0 text-rose-500" />, path: "/parent", roles: ["admin", "parent"] },
+  { key: "admin", label: "بەڕێوەبەرایەتی سیستم", icon: <Cpu className="w-5 h-5 shrink-0 text-indigo-600" />, path: "/admin", roles: ["admin"] },
   { key: "profile", label: "پڕۆفایل و ڕێکخستنەکان", icon: <User className="w-5 h-5 shrink-0" />, path: "/profile" },
 ];
 
@@ -66,38 +77,57 @@ export function Sidebar({
   onNavigateToLogin,
   onLogout,
 }: SidebarProps) {
+  const userRole = useAppStore((state) => state.userRole);
+  const setUserRole = useAppStore((state) => state.setUserRole);
+
+  // Filter visible items based on user role
+  const visibleNavItems = NAV_ITEMS.filter((item) => {
+    if (userRole === "admin") return true; // Admin has full access to all dashboards
+    if (userRole === "parent") {
+      return ["parent", "report", "profile"].includes(item.key);
+    }
+    if (userRole === "teacher") {
+      return ["teacher", "subjects", "practice", "labs", "chat", "pedagogy", "profile"].includes(item.key);
+    }
+    // Default student role
+    if (item.roles && !item.roles.includes("student")) return false;
+    return true;
+  });
+
   return (
     <aside
       className={`w-[280px] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 hidden lg:flex flex-col h-full p-4 shrink-0 shadow-2xs overflow-y-auto ${className}`}
       dir="rtl"
     >
-      {/* Featured Pedagogical Excellence Hub Button */}
-      <div className="mb-3">
-        <button
-          onClick={() => onNavigate("pedagogy")}
-          className={`w-full p-3 rounded-2xl border transition-all cursor-pointer text-right flex items-center justify-between ${
-            activeTab === "pedagogy"
-              ? "bg-gradient-to-r from-amber-500/20 to-indigo-500/20 border-amber-500/60 text-amber-900 dark:text-amber-200 shadow-xs"
-              : "bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200"
-          }`}
-        >
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
-              <GraduationCap className="w-4 h-4" />
+      {/* Featured Pedagogical Excellence Hub Button (Only if allowed for role) */}
+      {(userRole === "admin" || userRole === "student" || userRole === "teacher") && (
+        <div className="mb-3">
+          <button
+            onClick={() => onNavigate("pedagogy")}
+            className={`w-full p-3 rounded-2xl border transition-all cursor-pointer text-right flex items-center justify-between ${
+              activeTab === "pedagogy"
+                ? "bg-gradient-to-r from-amber-500/20 to-indigo-500/20 border-amber-500/60 text-amber-900 dark:text-amber-200 shadow-xs"
+                : "bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200"
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
+                <GraduationCap className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="text-xs font-black block leading-tight">تاقیگەی پێداگۆجی</span>
+                <span className="text-[10px] text-slate-400 block mt-0.5">٥ پایەی فێربوونی قووڵ</span>
+              </div>
             </div>
-            <div>
-              <span className="text-xs font-black block leading-tight">تاقیگەی پێداگۆجی</span>
-              <span className="text-[10px] text-slate-400 block mt-0.5">٥ پایەی فێربوونی قووڵ</span>
-            </div>
-          </div>
-          <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300">
-            نوێ
-          </span>
-        </button>
-      </div>
+            <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300">
+              نوێ
+            </span>
+          </button>
+        </div>
+      )}
 
       <div className="space-y-1 flex-1">
-        {NAV_ITEMS.map((item) => {
+        {visibleNavItems.map((item) => {
           const isActive =
             activeTab === item.key ||
             (activeTab === "settings" && item.key === "profile");
@@ -120,8 +150,43 @@ export function Sidebar({
         })}
       </div>
 
+      {/* Role Switcher in Sidebar Footer */}
+      <div className="pt-2 pb-2 border-t border-slate-100 dark:border-slate-800">
+        <span className="text-[10px] font-bold text-slate-400 font-sans block mb-1.5">
+          شێوازی بینین (دەسەڵات):
+        </span>
+        <div className="grid grid-cols-2 gap-1 bg-slate-50 dark:bg-slate-800/80 p-1 rounded-xl">
+          {[
+            { id: "student", label: "قوتابی" },
+            { id: "teacher", label: "مامۆستا" },
+            { id: "parent", label: "سەرپەرشتیار" },
+            { id: "admin", label: "بەڕێوەبەر" },
+          ].map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => {
+                const role = r.id as UserRole;
+                setUserRole(role);
+                if (role === "teacher") onNavigate("teacher");
+                else if (role === "parent") onNavigate("parent");
+                else if (role === "admin") onNavigate("admin");
+                else onNavigate("home");
+              }}
+              className={`py-1 px-1.5 rounded-lg text-[10px] font-bold transition cursor-pointer text-center ${
+                userRole === r.id
+                  ? "bg-indigo-600 text-white shadow-2xs"
+                  : "text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+              }`}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Auth Action Button */}
-      <div className="pt-3 pb-1 border-t border-slate-100 dark:border-slate-800">
+      <div className="pt-2 pb-1 border-t border-slate-100 dark:border-slate-800">
         {!isPermanentUser ? (
           <button
             type="button"
@@ -144,9 +209,9 @@ export function Sidebar({
       </div>
 
       {/* Footer Branding in Sidebar */}
-      <div className="pt-3 border-t border-slate-100 dark:border-slate-800 text-center">
+      <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-center">
         <p className="font-sans font-bold text-xs text-slate-800 dark:text-slate-200">پلاتفۆرمی زانا 🎓</p>
-        <p className="font-sans text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">پڕۆگرامی فەرمی پۆلەکانی ٩ تا ١٢</p>
+        <p className="font-sans text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">پڕۆگرامی فەرمی پۆلەکانی ٩ تا ١٢</p>
       </div>
     </aside>
   );
