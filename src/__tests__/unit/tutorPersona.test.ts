@@ -76,10 +76,11 @@ describe("ZANA Tutor Persona & Prompt Templates", () => {
       });
 
       expect(prompt).toContain("پێوەری pH");
-      expect(prompt).toContain("سۆزان");
-      expect(prompt).toContain("سەرنجڕاکێشان بە نموونەی ژیانی ڕۆژانە");
-      expect(prompt).toContain("شیکاری هەنگاو بە هەنگاو");
-      expect(prompt).toContain("هەڵە باوەکان لە تاقیکردنەوەی وەزاری");
+      expect(prompt).toContain("[IDENTITY]");
+      expect(prompt).toContain("[CONTEXT]");
+      expect(prompt).toContain("[STUDENT STATE]");
+      expect(prompt).toContain("[TEACHING RULES]");
+      expect(prompt).toContain("[OUTPUT FORMAT — JSON ONLY]");
     });
 
     it("builds Socratic hint prompts for all 4 scaffolding tiers", () => {

@@ -1,7 +1,7 @@
 /**
  * ZANA Response Parser & Multimodal Detector
- * Parses raw LLM text into semantic educational blocks:
- * EXPLANATION | STEP_BY_STEP | FORMULA | DIAGRAM_DESCRIPTION | EXAMPLE | SOCRATIC_QUESTION | PRACTICE_QUESTION
+ * Parses raw LLM text into semantic educational blocks, parses JSON schemas from Gemini,
+ * and provides type guards for Tutor, Assessment, and QuestionBank payloads.
  */
 
 import { detectForbiddenPhrases } from "./tutorPersona.ts";
@@ -63,6 +63,45 @@ export interface ParsedEducationalResponse {
   };
 }
 
+/**
+ * Structured Schema Definitions for Gemini JSON responses
+ */
+export interface TutorResponse {
+  responseType: "EXPLANATION" | "STEP_BY_STEP" | "FORMULA" | "EXAMPLE";
+  content: string;
+  followUpQuestions: string[];
+  hintsUsed: number;
+  conceptsReferenced: string[];
+  encouragement: string | null;
+}
+
+export interface AssessmentResponse {
+  isCorrect: boolean;
+  partialCredit: number;
+  misconceptionDetected: string | null;
+  misconceptionType: "conceptual" | "procedural" | "factual" | null;
+  positiveElement: string;
+  redirectionHint: string;
+  bloomsAchieved: "RECALL" | "COMPREHENSION" | "APPLICATION" | "ANALYSIS" | string;
+}
+
+export interface GeneratedQuestionItem {
+  id: string;
+  text: string;
+  type: "MULTIPLE_CHOICE" | "SHORT_ANSWER" | "TRUE_FALSE" | string;
+  options: string[] | null;
+  correctAnswer: string;
+  explanation: string;
+  bloomsLevel: string;
+  difficulty: number;
+  targetMisconception: string | null;
+  estimatedTimeSeconds: number;
+}
+
+export interface QuestionBank {
+  questions: GeneratedQuestionItem[];
+}
+
 const SUPERSCRIPT_MAP: Record<string, string> = {
   "0": "⁰",
   "1": "¹",
@@ -81,7 +120,105 @@ const SUPERSCRIPT_MAP: Record<string, string> = {
 
 export class ResponseParser {
   /**
-   * Primary entry point: parses raw response text into structured blocks.
+   * Sanitizes a response string by stripping extraneous markdown code blocks, backticks, and extra whitespace.
+   */
+  public static sanitizeResponse(raw: string): string {
+    if (!raw) return "";
+    return raw
+      .replace(/^```(?:json|markdown)?\s*/i, "")
+      .replace(/\s*```$/i, "")
+      .replace(/[\u200B-\u200D\uFEFF]/g, "") // remove zero-width spaces
+      .trim();
+  }
+
+  /**
+   * Type Guard: Validates TutorResponse
+   */
+  public static isTutorResponse(obj: unknown): obj is TutorResponse {
+    if (!obj || typeof obj !== "object") return false;
+    const r = obj as Record<string, unknown>;
+    return (
+      typeof r.content === "string" &&
+      Array.isArray(r.followUpQuestions) &&
+      typeof r.hintsUsed === "number" &&
+      Array.isArray(r.conceptsReferenced) &&
+      (typeof r.encouragement === "string" || r.encouragement === null)
+    );
+  }
+
+  /**
+   * Type Guard: Validates AssessmentResponse
+   */
+  public static isAssessmentResponse(obj: unknown): obj is AssessmentResponse {
+    if (!obj || typeof obj !== "object") return false;
+    const a = obj as Record<string, unknown>;
+    return (
+      typeof a.isCorrect === "boolean" &&
+      typeof a.partialCredit === "number" &&
+      (typeof a.misconceptionDetected === "string" || a.misconceptionDetected === null) &&
+      typeof a.positiveElement === "string" &&
+      typeof a.redirectionHint === "string" &&
+      typeof a.bloomsAchieved === "string"
+    );
+  }
+
+  /**
+   * Type Guard: Validates QuestionBank
+   */
+  public static isQuestionBank(obj: unknown): obj is QuestionBank {
+    if (!obj || typeof obj !== "object") return false;
+    const qb = obj as Record<string, unknown>;
+    if (!Array.isArray(qb.questions)) return false;
+    return qb.questions.every(
+      (q) =>
+        q &&
+        typeof q === "object" &&
+        typeof q.id === "string" &&
+        typeof q.text === "string" &&
+        typeof q.correctAnswer === "string"
+    );
+  }
+
+  /**
+   * Safely parses JSON response from Gemini with fallback to plain text content.
+   */
+  public static parseJsonSafe<T>(
+    rawText: string,
+    validator?: (obj: unknown) => obj is T
+  ): { data: T | null; fallbackText: string; isJson: boolean } {
+    const sanitized = this.sanitizeResponse(rawText);
+
+    try {
+      const parsed = JSON.parse(sanitized);
+      if (validator) {
+        if (validator(parsed)) {
+          return { data: parsed, fallbackText: "", isJson: true };
+        } else {
+          this.logDevWarning("JSON structure failed validator contract", parsed);
+        }
+      } else {
+        return { data: parsed as T, fallbackText: "", isJson: true };
+      }
+    } catch {
+      // Fallback: extract content as plain text if JSON parse fails
+      this.logDevWarning("Failed to parse Gemini output as JSON, falling back to plain text", rawText);
+    }
+
+    return {
+      data: null,
+      fallbackText: this.cleanAndNormalizeMath(sanitized),
+      isJson: false,
+    };
+  }
+
+  private static logDevWarning(message: string, context?: unknown) {
+    if (typeof process !== "undefined" && process.env?.NODE_ENV !== "production") {
+      console.warn(`[ResponseParser Dev Warning] ${message}`, context);
+    }
+  }
+
+  /**
+   * Primary educational parsing entry point: parses raw response text into structured blocks.
    */
   public static parse(rawText: string): ParsedEducationalResponse {
     const text = rawText || "";
@@ -215,7 +352,7 @@ export class ResponseParser {
           });
         }
 
-        let rawMatch = match[1] || `هەنگاوی ${stepCounter}`;
+        const rawMatch = match[1] || `هەنگاوی ${stepCounter}`;
         let title = rawMatch.trim();
         let inlineContent = "";
 
@@ -390,14 +527,12 @@ export class ResponseParser {
    */
   public static cleanAndNormalizeMath(text: string): string {
     let result = text
-      // Convert common chemistry ions
       .replace(/\[?H3O\+?\]?/g, "[H₃O⁺]")
       .replace(/\[?OH\-?\]?/g, "[OH⁻]")
       .replace(/H2SO4/g, "H₂SO₄")
       .replace(/HCl/g, "HCl")
       .replace(/CO2/g, "CO₂")
       .replace(/H2O/g, "H₂O")
-      // Remove raw LaTeX delimiters
       .replace(/\\\[([\s\S]*?)\\\]/g, "$1")
       .replace(/\\\(([\s\S]*?)\\\)/g, "$1")
       .replace(/\$([^\$]+)\$/g, "$1")
@@ -407,7 +542,6 @@ export class ResponseParser {
       .replace(/\\le(q)?/g, "≤")
       .replace(/\\ge(q)?/g, "≥");
 
-    // Convert generic exponents: ^(-?\d+) or ^n
     result = result.replace(/\^(-?\d+|[n])/g, (_, exp) =>
       exp
         .split("")

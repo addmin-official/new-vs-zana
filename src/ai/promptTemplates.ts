@@ -2,9 +2,13 @@
  * ZANA Master Prompt Template System
  * Standardizes instruction engineering for pedagogical reasoning, Socratic scaffolding,
  * misconception remediation, formula breakdown, and diagnostic exercise generation.
+ * Enforces strict JSON output schemas via Gemini responseMimeType and prompt contracts.
  */
 
 import { buildPersonaPromptBlock } from "./tutorPersona.ts";
+import { SafetyFilter } from "./safetyFilter.ts";
+
+export const PROMPT_TEMPLATE_VERSION = "v1.0.0";
 
 export interface ConceptExplanationParams {
   conceptName: string;
@@ -13,8 +17,37 @@ export interface ConceptExplanationParams {
   stream?: string;
   level?: string;
   studentName?: string;
+  masteryTier?: "NOT_STARTED" | "INTRODUCED" | "DEVELOPING" | "PROFICIENT" | "MASTERED" | string;
   curriculumEvidenceSnippet?: string;
+  curriculumChunks?: string;
+  activeMisconceptions?: string[];
+  recentConcepts?: string[];
+  irtTheta?: number;
+  prerequisite?: string;
+  requestType?: "ڕوونکردنەوە" | "نموونە" | "پرسیار" | "چارەسەرکردن" | string;
   previousMasteryScore?: number;
+  version?: string;
+}
+
+export interface AssessAnswerParams {
+  question: string;
+  correctAnswer: string;
+  bloomsLevel: "RECALL" | "COMPREHENSION" | "APPLICATION" | "ANALYSIS" | "EVALUATION" | string;
+  studentAnswer: string;
+  responseTimeSeconds?: number;
+  version?: string;
+}
+
+export interface GenerateQuestionsParams {
+  concept: string;
+  grade: string;
+  stream: string;
+  bloomsLevel: "RECALL" | "COMPREHENSION" | "APPLICATION" | "ANALYSIS" | string;
+  difficulty: number; // 0.0 - 1.0
+  count: number;
+  questionType: "MULTIPLE_CHOICE" | "SHORT_ANSWER" | "TRUE_FALSE" | string;
+  activeMisconceptions?: string[];
+  version?: string;
 }
 
 export interface SocraticHintParams {
@@ -61,47 +94,173 @@ export interface ExamSummaryParams {
 }
 
 export class PromptTemplates {
+  public static readonly VERSION = PROMPT_TEMPLATE_VERSION;
+
+  /**
+   * A/B testing version selector: determines template version for a session.
+   * By default, 10% of requests receive "v2.0.0" when available.
+   */
+  public static selectTemplateVersion(templateName: string, studentId = ""): string {
+    if (!studentId) return PROMPT_TEMPLATE_VERSION;
+    let hash = 0;
+    for (let i = 0; i < studentId.length; i++) {
+      hash = (hash << 5) - hash + studentId.charCodeAt(i);
+      hash |= 0;
+    }
+    const bucket = Math.abs(hash) % 100;
+    return bucket < 10 ? "v2.0.0" : PROMPT_TEMPLATE_VERSION;
+  }
+
   /**
    * Template 1: EXPLAIN_CONCEPT
-   * Constructs a multi-tiered pedagogical explanation following the 5-part architecture:
-   * 1. Hook / Intuition (نموونەی ژیانی ڕۆژانە)
-   * 2. Core Scientific Principle (یاسای سەرەکی)
-   * 3. Step-by-Step Breakdown (هەنگاو بە هەنگاو)
-   * 4. Common Pitfalls (هەڵە باوەکان)
-   * 5. Interactive Check Question (پرسیاری پشکنین)
+   * Upgraded with JSON schema output, teaching rules, and prerequisite probing.
    */
   public static explainConcept(params: ConceptExplanationParams): string {
-    const personaBlock = buildPersonaPromptBlock();
+    const concept = SafetyFilter.sanitizeUserInput(params.conceptName);
+    const grade = SafetyFilter.sanitizeUserInput(params.grade);
+    const stream = params.stream ? SafetyFilter.sanitizeUserInput(params.stream) : "زانستی";
+    const masteryTier = params.masteryTier || "DEVELOPING";
+    const curriculumChunks = params.curriculumChunks || params.curriculumEvidenceSnippet || "مەنهەجی فەرمیی پۆلی دیاریکراو.";
+    const activeMisconceptions = (params.activeMisconceptions || []).join("، ") || "هیچ هەڵەیەکی دیاریکراو نییە.";
+    const recentConcepts = (params.recentConcepts || []).join("، ") || "دەستپێکی بەش.";
+    const irtTheta = params.irtTheta !== undefined ? params.irtTheta.toFixed(2) : "0.00";
+    const requestType = params.requestType || "ڕوونکردنەوە";
+    const prerequisite = params.prerequisite || "چەمکە بنەڕەتییەکان";
 
     return `
-${personaBlock}
+[IDENTITY]
+تۆ زانایت، مامۆستای زیرەکی پلاتفۆرمی ZANA.
+خوێندکارەکە لە پۆلی ${grade}ەمە، شاخەی ${stream}.
+ئاستی تێگەیشتنی ئێستا: ${masteryTier} لە بابەتی ${concept}.
+وەشانی پرۆمپت: ${params.version || PROMPT_TEMPLATE_VERSION}
 
-[ئەرکی سەرەکی: ڕوونکردنەوەی چەمکی زانستی بە تەواوی و بە شێوازی فێرکاری]
-بابەت: ${params.subject}
-پۆل: پۆلی ${params.grade}${params.stream ? ` (${params.stream})` : ""}
-ئاستی زانستی قوتابی: ${params.level || "مامناوەند"}
-ناوی قوتابی: ${params.studentName || "قوتابی"}
-چەمکی مەبەست: "${params.conceptName}"
-${params.previousMasteryScore !== undefined ? `ئاستی لێهاتوویی تۆمارکراو: ${Math.round(params.previousMasteryScore * 100)}%` : ""}
+[CONTEXT]
+مەنهەجی فەرمی:
+${curriculumChunks}
 
-${params.curriculumEvidenceSnippet ? `سەرچاوەی پەڕتووکی فەرمی:\n"${params.curriculumEvidenceSnippet}"\n` : ""}
+[STUDENT STATE]
+هەڵەی دیاریکراو: ${activeMisconceptions}
+دواین بابەتی تێگەیشتوو: ${recentConcepts}
+ئاستی توانا: θ = ${irtTheta}
 
-پێکهاتەی داواکراو بۆ وەڵام (دەبێت ڕێک بەم ٥ بەشە بێت):
-١. [سەرنجڕاکێشان بە نموونەی ژیانی ڕۆژانە]: نموونەیەکی ململانێیی یان بەرجەستە لە ژیانی ڕۆژانە دەربارەی ${params.conceptName}.
-٢. [پێناسە و یاسای بنەڕەتی]: پێناسەی زانستی ورد و هاوکێشەی سەرەکی بە شێوازی یونیکۆدی مۆدێرن (بۆ نموونە: H₃O⁺، pH = -log[H₃O⁺]).
-٣. [شیکاری هەنگاو بە هەنگاو]: ڕوونکردنەوەی ٣ هەنگاوی لۆجیکی بۆ تێگەیشتن و شیکارکردنی پرسیارەکان.
-٤. [هەڵە باوەکان لە تاقیکردنەوەی وەزاری]: ئەو لێکتێنەگەیشتنانەی زۆربەی قوتابیان تێی دەکەون بەبێ بەکارهێنانی وشەی نەشیاو.
-٥. [پرسیاری پشکنینی کارلێککار]: یەک پرسیاری کورت و هاندەر لەسەر بابەتەکە بۆ ئەوەی قوتابی وەڵامی بداتەوە.
+[TASK]
+بابەتی داواکراو: ${concept}
+جۆری داواکاری: ${requestType}
+(ڕوونکردنەوە | نموونە | پرسیار | چارەسەرکردن)
+
+[TEACHING RULES]
+- بە زمانی شیرینی کوردی سۆرانی وەڵامبدەرەوە.
+${masteryTier === "NOT_STARTED" || masteryTier === "INTRODUCED" ? `- سەرەتا بپرسە "ئایا ${prerequisite} دەناسیت؟"\n` : ""}- ئەگەر هەڵەی دیاریکراو هەبوو: بەبێ ناوبردنی ئەو هەڵەیە و بەبێ گووتنی وشەی شکێنەر، ئاراستەی ڕاست بکەرەوە.
+- هەرگیز زیاتر لە 150 وشە نەبێت بۆ ئەوەی خوێندکار ماندوو نەبێت.
+- کۆتایی وەڵامەکە بە پرسیارێکی ڕێبەریکەر تەواو بکە.
+- یونیکۆدی مۆدێرن بۆ هاوکێشەکان بەکاربهێنە (وەک H₃O⁺، x²).
+
+[OUTPUT FORMAT — JSON ONLY]
+پێویستە وەڵامەکەت تەنها و تەنها بە فۆرماتی JSON بێت بەپێی ئەم شێوازە:
+{
+  "responseType": "EXPLANATION",
+  "content": "دەقی وەڵام بە کوردی سۆرانی",
+  "followUpQuestions": ["پرسیاری ١؟", "پرسیاری ٢؟", "پرسیاری ٣؟"],
+  "hintsUsed": 0,
+  "conceptsReferenced": ["${concept}"],
+  "encouragement": "دەستخۆشییەکی گەرم بە کوردی"
+}
 `.trim();
   }
 
   /**
-   * Template 2: SOCRATIC_HINT
-   * Scaffolds hints without revealing the solution directly:
-   * Level 1: Guiding Question
-   * Level 2: Real-World Analogy / Conceptual Clue
-   * Level 3: Partial Step Breakdown
-   * Level 4: Full Synthesis & Concept Reveal
+   * Template 2: ASSESS_ANSWER
+   * Formative assessment grader evaluating student reasoning with redirection hints.
+   */
+  public static assessAnswer(params: AssessAnswerParams): string {
+    const question = SafetyFilter.sanitizeUserInput(params.question);
+    const correctAnswer = SafetyFilter.sanitizeUserInput(params.correctAnswer);
+    const studentAnswer = SafetyFilter.sanitizeUserInput(params.studentAnswer);
+    const responseTime = params.responseTimeSeconds !== undefined ? `${params.responseTimeSeconds} چرکە` : "دیارینەکراو";
+
+    return `
+[IDENTITY]
+تۆ هەڵسەنگێنەری فێرکاریی زانایت.
+وەشانی پرۆمپت: ${params.version || PROMPT_TEMPLATE_VERSION}
+
+[QUESTION]
+پرسیار: ${question}
+وەڵامی دروست: ${correctAnswer}
+ئاستی کەرتی بلووم: ${params.bloomsLevel}
+
+[STUDENT ANSWER]
+وەڵامی خوێندکار: ${studentAnswer}
+کاتی وەڵامدان: ${responseTime}
+
+[TASK]
+١. ئایا وەڵامەکە دروستە؟ (true/false)
+٢. ئەگەر شاش بوو، چی تێگەیشتنی شاشی هەیە بەبێ وشەی بریندارکەر؟
+٣. چ خاڵێکی ئەرێنی لە بیرکردنەوەکەیدا هەیە؟
+٤. بچووکترین ئاراستەکردنەوە بۆ ڕاستکردنەوەی هەنگاوەکە چییە؟
+
+[OUTPUT FORMAT — JSON ONLY]
+{
+  "isCorrect": boolean,
+  "partialCredit": 0.0,
+  "misconceptionDetected": "string|null",
+  "misconceptionType": "conceptual|procedural|factual|null",
+  "positiveElement": "دەستخۆشی لە خاڵی باشی وەڵامەکە",
+  "redirectionHint": "ئاراستەکردنەوە بە پرسیارێک",
+  "bloomsAchieved": "${params.bloomsLevel}"
+}
+`.trim();
+  }
+
+  /**
+   * Template 3: GENERATE_QUESTIONS
+   * Professional item generator producing curriculum-grounded items targeting misconceptions.
+   */
+  public static generateQuestions(params: GenerateQuestionsParams): string {
+    const concept = SafetyFilter.sanitizeUserInput(params.concept);
+    const misconceptions = (params.activeMisconceptions || []).join("، ") || "هەڵە باوەکانی تاقیکردنەوەی وەزاری";
+
+    return `
+[IDENTITY]
+تۆ دروستکەری پرسیاری پیشەیی زانایت.
+وەشانی پرۆمپت: ${params.version || PROMPT_TEMPLATE_VERSION}
+
+[PARAMETERS]
+بابەت: ${concept}
+پۆل: ${params.grade} — شاخە: ${params.stream}
+ئاستی ئارزیاکردن: ${params.bloomsLevel}
+ئاستی سەختی: ${params.difficulty.toFixed(2)} (0.0–1.0)
+ژمارەی پرسیار: ${params.count}
+جۆری پرسیار: ${params.questionType}
+هەڵەی دیاریکراو: ${misconceptions}
+
+[RULES]
+- هەر پرسیارێک تاکەکەسانە و جیاواز بێت لە پرسیارەکانی تر.
+- وەبەرگیری: ${misconceptions} بکە ئامانجی بژاردە نادروستەکان.
+- بژاردەی شاش: هەڵە باوەکانی قوتابیان بێت، نەک بژاردەی بێمانا و هەڕەمەکی.
+- بە زمانی فەرمی کوردی سۆرانی.
+
+[OUTPUT FORMAT — JSON ONLY]
+{
+  "questions": [
+    {
+      "id": "uuid-1",
+      "text": "دەقی پرسیار",
+      "type": "${params.questionType}",
+      "options": ["A) ...", "B) ...", "C) ...", "D) ..."],
+      "correctAnswer": "A) ...",
+      "explanation": "شیکاری فێرکاری",
+      "bloomsLevel": "${params.bloomsLevel}",
+      "difficulty": ${params.difficulty},
+      "targetMisconception": null,
+      "estimatedTimeSeconds": 60
+    }
+  ]
+}
+`.trim();
+  }
+
+  /**
+   * Template 4: SOCRATIC_HINT
    */
   public static socraticHint(params: SocraticHintParams): string {
     const personaBlock = buildPersonaPromptBlock();
@@ -111,25 +270,22 @@ ${params.curriculumEvidenceSnippet ? `سەرچاوەی پەڕتووکی فەرم
       hintDirective = `
 ئاستی ڕێنمایی: ئاستی ١ (پرسیاری ڕێبەریکەر - Guiding Question)
 - هەرگیز هیچ بەشێکی وەڵام یان هاوکێشەکە یەکسەر ئاشکرا مەکە.
-- تەنها یەک پرسیاری سۆکراتیی ڕوون بکە دەربارەی ئەوەی کە یاسای بنەڕەتی چی دەڵێت، یان سەرنجی قوتابی ڕابکێشە بۆ داتایەکی ناو پرسیارەکە.
+- تەنها یەک پرسیاری سۆکراتیی ڕوون بکە دەربارەی ئەوەی کە یاسای بنەڕەتی چی دەڵێت.
 `;
     } else if (params.hintLevel === 2) {
       hintDirective = `
 ئاستی ڕێنمایی: ئاستی ٢ (نموونە و ئاماژەی تێگەیشتن - Conceptual Clue & Analogy)
 - ئاماژەیەکی ڕوونتر بدە بە نموونەیەکی هاوشێوەی ژیانی ڕۆژانە.
-- هێما بۆ پەیوەندی نێوان گۆڕاوەکان بکە (بۆ نموونە: ئەگەر قەبارە زیاد بکات، پەستان چۆن دەگۆڕێت؟).
 `;
     } else if (params.hintLevel === 3) {
       hintDirective = `
 ئاستی ڕێنمایی: ئاستی ٣ (شیکاری هەنگاوی یەکەم - Partial Step Breakdown)
-- هەنگاوی یەکەمی هاوکێشەکە یان گۆڕینەوەی یەکەکان بە نیوەچڵی بۆ بنووسە.
-- داوای لێبکە هەنگاوی کۆتایی یان ژماردنەکەی لەسەر بنەمای ئەم هەنگاوە بۆ تەواو بکات.
+- هەنگاوی یەکەمی هاوکێشەکە بە نیوەچڵی بۆ بنووسە.
 `;
     } else {
       hintDirective = `
 ئاستی ڕێنمایی: ئاستی ٤ (شیکاری تەواو و بەستنەوەی چەمک - Full Synthesis & Reveal)
-- بەهۆی ئەوەی ٤ جار هەوڵدراوە و گەیشتووینەتە قۆناغی کۆتایی، ئێستا بە تەواوی و بە لۆجیکێکی زانستیی بێ وێنە شیکارەکەی هەنگاو بە هەنگاو بۆ ڕوون بکەرەوە.
-- چەمکە سەرەکییەکە پەیوەست بکەرەوە بە بەشی پەڕتووکی فەرمی.
+- بە تەواوی و بە لۆجیکێکی زانستی شیکارەکەی هەنگاو بە هەنگاو بۆ ڕوون بکەرەوە.
 `;
     }
 
@@ -137,9 +293,9 @@ ${params.curriculumEvidenceSnippet ? `سەرچاوەی پەڕتووکی فەرم
 ${personaBlock}
 
 [دۆخی فێرکاریی سۆکراتی (Socratic Scaffolding Engine)]
-پرسیاری لەبەردەم قوتابی: "${params.problemText}"
-${params.studentAnswer ? `وەڵام یان سەرنجی پێشووی قوتابی: "${params.studentAnswer}"` : ""}
-${params.conceptName ? `چەمکی پەیوەندیدار: ${params.conceptName}` : ""}
+پرسیاری لەبەردەم قوتابی: "${SafetyFilter.sanitizeUserInput(params.problemText)}"
+${params.studentAnswer ? `وەڵام یان سەرنجی پێشووی قوتابی: "${SafetyFilter.sanitizeUserInput(params.studentAnswer)}"` : ""}
+${params.conceptName ? `چەمکی پەیوەندیدار: ${SafetyFilter.sanitizeUserInput(params.conceptName)}` : ""}
 ${params.previousHints && params.previousHints.length > 0 ? `ڕێنماییە پێشووەکانی دراون:\n${params.previousHints.map((h, i) => `${i + 1}. ${h}`).join("\n")}` : ""}
 
 ${hintDirective}
@@ -149,14 +305,13 @@ ${hintDirective}
   }
 
   /**
-   * Template 3: PRACTICE_QUESTION
-   * Creates curriculum-aligned questions with distractors and Bloom's taxonomy tags.
+   * Template 5: PRACTICE_QUESTION
    */
   public static practiceQuestion(params: PracticeQuestionParams): string {
     return `
 [ئەرکی بەرهەمهێنانی پرسیاری تاقیکردنەوەی فێرکاری]
 بابەت: ${params.subject} | پۆل: پۆلی ${params.grade}
-چەمک: "${params.conceptNameKu}" (ناسنامە: ${params.conceptId})
+چەمک: "${SafetyFilter.sanitizeUserInput(params.conceptNameKu)}" (ناسنامە: ${params.conceptId})
 ئاستی قورسی: ${params.difficulty}
 ئاستی مەعریفی (Bloom's Level): ${params.cognitiveLevel || "APPLICATION"}
 ${params.curriculumExcerpt ? `دەقی فەرمیی پەڕتووک:\n"${params.curriculumExcerpt}"\n` : ""}
@@ -164,15 +319,13 @@ ${params.curriculumExcerpt ? `دەقی فەرمیی پەڕتووک:\n"${params.c
 مەرجە بنەڕەتییەکان:
 ١. پرسیارەکە بە زمانی کوردی سۆرانی بێت بە فۆرماتی چوار-هەڵبژاردەیی (A, B, C, D).
 ٢. تەنها یەک هەڵبژاردەی تەواو ڕاست بێت.
-٣. سێ هەڵبژاردەکەی تر (Distractors) با بەپێی هەڵە باوەکانی قوتابیان بن (بۆ نموونە پێچەوانەکردنەوەی هێما یان بیرچوونی چوارگۆشە).
+٣. سێ هەڵبژاردەکەی تر (Distractors) با بەپێی هەڵە باوەکانی قوتابیان بن.
 ٤. ڕوونکردنەوەی فێرکاری کورت بۆ ئەوەی بۆچی وەڵامە ڕاستەکە دروستە.
-٥. دەرئەنجامەکە لە شێوازی فۆرماتکراوی ڕوون و خوێندەوار بنووسە.
 `.trim();
   }
 
   /**
-   * Template 4: MISCONCEPTION_REMEDIATION
-   * Gently redirects a detected misconception without negative labeling.
+   * Template 6: MISCONCEPTION_REMEDIATION
    */
   public static misconceptionRemediation(params: MisconceptionRemediationParams): string {
     const personaBlock = buildPersonaPromptBlock();
@@ -182,41 +335,37 @@ ${personaBlock}
 
 [ئەرکی چارەسەرکردنی لێکتێنەگەیشتنی فێرکاری (Misconception Remediation)]
 بابەت: ${params.subject} | پۆل: پۆلی ${params.grade}
-چەمک: ${params.conceptNameKu}
-لێکتێنەگەیشتنی دیاریکراو: "${params.detectedMisconceptionNameKu}"
-وەڵام یان دەربڕینی ناتەواوی قوتابی: "${params.studentIncorrectResponse}"
+چەمک: ${SafetyFilter.sanitizeUserInput(params.conceptNameKu)}
+لێکتێنەگەیشتنی دیاریکراو: "${SafetyFilter.sanitizeUserInput(params.detectedMisconceptionNameKu)}"
+وەڵام یان دەربڕینی ناتەواوی قوتابی: "${SafetyFilter.sanitizeUserInput(params.studentIncorrectResponse)}"
 
 ڕێسای چارەسەری ئەرێنی:
 - هەرگیز مەڵێ "ئەمە هەڵەیە" یان "وەڵامەکەت هەڵەیە".
 - دەست پێبکە بە سەلماندنی هەوڵەکە: "زۆر باشە کە بەم جۆرە بیرت کردەوە، بەڵام با پێکەوە لایەنێکی تر تاقی بکەینەوە..."
-- تەرکیز بکە سەر هۆکاری دەروونیی دروستبوونی ئەم لێکتێنەگەیشتنە (بۆ نموونە: جیاوازی نێوان خەستی و بڕ، یان مانای پێوەری پێچەوانە).
 - بە کورتی ڕاستییە زانستییەکە بسەلمێنە و داوای ڕاهێنانێکی کورت بکە.
 `.trim();
   }
 
   /**
-   * Template 5: FORMULA_EXPLANATION
-   * Deconstructs mathematical and scientific formulas into variables, units, and intuition.
+   * Template 7: FORMULA_EXPLANATION
    */
   public static formulaExplanation(params: FormulaExplanationParams): string {
     return `
 [ئەرکی شیکردنەوەی قووڵی هاوکێشە و یاسای زانستی]
 بابەت: ${params.subject} | پۆل: پۆلی ${params.grade}
-ناوی یاساکە: ${params.formulaNameKu}
-هاوکێشەی سەرەکی: ${params.formulaSymbolic}
+ناوی یاساکە: ${SafetyFilter.sanitizeUserInput(params.formulaNameKu)}
+هاوکێشەی سەرەکی: ${SafetyFilter.sanitizeUserInput(params.formulaSymbolic)}
 ${params.contextUsageKu ? `چوارچێوەی بەکارهێنان: ${params.contextUsageKu}` : ""}
 
 پێکهاتەی داواکراو بۆ وەڵام:
 ١. [هاوکێشەی یونیکۆد]: نیشاندانی هاوکێشەکە بە فۆنتی گەورە و بە یونیکۆدی کوردی/ماتماتیکی.
-٢. [خشتەی گۆڕاوەکان]: ڕوونکردنەوەی هەموو پیتەکان، یەکە پێوانەییە نێودەوڵەتییەکان (SI Units)، و مانای فیزیکی/کیمیایی.
-٣. [مانای لۆجیکی]: چۆن بیر لەم هاوکێشەیە بکەینەوە بێ لەبەرکردنی کوێرانە (پەیوەندیی ڕاستەوانە و پێچەوانە).
-٤. [تێبینی تاقیکردنەوەی وەزاری]: خاڵە وردەکانی نمرەهێنەر لە تاقیکردنەوە فەرمییەکاندا.
+٢. [خشتەی گۆڕاوەکان]: ڕوونکردنەوەی هەموو پیتەکان، یەکە پێوانەییە نێودەوڵەتییەکان (SI Units).
+٣. [تێبینی تاقیکردنەوەی وەزاری]: خاڵە وردەکانی نمرەهێنەر لە تاقیکردنەوە فەرمییەکاندا.
 `.trim();
   }
 
   /**
-   * Template 6: EXAM_SUMMARY
-   * Compiles a 3-point pedagogical post-assessment study roadmap.
+   * Template 8: EXAM_SUMMARY
    */
   public static examSummary(params: ExamSummaryParams): string {
     const pct = params.totalQuestions > 0 ? Math.round((params.correctCount / params.totalQuestions) * 100) : 0;

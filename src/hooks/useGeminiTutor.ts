@@ -3,6 +3,7 @@ import { ResponseParser, ParsedEducationalResponse, EducationalResponseType } fr
 import { buildSocraticPrompt } from "../prompts/socraticPrompts.ts";
 import { PromptTemplates } from "../ai/promptTemplates.ts";
 import { getRandomEncouragement } from "../ai/tutorPersona.ts";
+import { useGeminiClient, TokenUsage } from "./useGeminiClient.ts";
 
 export type TutorWorkspaceMode = "socratic" | "explain" | "practice" | "ask";
 
@@ -14,6 +15,7 @@ export interface TutorMessage {
   parsed?: ParsedEducationalResponse;
   socraticLevel?: number;
   responseType?: EducationalResponseType;
+  isStreaming?: boolean;
 }
 
 export interface UseGeminiTutorOptions {
@@ -42,6 +44,8 @@ export function useGeminiTutor(options: UseGeminiTutorOptions = {}) {
 
   const activeProblemRef = useRef<string>("");
   const hintHistoryRef = useRef<string[]>([]);
+
+  const { executeRequest, isStreaming, tokenUsage } = useGeminiClient();
 
   const sendMessage = useCallback(
     async (
@@ -91,7 +95,7 @@ export function useGeminiTutor(options: UseGeminiTutorOptions = {}) {
             grade,
             previousHints: hintHistoryRef.current,
             conversationHistory: messages.slice(-4).map((m) => ({
-              role: m.sender,
+              role: m.sender === "zana" ? "tutor" : "student",
               text: m.text,
             })),
           });
@@ -105,55 +109,72 @@ export function useGeminiTutor(options: UseGeminiTutorOptions = {}) {
           });
         }
 
-        const res = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+        const zanaMsgId = `zana_${Date.now()}`;
+        let streamedAccumulator = "";
+
+        // Placeholder for streaming message
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: zanaMsgId,
+            sender: "zana",
+            text: "...",
+            timestamp: Date.now(),
+            isStreaming: true,
+          },
+        ]);
+
+        const data = await executeRequest<{ text?: string }>({
+          endpoint: "/api/chat",
+          body: {
             message: promptForApi,
             subject,
             grade,
             mode: mode === "socratic" ? "chat" : mode,
             studentName,
-          }),
+          },
+          onStreamChunk: (chunk: string) => {
+            streamedAccumulator += chunk;
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === zanaMsgId
+                  ? { ...msg, text: streamedAccumulator }
+                  : msg
+              )
+            );
+          },
         });
 
-        if (!res.ok) {
-          if (res.status === 429) {
-            throw new Error("گەیشتیتە سنوری دیاریکراوی بەکارهێنان بۆ ئەم کاتژمێرە. تکایە دواتر هەوڵبدەرەوە.");
-          }
-          throw new Error(`داواکارییەکە سەرکەوتوو نەبوو (${res.status})`);
-        }
-
-        const data = await res.json();
-        const responseText: string = data.text || "";
-
-        // Parse educational response
+        const responseText: string = data.text || streamedAccumulator || "";
         const parsed = ResponseParser.parse(responseText);
 
         if (mode === "socratic" && parsed.socraticQuestion) {
           hintHistoryRef.current.push(parsed.socraticQuestion);
         }
 
-        const zanaMsgId = `zana_${Date.now()}`;
-        const newZanaMessage: TutorMessage = {
-          id: zanaMsgId,
-          sender: "zana",
-          text: parsed.sanitizedText || responseText,
-          timestamp: Date.now(),
-          parsed,
-          socraticLevel: mode === "socratic" ? currentLevel : undefined,
-          responseType: parsed.primaryType,
-        };
-
-        setMessages((prev) => [...prev, newZanaMessage]);
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === zanaMsgId
+              ? {
+                  ...msg,
+                  text: parsed.sanitizedText || responseText,
+                  parsed,
+                  socraticLevel: mode === "socratic" ? currentLevel : undefined,
+                  responseType: parsed.primaryType,
+                  isStreaming: false,
+                }
+              : msg
+          )
+        );
       } catch (err: unknown) {
         const fallbackMsg = (err as Error).message || "کێشەیەک لە پەیوەندی بە ڕاژەکاری ژیریی دەستکرد ڕوویدا.";
         setError(fallbackMsg);
+        setMessages((prev) => prev.filter((m) => !m.isStreaming));
       } finally {
         setIsLoading(false);
       }
     },
-    [grade, hintLevel, isLoading, messages, mode, stream, studentName, subject]
+    [executeRequest, grade, hintLevel, isLoading, messages, mode, stream, studentName, subject]
   );
 
   const requestNextHint = useCallback(
@@ -189,6 +210,8 @@ export function useGeminiTutor(options: UseGeminiTutorOptions = {}) {
     hintLevel,
     hintsUsed,
     isLoading,
+    isStreaming,
+    tokenUsage: tokenUsage as TokenUsage,
     error,
     sendMessage,
     requestNextHint,
