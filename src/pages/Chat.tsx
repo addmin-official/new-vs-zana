@@ -172,7 +172,7 @@ export interface ChatProps {
 }
 
 export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatProps = {}) {
-  const { t: _t } = useTranslation();
+  const { t, formatNumber: _formatNumber } = useTranslation();
   const chapters = useAppStore((state) => state.chapters);
   const activeChapterId = useAppStore((state) => state.activeChapter);
   const setActiveChapter = useAppStore((state) => state.setActiveChapter);
@@ -896,7 +896,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                 }`}
               >
                 <MessageSquare className="w-4 h-4 shrink-0" />
-                <span>مامۆستا زانا (گفتوگۆی زیرەک)</span>
+                <span>{t("chat.tutorMode")}</span>
               </button>
               <button
                 onClick={() => setViewMode("workspace")}
@@ -907,7 +907,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                 }`}
               >
                 <BookMarked className="w-4 h-4 shrink-0" />
-                <span>مێزی وانە (سەرچاوەکان)</span>
+                <span>{t("chat.workspaceMode")}</span>
               </button>
             </div>
           </div>

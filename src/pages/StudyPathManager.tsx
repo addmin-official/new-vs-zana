@@ -104,7 +104,7 @@ export function StudyPathManager({
   onNavigateToLabs,
   onNavigateToAssessment,
 }: StudyPathManagerProps = {}) {
-  const { t: _t } = useTranslation();
+  const { t, formatNumber: _formatNumber } = useTranslation();
   const [activeTab, setActiveTab] = useState<"today" | "weekly" | "graph" | "forecast" | "goals">("today");
   const [weeklyGoalHours, setWeeklyGoalHours] = useState<number>(() => {
     if (typeof window !== "undefined") {
@@ -512,9 +512,9 @@ export function StudyPathManager({
         {/* Segmented 5 Navigation Tabs */}
         <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl shrink-0 overflow-x-auto no-scrollbar">
           {[
-            { id: "today", label: "ئەرکەکانی ئەمڕۆ", icon: Clock },
-            { id: "weekly", label: "خشتەی ٧ ڕۆژە", icon: Calendar },
-            { id: "graph", label: "نەخشەی مەعریفە", icon: GitBranch },
+            { id: "today", label: t("plan.todayPlan"), icon: Clock },
+            { id: "weekly", label: t("plan.weeklyPlan"), icon: Calendar },
+            { id: "graph", label: t("plan.knowledgeGraph"), icon: GitBranch },
             { id: "forecast", label: "پێشبینی و خێرایی", icon: TrendingUp },
             { id: "goals", label: "ئامانجەکان", icon: Target },
           ].map((tab) => {

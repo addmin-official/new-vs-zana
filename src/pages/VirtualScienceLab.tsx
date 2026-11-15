@@ -60,7 +60,7 @@ const LabLoadingSkeleton = () => (
 );
 
 export function VirtualScienceLab() {
-  const { t: _t } = useTranslation();
+  const { t, formatNumber } = useTranslation();
   const user = useAppStore((state) => state.user);
   const rawSubj = (user.activeSubject || "chemistry").toLowerCase();
   const studentGrade = user.grade || "12";
@@ -152,22 +152,22 @@ export function VirtualScienceLab() {
         <div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-200">
-              تاقیگەی زانستیی کارلێککارانە و ٣D 🧪⚡
+              {t("labs.title")} 🧪⚡
             </span>
             <span className="flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
               <Lock className="w-3 h-3 text-amber-600" />
-              <span>پۆلی {studentGrade} • {streamLabel} (جێگیرکراوە)</span>
+              <span>پۆلی {formatNumber(Number(studentGrade))} • {streamLabel} (جێگیرکراوە)</span>
             </span>
           </div>
 
           <h1 className="font-sans font-black text-2xl text-slate-900 mt-2">
-            {activeLab === "titration" && "هاوسەنگی ترش و تفت (تیتراسیۆن) • کیمیا"}
-            {activeLab === "mechanics" && "سیمولەیشنی بزووتنی خولاو و تاودانی چەقەهێز • فیزیا"}
-            {activeLab === "electrochemistry" && "سوڕی کارەبایی و یاسای ئۆم (Ohm's Law) • فیزیا"}
-            {activeLab === "microscopy" && "مایکرۆسکۆپی ئەلکترۆنی و پێکهاتەی خانە • زیندەزانی"}
+            {activeLab === "titration" && `${t("labs.titration")} • کیمیا`}
+            {activeLab === "mechanics" && `${t("labs.mechanics")} • فیزیا`}
+            {activeLab === "electrochemistry" && `${t("labs.circuits")} (Ohm's Law) • فیزیا`}
+            {activeLab === "microscopy" && `${t("labs.microscopy")} • زیندەزانی`}
           </h1>
           <p className="font-sans text-xs sm:text-sm text-slate-500 mt-1">
-            سیستەمی تاقیگەی فەرمی وەزارەت بۆ پۆلی {studentGrade}ی {streamLabel} تایبەت بە بابەتی {rawSubj === "chemistry" ? "کیمیا" : rawSubj === "physics" ? "فیزیا" : rawSubj === "biology" ? "زیندەزانی" : rawSubj}.
+            سیستەمی تاقیگەی فەرمی وەزارەت بۆ پۆلی {formatNumber(Number(studentGrade))}ی {streamLabel} تایبەت بە بابەتی {rawSubj === "chemistry" ? "کیمیا" : rawSubj === "physics" ? "فیزیا" : rawSubj === "biology" ? "زیندەزانی" : rawSubj}.
           </p>
         </div>
 
@@ -190,7 +190,7 @@ export function VirtualScienceLab() {
             aria-label="چالاککردنی دۆخی فێرکاری هاوبەش"
           >
             <Users className="w-4 h-4" />
-            <span>{partnerSession.isPartnerMode ? "دۆخی هاوبەش: چالاکە" : "دۆخی هاوبەش (Partner Mode)"}</span>
+            <span>{partnerSession.isPartnerMode ? `${t("labs.partnerMode")}: چالاکە` : t("labs.partnerMode")}</span>
           </button>
 
           {/* Lab Switcher Buttons */}

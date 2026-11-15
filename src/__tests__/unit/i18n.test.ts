@@ -43,10 +43,18 @@ describe("ZANA i18n System & Kurdish Sorani Engine", () => {
     it("falls back to key name when key is not found in any language", () => {
       expect(t("unknown.fake.key" as unknown as string)).toBe("unknown.fake.key");
     });
+
+    it("translates new lab, plan, practice and settings keys", () => {
+      expect(t("labs.title")).toBe("تاقیگەی زانستیی کارلێککارانە و ٣D");
+      expect(t("plan.todayPlan")).toBe("ئەرکەکانی ئەمڕۆ");
+      expect(t("practice.badges")).toBe("مەدالیاکانی بەدەستهێنان");
+      expect(t("settings.numerals")).toBe("شێوازی ژمارەکان");
+    });
   });
 
   describe("Number and Currency Formatting", () => {
     it("formats numbers with standard digits", () => {
+      i18n.setUseEasternNumerals(false);
       const formatted = formatNumber(1500, "ckb");
       expect(formatted).toContain("1");
     });
@@ -54,6 +62,13 @@ describe("ZANA i18n System & Kurdish Sorani Engine", () => {
     it("converts to Eastern Arabic numerals when requested", () => {
       const eastern = formatNumber(1234, "ckb", { useEasternNumerals: true });
       expect(eastern).toBe("١٬٢٣٤");
+    });
+
+    it("respects global setUseEasternNumerals setting", () => {
+      i18n.setUseEasternNumerals(true);
+      expect(formatNumber(99)).toBe("٩٩");
+      i18n.setUseEasternNumerals(false);
+      expect(formatNumber(99)).toBe("99");
     });
   });
 

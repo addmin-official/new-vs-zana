@@ -12,6 +12,9 @@ import {
 
 export function useTranslation() {
   const [locale, setLocaleState] = useState<SupportedLocale>(i18n.getLocale());
+  const [useEasternNumerals, setUseEasternNumeralsState] = useState<boolean>(() =>
+    i18n.getUseEasternNumerals()
+  );
 
   const changeLanguage = useCallback((newLocale: SupportedLocale) => {
     i18n.setLocale(newLocale);
@@ -21,6 +24,11 @@ export function useTranslation() {
       document.documentElement.lang = newLocale;
       document.documentElement.dir = "rtl"; // Both ckb and ar are RTL
     }
+  }, []);
+
+  const setUseEasternNumerals = useCallback((enabled: boolean) => {
+    i18n.setUseEasternNumerals(enabled);
+    setUseEasternNumeralsState(enabled);
   }, []);
 
   const t = useCallback(
@@ -33,9 +41,11 @@ export function useTranslation() {
 
   const formatNumber = useCallback(
     (n: number, options?: { useEasternNumerals?: boolean }) => {
-      return rawFormatNumber(n, locale, options);
+      return rawFormatNumber(n, locale, {
+        useEasternNumerals: options?.useEasternNumerals ?? useEasternNumerals,
+      });
     },
-    [locale]
+    [locale, useEasternNumerals]
   );
 
   const formatDate = useCallback(
@@ -58,12 +68,18 @@ export function useTranslation() {
     if (current !== locale) {
       setLocaleState(current);
     }
-  }, [locale]);
+    const currentNum = i18n.getUseEasternNumerals();
+    if (currentNum !== useEasternNumerals) {
+      setUseEasternNumeralsState(currentNum);
+    }
+  }, [locale, useEasternNumerals]);
 
   return {
     t,
     locale,
     changeLanguage,
+    useEasternNumerals,
+    setUseEasternNumerals,
     formatNumber,
     formatDate,
     formatDuration,

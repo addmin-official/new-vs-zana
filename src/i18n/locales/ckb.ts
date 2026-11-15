@@ -179,6 +179,14 @@ export const ckb = {
   },
 
   labs: {
+    title: "تاقیگەی زانستیی کارلێککارانە و ٣D",
+    loading: "تاقیگە باردەکرێت...",
+    titration: "هاوسەنگی ترش و تفت (تیتراسیۆن)",
+    mechanics: "سیمولەیشنی بزووتنی خولاو و تاودانی چەقەهێز",
+    circuits: "سوڕی کارەبایی و یاسای ئۆم",
+    microscopy: "مایکرۆسکۆپی ئەلکترۆنی و پێکهاتەی خانە",
+    generateReport: "دروستکردنی ڕاپۆرت",
+    partnerMode: "دۆخی دوو قوتابی (هاوبەش)",
     experiment: "تاقیکردنەوە",
     hypothesis: "گریمانە",
     variable: "گۆڕاو",
@@ -208,6 +216,36 @@ export const ckb = {
     viewFormula: "یاساکان",
     viewSummary: "پوختە",
     viewVision: "وێنەی پرسیار",
+  },
+
+  plan: {
+    todayPlan: "ئەرکەکانی ئەمڕۆ",
+    weeklyPlan: "خشتەی ٧ ڕۆژە",
+    knowledgeGraph: "نەخشەی مەعریفە",
+    adjustPlan: "دەستکاریکردنی ئاراستەی پلان",
+    completed: "تەواوکراو",
+    pending: "ماوە بۆ خوێندن",
+    streak: "{{count}} ڕۆژ بەردەوامی",
+  },
+
+  practice: {
+    allGrades: "هەموو پۆلەکان",
+    allSubjects: "هەموو بابەتەکان",
+    allFormats: "هەموو جۆرەکان",
+    badges: "مەدالیاکانی بەدەستهێنان",
+    modulesFound: "{{count}} مۆدیۆلی ڕاهێنان دۆزرایەوە",
+    startPractice: "دەستپێکردنی ڕاهێنان",
+  },
+
+  settings: {
+    language: "زمانی پلاتفۆرم",
+    kurdish: "کوردیی سۆرانی",
+    arabic: "العربية",
+    numerals: "شێوازی ژمارەکان",
+    standardNumerals: "ژمارەی ستاندارد (123)",
+    easternNumerals: "ژمارەی ڕۆژهەڵاتی (١٢٣)",
+    theme: "ڕووکاری پلاتفۆرم",
+    sound: "دەنگە فێرکارییەکان",
   },
 } as const;
 

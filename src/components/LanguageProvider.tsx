@@ -12,6 +12,8 @@ import {
 export interface LanguageContextValue {
   locale: SupportedLocale;
   setLocale: (locale: SupportedLocale) => void;
+  useEasternNumerals: boolean;
+  setUseEasternNumerals: (enabled: boolean) => void;
   t: (key: TranslationKey | string, options?: TranslationOptions) => string;
   formatNumber: (n: number, options?: { useEasternNumerals?: boolean }) => string;
   formatDate: (date: Date | number | string) => string;
@@ -32,6 +34,9 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({
   defaultLocale = "ckb",
 }) => {
   const [locale, setLocaleState] = useState<SupportedLocale>(defaultLocale);
+  const [useEasternNumerals, setUseEasternNumeralsState] = useState<boolean>(() =>
+    i18n.getUseEasternNumerals()
+  );
 
   const setLocale = (newLocale: SupportedLocale) => {
     i18n.setLocale(newLocale);
@@ -40,6 +45,11 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({
       document.documentElement.lang = newLocale;
       document.documentElement.dir = "rtl";
     }
+  };
+
+  const setUseEasternNumerals = (enabled: boolean) => {
+    i18n.setUseEasternNumerals(enabled);
+    setUseEasternNumeralsState(enabled);
   };
 
   useEffect(() => {
@@ -73,15 +83,19 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({
     return {
       locale,
       setLocale,
+      useEasternNumerals,
+      setUseEasternNumerals,
       t: (key: TranslationKey | string, options?: TranslationOptions) => i18n.t(key, options),
       formatNumber: (n: number, options?: { useEasternNumerals?: boolean }) =>
-        formatNumber(n, locale, options),
+        formatNumber(n, locale, {
+          useEasternNumerals: options?.useEasternNumerals ?? useEasternNumerals,
+        }),
       formatDate: (date: Date | number | string) => formatDate(date, locale),
       formatDuration: (minutes: number) => formatDuration(minutes, locale),
       isRtl: true,
       dir: "rtl" as const,
     };
-  }, [locale]);
+  }, [locale, useEasternNumerals]);
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 };
@@ -93,6 +107,8 @@ export function useLanguage(): LanguageContextValue {
     return {
       locale: i18n.getLocale(),
       setLocale: (l: SupportedLocale) => i18n.setLocale(l),
+      useEasternNumerals: i18n.getUseEasternNumerals(),
+      setUseEasternNumerals: (val: boolean) => i18n.setUseEasternNumerals(val),
       t: (key: TranslationKey | string, options?: TranslationOptions) => i18n.t(key, options),
       formatNumber: (n: number, options?: { useEasternNumerals?: boolean }) =>
         formatNumber(n, i18n.getLocale(), options),

@@ -70,23 +70,56 @@ const ARABIC_MONTHS = [
 
 export class I18nManager {
   private currentLocale: SupportedLocale = "ckb";
+  private useEasternNumerals: boolean = false;
   private dictionaries: Record<SupportedLocale, Record<string, unknown>> = {
     ckb: ckb as unknown as Record<string, unknown>,
     ar: ar as unknown as Record<string, unknown>,
   };
 
   constructor(defaultLocale: SupportedLocale = "ckb") {
-    this.currentLocale = defaultLocale;
+    if (typeof localStorage !== "undefined") {
+      const saved = localStorage.getItem("zana_locale") as SupportedLocale;
+      if (saved && (saved === "ckb" || saved === "ar")) {
+        this.currentLocale = saved;
+      } else {
+        this.currentLocale = defaultLocale;
+      }
+      this.useEasternNumerals = localStorage.getItem("zana_use_eastern_numerals") === "true";
+    } else {
+      this.currentLocale = defaultLocale;
+    }
   }
 
   public setLocale(locale: SupportedLocale): void {
     if (this.dictionaries[locale]) {
       this.currentLocale = locale;
+      if (typeof localStorage !== "undefined") {
+        try {
+          localStorage.setItem("zana_locale", locale);
+        } catch {
+          // ignore
+        }
+      }
     }
   }
 
   public getLocale(): SupportedLocale {
     return this.currentLocale;
+  }
+
+  public setUseEasternNumerals(enabled: boolean): void {
+    this.useEasternNumerals = enabled;
+    if (typeof localStorage !== "undefined") {
+      try {
+        localStorage.setItem("zana_use_eastern_numerals", String(enabled));
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  public getUseEasternNumerals(): boolean {
+    return this.useEasternNumerals;
   }
 
   /**
@@ -150,7 +183,8 @@ export class I18nManager {
     _locale: SupportedLocale = this.currentLocale,
     options?: { useEasternNumerals?: boolean }
   ): string {
-    if (options?.useEasternNumerals) {
+    const useEastern = options?.useEasternNumerals ?? this.useEasternNumerals;
+    if (useEastern) {
       const formatted = Number(n).toLocaleString("en-US");
       return formatted
         .replace(/,/g, "٬")

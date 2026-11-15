@@ -790,7 +790,7 @@ export function PracticeLab({
   onNavigateToPedagogy,
   onNavigateToSubjects: _onNavigateToSubjects,
 }: PracticeLabProps = {}) {
-  const { t: _t } = useTranslation();
+  const { t, formatNumber: _formatNumber } = useTranslation();
   const { playSuccess, playError } = useSoundEffects();
   const { profile } = useStudentProfile();
   const user = useAppStore((state) => state.user);
@@ -1176,7 +1176,7 @@ export function PracticeLab({
             </button>
             <div className="flex items-center gap-2">
               <Trophy className="w-5 h-5 text-amber-500" />
-              <h3 className="font-sans font-bold text-base text-slate-900">مەدالیاکانی بەدەستهێنان</h3>
+              <h3 className="font-sans font-bold text-base text-slate-900">{t("practice.badges")}</h3>
             </div>
             <div className="grid grid-cols-2 gap-3 pt-2">
               {badgesList.map((b) => (

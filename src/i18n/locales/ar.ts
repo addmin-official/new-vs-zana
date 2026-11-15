@@ -179,6 +179,14 @@ export const ar = {
   },
 
   labs: {
+    title: "المختبر العلمي التفاعلي وثلاثي الأبعاد",
+    loading: "جارٍ تحميل المختبر...",
+    titration: "معايرة الحموض والقواعد",
+    mechanics: "محاكاة الحركة الدائرية والتسارع المركزي",
+    circuits: "الدوائر الكهربائية وقانون أوم",
+    microscopy: "المجهر الإلكتروني وتركيب الخلية",
+    generateReport: "إنشاء تقرير التجربة",
+    partnerMode: "وضع الزميلين التشاركي",
     experiment: "التجربة",
     hypothesis: "الفرضية",
     variable: "المتغير",
@@ -208,5 +216,35 @@ export const ar = {
     viewFormula: "القوانين",
     viewSummary: "الملخص",
     viewVision: "صورة السؤال",
+  },
+
+  plan: {
+    todayPlan: "خطة دراسة اليوم",
+    weeklyPlan: "الخطة الأسبوعية",
+    knowledgeGraph: "خريطة المفاهيم المعرفية",
+    adjustPlan: "تعديل مسار الخطة",
+    completed: "مكتمل",
+    pending: "قيد الانتظار",
+    streak: "{{count}} أيام متتالية",
+  },
+
+  practice: {
+    allGrades: "جميع الصفوف",
+    allSubjects: "جميع المواد",
+    allFormats: "جميع الأنواع",
+    badges: "أوسمة الإنجاز",
+    modulesFound: "تم العثور على {{count}} وحدة تدريبية",
+    startPractice: "بدء التدريب",
+  },
+
+  settings: {
+    language: "لغة المنصة",
+    kurdish: "الكردية السورانية",
+    arabic: "العربية",
+    numerals: "نظام الأرقام",
+    standardNumerals: "أرقام قياسية (123)",
+    easternNumerals: "أرقام مشرقية (١٢٣)",
+    theme: "مظهر المنصة",
+    sound: "الأصوات التعليمية",
   },
 } as const;

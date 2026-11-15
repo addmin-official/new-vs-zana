@@ -25,6 +25,7 @@ import { useStudentProfile } from "../features/student/useStudentProfile.ts";
 import { useStudentMastery } from "../learning/hooks/useStudentMastery.ts";
 import { notificationService } from "../services/notificationService.ts";
 import { NotificationPreferences, DEFAULT_NOTIFICATION_PREFERENCES } from "../domain/notification.ts";
+import { useTranslation } from "../hooks/useTranslation.ts";
 
 export interface ProfileAndSettingsProps {
   profile?: StudentProfile;
@@ -50,6 +51,7 @@ export function ProfileAndSettings({
   const clearChatHistory = useAppStore((state) => state.clearChatHistory);
   const logout = useAppStore((state) => state.logout);
   const { soundEnabled, toggleSound, playSuccess } = useSoundEffects();
+  const { t, locale, changeLanguage, useEasternNumerals, setUseEasternNumerals } = useTranslation();
   const { profile: masteryProfile } = useStudentMastery(studentProfile?.id || "default-guest");
   const userProgress = useAppStore((state) => state.userProgress);
   const authUser = getCurrentUser();
@@ -731,10 +733,63 @@ export function ProfileAndSettings({
             </div>
           </div>
 
-          {/* Language */}
-          <div className="space-y-1 pt-2 border-t border-slate-100 text-xs font-sans">
-            <span className="font-bold text-slate-800">زمانی پلاتفۆرم:</span>
-            <p className="text-slate-500">کوردیی سۆرانی (ckb) • دیاریکراوە بۆ تەواوی پڕۆگرامی فێرکاری هەرێم</p>
+          {/* Language & Numeral Preferences */}
+          <div className="space-y-4 pt-3 border-t border-slate-100 text-xs font-sans">
+            <div>
+              <span className="font-bold text-slate-800 block mb-2">{t("settings.language")}:</span>
+              <div className="grid grid-cols-2 gap-3 max-w-sm">
+                <button
+                  type="button"
+                  onClick={() => changeLanguage("ckb")}
+                  className={`p-3 rounded-xl border flex items-center justify-center gap-2 font-bold font-sans cursor-pointer transition ${
+                    locale === "ckb"
+                      ? "bg-indigo-50 border-indigo-600 text-indigo-700 shadow-xs"
+                      : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  <span>☀️ {t("settings.kurdish")}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => changeLanguage("ar")}
+                  className={`p-3 rounded-xl border flex items-center justify-center gap-2 font-bold font-sans cursor-pointer transition ${
+                    locale === "ar"
+                      ? "bg-indigo-50 border-indigo-600 text-indigo-700 shadow-xs"
+                      : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  <span>🌍 {t("settings.arabic")}</span>
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <span className="font-bold text-slate-800 block mb-2">{t("settings.numerals")}:</span>
+              <div className="grid grid-cols-2 gap-3 max-w-sm">
+                <button
+                  type="button"
+                  onClick={() => setUseEasternNumerals(false)}
+                  className={`p-3 rounded-xl border flex items-center justify-center gap-2 font-bold font-sans cursor-pointer transition ${
+                    !useEasternNumerals
+                      ? "bg-indigo-50 border-indigo-600 text-indigo-700 shadow-xs"
+                      : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  <span>123 • {t("settings.standardNumerals")}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUseEasternNumerals(true)}
+                  className={`p-3 rounded-xl border flex items-center justify-center gap-2 font-bold font-sans cursor-pointer transition ${
+                    useEasternNumerals
+                      ? "bg-indigo-50 border-indigo-600 text-indigo-700 shadow-xs"
+                      : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  <span>١٢٣ • {t("settings.easternNumerals")}</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
