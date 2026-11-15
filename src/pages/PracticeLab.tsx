@@ -9,6 +9,7 @@ import {
   Flame,
   Calculator,
   ArrowLeftRight,
+  Lock,
 } from "lucide-react";
 import { useSoundEffects } from "../hooks/useSoundEffects.ts";
 import { useStudentProfile } from "../features/student/useStudentProfile.ts";
@@ -593,13 +594,16 @@ export function PracticeLab({
   const { profile } = useStudentProfile();
   const user = useAppStore((state) => state.user);
 
-  // Derive active subject metadata and pure problem scoping
+  // Derive locked student grade, stream, and active subject metadata
+  const studentGrade = String(user.grade || profile?.grade || "12");
+  const studentStream = user.stream || profile?.stream || "scientific";
+  const streamLabel = studentStream === "scientific" ? "بەشی زانستی" : "بەشی وێژەیی";
+
   const rawSubj = (profile?.activeSubject || user?.activeSubject || "chemistry").toLowerCase();
   const activeSubjectMeta = SUBJECT_PRACTICE_META[rawSubj] || { label: "کیمیا", icon: "⚗️" };
 
   const [practiceTab, setPracticeTab] = useState<"standard_solver" | "interactive_types">("standard_solver");
   const [activeInteractiveIndex, setActiveInteractiveIndex] = useState(0);
-  const [selectedGrade, setSelectedGrade] = useState<string>("all");
   const [selectedFormat, setSelectedFormat] = useState<string>("all");
   const [isBadgesModalOpen, setIsBadgesModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -639,25 +643,35 @@ export function PracticeLab({
     { id: 4, name: "ماستەر فیزیا", icon: "⚡", unlocked: totalScore >= 200 },
   ];
 
-  // Subject-pure problem set: strictly matching the activeSubject
+  // Subject and Grade pure problem set: strictly matching the student's locked grade and subject
   const subjectScopedProblems = useMemo(() => {
     return PROBLEMS_DATA.filter((p) => {
-      if (rawSubj === "math" || rawSubj === "mathematics") {
-        return p.category === "math" || p.category === "algebra" || p.category === "geometry";
-      }
-      return p.category === rawSubj;
+      const matchCat =
+        rawSubj === "math" || rawSubj === "mathematics"
+          ? p.category === "math" || p.category === "algebra" || p.category === "geometry"
+          : p.category === rawSubj;
+      const matchGrade = p.grade === studentGrade;
+      return matchCat && matchGrade;
     });
-  }, [rawSubj]);
+  }, [rawSubj, studentGrade]);
 
-  const availableProblems = subjectScopedProblems.length > 0 ? subjectScopedProblems : PROBLEMS_DATA;
+  // Fallback to subject-matched if no grade-specific problem exists
+  const availableProblems = useMemo(() => {
+    if (subjectScopedProblems.length > 0) return subjectScopedProblems;
+    const catOnly = PROBLEMS_DATA.filter((p) => {
+      return rawSubj === "math" || rawSubj === "mathematics"
+        ? p.category === "math" || p.category === "algebra" || p.category === "geometry"
+        : p.category === rawSubj;
+    });
+    return catOnly.length > 0 ? catOnly : PROBLEMS_DATA;
+  }, [subjectScopedProblems, rawSubj]);
 
   const filteredProblems = availableProblems.filter((p) => {
-    const matchGrade = selectedGrade === "all" || p.grade === selectedGrade;
     const matchFormat = selectedFormat === "all" || p.format === selectedFormat;
     const matchSearch =
       p.title.includes(searchQuery) ||
       p.statement.includes(searchQuery);
-    return matchGrade && matchFormat && matchSearch;
+    return matchFormat && matchSearch;
   });
 
   const currentProblem = filteredProblems[currentProblemIndex] || availableProblems[0] || PROBLEMS_DATA[0];
@@ -754,16 +768,10 @@ export function PracticeLab({
               <span className="text-base">{activeSubjectMeta.icon}</span>
               <span className="text-xs font-bold text-indigo-900 font-sans">{activeSubjectMeta.label}</span>
             </div>
-            {onNavigateToSubjects && (
-              <button
-                type="button"
-                onClick={onNavigateToSubjects}
-                className="text-[10px] text-indigo-700 bg-white border border-indigo-200 hover:bg-indigo-100 px-2 py-0.5 rounded-lg font-bold flex items-center gap-1 cursor-pointer transition shadow-2xs"
-              >
-                <span>گۆڕین</span>
-                <ArrowLeftRight className="w-2.5 h-2.5" />
-              </button>
-            )}
+            <div className="flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+              <Lock className="w-2.5 h-2.5 text-amber-600" />
+              <span>جێگیرکراوە</span>
+            </div>
           </div>
 
           <div className="relative">
@@ -918,24 +926,18 @@ export function PracticeLab({
                     تاقیگەی ڕاهێنانی {activeSubjectMeta.label}
                   </span>
                   <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
-                    مەنهەجی پۆلی ١٢
+                    مەنهەجی پۆلی {studentGrade}
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-500 font-sans mt-0.5">
-                  پرسیار و ڕاهێنانەکان تەنها تایبەتن بە وانەی {activeSubjectMeta.label}
+                  پرسیار و ڕاهێنانەکان تایبەت و چەسپاون بە پۆلی {studentGrade} • {streamLabel}
                 </p>
               </div>
             </div>
-            {onNavigateToSubjects && (
-              <button
-                type="button"
-                onClick={onNavigateToSubjects}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-sans text-xs font-bold transition-all cursor-pointer shadow-2xs"
-              >
-                <span>گۆڕینی وانە</span>
-                <ArrowLeftRight className="w-3.5 h-3.5" />
-              </button>
-            )}
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold font-sans">
+              <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+              <span>پۆلی {studentGrade} • {streamLabel} (جێگیرکراوە)</span>
+            </div>
           </div>
 
           {/* Practice Mode Switcher */}
@@ -1033,53 +1035,33 @@ export function PracticeLab({
           {/* VIEW 2: STANDARD STEP-BY-STEP SOLVER */}
           {practiceTab === "standard_solver" && (
             <>
-          {/* 3-Tier Filter System */}
+          {/* Locked Curriculum Status Bar */}
           <div className="space-y-2 bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
-            {/* Row 1: Grade Filter */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-              <span className="text-[11px] font-bold text-slate-400 shrink-0 ml-1">پۆل:</span>
-              {[
-                { id: "all", label: "هەموو پۆلەکان" },
-                { id: "9", label: "پۆلی ٩" },
-                { id: "10", label: "پۆلی ١٠" },
-                { id: "11", label: "پۆلی ١١" },
-                { id: "12", label: "پۆلی ١٢" },
-              ].map((g) => (
-                <button
-                  key={g.id}
-                  onClick={() => {
-                    setSelectedGrade(g.id);
-                    setCurrentProblemIndex(0);
-                  }}
-                  className={`px-3 py-1.5 rounded-xl text-xs shrink-0 cursor-pointer transition-colors font-sans ${
-                    selectedGrade === g.id
-                      ? "bg-slate-900 text-white font-bold"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                  }`}
-                >
-                  {g.label}
-                </button>
-              ))}
+            {/* Row 1: Locked Grade & Stream Status */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-slate-500 font-sans">پۆل و بەش:</span>
+                <span className="font-black text-slate-900 font-sans">پۆلی {studentGrade}ی ئامادەیی • {streamLabel}</span>
+              </div>
+              <div className="flex items-center gap-1.5 self-start sm:self-auto text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-full">
+                <Lock className="w-3 h-3 text-amber-600" />
+                <span>جێگیرکراوە بەپێی هەژمار</span>
+              </div>
             </div>
 
-            {/* Row 2: Subject Filter */}
-            {/* Row 2: Active Subject Display */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-              <span className="text-[11px] font-bold text-slate-400 shrink-0 ml-1">بابەت:</span>
-              <div className="px-3 py-1.5 rounded-xl text-xs shrink-0 flex items-center gap-1.5 font-sans bg-indigo-600 text-white font-bold shadow-2xs">
-                <span>{activeSubjectMeta.icon}</span>
-                <span>{activeSubjectMeta.label}</span>
+            {/* Row 2: Locked Subject Status */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl bg-indigo-50/60 border border-indigo-100 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-indigo-700 font-sans">بابەتی تەرکیز:</span>
+                <div className="flex items-center gap-1.5 font-sans font-black text-indigo-950">
+                  <span>{activeSubjectMeta.icon}</span>
+                  <span>{activeSubjectMeta.label}</span>
+                </div>
               </div>
-              {onNavigateToSubjects && (
-                <button
-                  type="button"
-                  onClick={onNavigateToSubjects}
-                  className="px-2.5 py-1 rounded-xl text-[11px] text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 font-sans font-bold flex items-center gap-1 cursor-pointer transition shadow-2xs"
-                >
-                  <span>گۆڕینی وانە</span>
-                  <ArrowLeftRight className="w-3 h-3" />
-                </button>
-              )}
+              <div className="flex items-center gap-1.5 self-start sm:self-auto text-[10px] font-bold text-indigo-700 bg-white border border-indigo-200 px-2.5 py-0.5 rounded-full shadow-2xs">
+                <Lock className="w-3 h-3 text-indigo-600" />
+                <span>مەنهەجی فەرمی وەزارەت</span>
+              </div>
             </div>
 
             {/* Row 3: Format Filter */}
@@ -1129,11 +1111,10 @@ export function PracticeLab({
                 هیچ پرسیارێک بەپێی ئەم فلتەرانە نەدۆزرایەوە
               </h3>
               <p className="font-sans text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
-                تکایە هەڵبژاردەی پۆل یان جۆری پرسیارەکە بگۆڕە یان فلتەرەکان پاکبکەرەوە بۆ بینینی هەموو ڕاهێنانەکان.
+                تکایە فلتەری شێوازی پرسیار یان وشەی گەڕانەکەت پاکبکەرەوە.
               </p>
               <button
                 onClick={() => {
-                  setSelectedGrade("all");
                   setSelectedFormat("all");
                   setSearchQuery("");
                 }}

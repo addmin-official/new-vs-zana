@@ -7,6 +7,7 @@ import {
   ArrowRight,
   RotateCcw,
   ArrowLeftRight,
+  Lock,
 } from "lucide-react";
 import { useSoundEffects } from "../hooks/useSoundEffects.ts";
 import { useAppStore } from "../store/appStore.ts";
@@ -1059,20 +1060,14 @@ export function AdaptiveAssessment({
               </span>
             </div>
             <p className="text-[11px] text-slate-500 font-sans mt-0.5">
-              پرسیارەکان بە تەواوی و تایبەت لەسەر مەنهەجی {activeSubjectMeta.label}ن
+              پرسیارەکان بە تەواوی تایبەت و چەسپاون لەسەر مەنهەجی پۆلی {user.grade || "١٢"} • {user.stream === "scientific" ? "بەشی زانستی" : "بەشی وێژەیی"}
             </p>
           </div>
         </div>
-        {onNavigateToSubjects && (
-          <button
-            type="button"
-            onClick={onNavigateToSubjects}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-sans text-xs font-bold transition-all cursor-pointer shadow-2xs"
-          >
-            <span>گۆڕینی وانە</span>
-            <ArrowLeftRight className="w-3.5 h-3.5" />
-          </button>
-        )}
+        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold font-sans">
+          <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+          <span>پۆلی {user.grade || "١٢"} • {user.stream === "scientific" ? "بەشی زانستی" : "بەشی وێژەیی"} (جێگیرکراوە)</span>
+        </div>
       </div>
 
       {/* 1. INTRO PRE-ASSESSMENT SCREEN */}

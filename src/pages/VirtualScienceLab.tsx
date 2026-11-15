@@ -12,12 +12,55 @@ import {
   Pause,
   Compass,
   Sparkles,
+  Lock,
 } from "lucide-react";
+import { useAppStore } from "../store/appStore.ts";
 
 export type LabType = "titration" | "mechanics" | "electrochemistry" | "microscopy";
 
 export function VirtualScienceLab() {
-  const [activeLab, setActiveLab] = useState<LabType>("titration");
+  const user = useAppStore((state) => state.user);
+  const rawSubj = (user.activeSubject || "chemistry").toLowerCase();
+  const studentGrade = user.grade || "12";
+  const studentStream = user.stream || "scientific";
+  const streamLabel = studentStream === "scientific" ? "بەشی زانستی" : "بەشی وێژەیی";
+
+  // Determine allowed labs strictly scoped to the student's enrolled active subject
+  const availableLabs = useMemo(() => {
+    if (rawSubj === "physics") {
+      return [
+        { id: "mechanics", label: "بزووتنی خولاو (فیزیا)", icon: <Atom className="w-4 h-4 text-sky-500" /> },
+        { id: "electrochemistry", label: "یاسای ئۆم و سوڕ (فیزیا)", icon: <Zap className="w-4 h-4 text-amber-500" /> },
+      ];
+    } else if (rawSubj === "biology") {
+      return [
+        { id: "microscopy", label: "مایکرۆسکۆپ (زیندەزانی)", icon: <Dna className="w-4 h-4 text-purple-500" /> },
+      ];
+    } else {
+      // Chemistry and standard default
+      return [
+        { id: "titration", label: "تیتراسیۆن (کیمیا)", icon: <FlaskConical className="w-4 h-4 text-emerald-500" /> },
+      ];
+    }
+  }, [rawSubj]);
+
+  const [activeLab, setActiveLab] = useState<LabType>(() => {
+    if (rawSubj === "physics") return "mechanics";
+    if (rawSubj === "biology") return "microscopy";
+    return "titration";
+  });
+
+  useEffect(() => {
+    if (rawSubj === "physics") {
+      if (activeLab !== "mechanics" && activeLab !== "electrochemistry") {
+        setActiveLab("mechanics");
+      }
+    } else if (rawSubj === "biology") {
+      setActiveLab("microscopy");
+    } else {
+      setActiveLab("titration");
+    }
+  }, [rawSubj]);
 
   // ───────────────────────────────────────────────────────────────────────────
   // 1. CHEMISTRY: Acid-Base Titration Lab (پێوەری pH و تیتراسیۆن)
@@ -195,31 +238,32 @@ export function VirtualScienceLab() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-6xl mx-auto w-full" dir="rtl">
-      {/* 1. Header & Lab Selector Tabs */}
+      {/* 1. Header & Locked Lab Selector Tabs */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-4">
         <div>
-          <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-200">
-            تاقیگەی زانستیی کارلێککارانە و ٣D 🧪⚡
-          </span>
-          <h1 className="font-sans font-black text-2xl text-slate-900 mt-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-200">
+              تاقیگەی زانستیی کارلێککارانە و ٣D 🧪⚡
+            </span>
+            <span className="flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+              <Lock className="w-3 h-3 text-amber-600" />
+              <span>پۆلی {studentGrade} • {streamLabel} (جێگیرکراوە)</span>
+            </span>
+          </div>
+          <h1 className="font-sans font-black text-2xl text-slate-900 mt-2">
             {activeLab === "titration" && "هاوسەنگی ترش و تفت (تیتراسیۆن) • کیمیا"}
             {activeLab === "mechanics" && "سیمولەیشنی بزووتنی خولاو و تاودانی ناوەکی • فیزیا"}
             {activeLab === "electrochemistry" && "سوڕی کارەبایی و یاسای ئۆم (Ohm's Law) • فیزیا"}
             {activeLab === "microscopy" && "مایکرۆسکۆپی ئەلکترۆنی و پێکهاتەی خانە • زیندەزانی"}
           </h1>
-          <p className="font-sans text-xs sm:text-sm text-slate-500">
-            سیستەمی تاقیگەی فەرمی پۆلی ١٢ی زانستی بۆ تاقیکردنەوەی ڕاستەوخۆ، ژماردنی یاساکان و بەدەستهێنانی تێگەیشتنی قووڵ.
+          <p className="font-sans text-xs sm:text-sm text-slate-500 mt-1">
+            سیستەمی تاقیگەی فەرمی پۆلی {studentGrade}ی {streamLabel} تایبەت بە بابەتی چەسپاوی {rawSubj === "chemistry" ? "کیمیا" : rawSubj === "physics" ? "فیزیا" : rawSubj === "biology" ? "زیندەزانی" : rawSubj}.
           </p>
         </div>
 
-        {/* Lab Switcher Buttons */}
-        <div className="flex flex-wrap gap-2">
-          {[
-            { id: "mechanics", label: "بزووتنی خولاو (فیزیا)", icon: <Atom className="w-4 h-4 text-sky-500" /> },
-            { id: "electrochemistry", label: "یاسای ئۆم و سوڕ (فیزیا)", icon: <Zap className="w-4 h-4 text-amber-500" /> },
-            { id: "titration", label: "تیتراسیۆن (کیمیا)", icon: <FlaskConical className="w-4 h-4 text-emerald-500" /> },
-            { id: "microscopy", label: "مایکرۆسکۆپ (بایۆلۆجی)", icon: <Dna className="w-4 h-4 text-purple-500" /> },
-          ].map((lab) => (
+        {/* Lab Switcher Buttons (Strictly filtered for the active subject) */}
+        <div className="flex flex-wrap items-center gap-2">
+          {availableLabs.map((lab) => (
             <button
               key={lab.id}
               onClick={() => setActiveLab(lab.id as LabType)}
@@ -233,6 +277,10 @@ export function VirtualScienceLab() {
               <span>{lab.label}</span>
             </button>
           ))}
+          <div className="flex items-center gap-1 text-[11px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1.5 rounded-xl border border-slate-200">
+            <Lock className="w-3 h-3 text-slate-400" />
+            <span>وانەی چەسپاو: {rawSubj === "chemistry" ? "کیمیا" : rawSubj === "physics" ? "فیزیا" : rawSubj === "biology" ? "زیندەزانی" : rawSubj}</span>
+          </div>
         </div>
       </div>
 
