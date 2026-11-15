@@ -8,6 +8,12 @@ import {
   CheckCircle2,
   FileText,
   RefreshCw,
+  Share2,
+  Copy,
+  Check,
+  X,
+  Send,
+  MessageCircle
 } from "lucide-react";
 import { StudentProfile } from "../features/student/studentTypes.ts";
 import { useStudentProfile } from "../features/student/useStudentProfile.ts";
@@ -29,7 +35,57 @@ export function ParentReport({ profile: propProfile }: ParentReportProps = {}) {
 
   const [downloadNotice, setDownloadNotice] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [reportId] = useState(() => "ZN-2026-" + Math.random().toString(36).substring(2, 8).toUpperCase());
+
+  const getShareText = () => {
+    return (
+      `سڵاو،\n\n` +
+      `ئەمە کورتەی ڕاپۆرتی پێشکەوتنی قوتابی (${studentName})یە لە پلاتفۆرمی زانا بۆ پۆلی ${studentGrade}ی ${streamLabel}:\n` +
+      `• بابەتی تەرکیز: ${activeSubjectLabel}\n` +
+      `• نمرەی تێکڕا: 82% (ئاستی باڵا)\n` +
+      `• کاتژمێرەکانی خوێندن: ١٨.٥ کاتژمێر\n` +
+      `• بەردەوامی: ١٢ ڕۆژ لەسەریەک\n` +
+      `• ناسنامەی فەرمی: ${reportId}\n\n` +
+      `دەتوانن تەواوی شیکارییە ئەکادیمییەکە لە پلاتفۆرمی زانا ببینن.`
+    );
+  };
+
+  const handleCopyText = async () => {
+    try {
+      await navigator.clipboard.writeText(getShareText());
+      setCopied(true);
+      setDownloadNotice("دەقی ڕاپۆرتەکە کۆپی کرا! ئێستا دەتوانیت لە هەر جێگەیەک پەیستی بکەیت.");
+      setTimeout(() => {
+        setCopied(false);
+        setDownloadNotice(null);
+      }, 4000);
+    } catch {
+      setDownloadNotice("هەڵەیەک ڕوویدا لە کۆپیکردن. تکایە دەقەکە دەستنیشان بکە و کۆپی بکە.");
+    }
+  };
+
+  const handleShareWhatsApp = () => {
+    const text = encodeURIComponent(getShareText());
+    window.open(`https://api.whatsapp.com/send?text=${text}`, "_blank");
+    setIsShareModalOpen(false);
+  };
+
+  const handleShareTelegram = () => {
+    const text = encodeURIComponent(getShareText());
+    window.open(`https://t.me/share/url?url=https://zana.idggov.tech&text=${text}`, "_blank");
+    setIsShareModalOpen(false);
+  };
+
+  const handleSendEmail = () => {
+    // Copy text first to prevent data loss if Mail client fails (e.g. iCloud quota full)
+    handleCopyText();
+    const subject = encodeURIComponent(`ڕاپۆرتی هوشیاری باوان - قوتابی ${studentName}`);
+    const body = encodeURIComponent(getShareText());
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+    setIsShareModalOpen(false);
+  };
 
   const handleDownloadPdf = () => {
     setDownloadNotice("ڕاپۆرتی فەرمی ئامادە کرا؛ ئێستا دەتوانیت وەک PDF پاشەکەوتی بکەیت.");
@@ -37,16 +93,6 @@ export function ParentReport({ profile: propProfile }: ParentReportProps = {}) {
       window.print();
       setDownloadNotice(null);
     }, 600);
-  };
-
-  const handleSendEmail = () => {
-    setDownloadNotice("ئامادەکاری بۆ ناردنی کورتەی هەفتانە بۆ ئیمەیڵ کرا.");
-    const subject = encodeURIComponent(`ڕاپۆرتی هوشیاری باوان - قوتابی ${studentName}`);
-    const body = encodeURIComponent(
-      `سڵاو،\n\nئەمە کورتەی ڕاپۆرتی پێشکەوتنی قوتابی (${studentName})یە لە پلاتفۆرمی زانا بۆ پۆلی ${studentGrade}ی ${streamLabel}.\n\nبابەتی تەرکیز: ${activeSubjectLabel}\nناسنامەی ڕاپۆرت: ${reportId}\n\nدەتوانن تەواوی شیکارییەکە لە پلاتفۆرمی زانا ببینن.`
-    );
-    window.location.href = `mailto:?subject=${subject}&body=${body}`;
-    setTimeout(() => setDownloadNotice(null), 3000);
   };
 
   const handlePrint = () => {
@@ -62,30 +108,30 @@ export function ParentReport({ profile: propProfile }: ParentReportProps = {}) {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-5xl mx-auto w-full" dir="rtl">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
-        <div>
-          <span className="text-xs font-bold text-teal-700 bg-teal-50 px-3 py-1 rounded-full border border-teal-200">
-            ڕاپۆرتی هوشیاری باوان (Parent Intelligence Report) 📊
+      {/* Header - Optimized for responsive split-screen and mobile */}
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
+        <div className="space-y-1.5 flex-1 min-w-0">
+          <span className="inline-block text-xs font-bold text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/60 px-3 py-1 rounded-full border border-teal-200 dark:border-teal-800">
+            ڕاپۆرتی هوشیاری باوان (Parent Intelligence) 📊
           </span>
-          <h1 className="font-sans font-black text-2xl text-slate-900 mt-1">
+          <h1 className="font-sans font-black text-xl sm:text-2xl text-slate-900 dark:text-slate-100 leading-snug">
             ڕاپۆرتی مانگانەی پێشکەوتن و خاڵە لاوازەکان
           </h1>
-          <p className="font-sans text-xs sm:text-sm text-slate-500">
+          <p className="font-sans text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-2xl leading-relaxed">
             شیکاری وردی ژیریی دەستکردی زانا بۆ هاوکاریکردنی خێزان لە چاودێری ئاستی ئەکادیمی
           </p>
         </div>
 
         {/* Action Export Buttons + Report ID Badge */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           {/* Internal Report ID Badge */}
-          <div className="flex items-center gap-2.5 bg-indigo-50/70 px-3.5 py-1.5 rounded-xl border border-indigo-100">
+          <div className="flex items-center gap-2.5 bg-indigo-50/70 dark:bg-indigo-950/40 px-3.5 py-1.5 rounded-xl border border-indigo-100 dark:border-indigo-900/60">
             <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center text-white shrink-0">
               <FileText className="w-3.5 h-3.5" />
             </div>
             <div className="text-right">
-              <span className="text-[9px] font-bold text-indigo-500 block uppercase font-mono leading-none">ناسنامەی ناوخۆ</span>
-              <span className="text-xs font-black text-slate-800 font-mono leading-tight">{reportId}</span>
+              <span className="text-[9px] font-bold text-indigo-500 dark:text-indigo-400 block uppercase font-mono leading-none">ناسنامەی ناوخۆ</span>
+              <span className="text-xs font-black text-slate-800 dark:text-slate-200 font-mono leading-tight">{reportId}</span>
             </div>
           </div>
 
@@ -96,9 +142,9 @@ export function ParentReport({ profile: propProfile }: ParentReportProps = {}) {
                 setIsRefreshing(false);
                 setDownloadNotice("ڕاپۆرتەکە بە سەرکەوتوویی نوێکرایەوە.");
                 setTimeout(() => setDownloadNotice(null), 3000);
-              }, 1200);
+              }, 1000);
             }}
-            className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-sans font-bold text-xs px-3 py-2 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
+            className="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800 font-sans font-bold text-xs px-3 py-2 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
             title="نوێکردنەوەی داتا"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin text-indigo-600" : ""}`} />
@@ -110,20 +156,20 @@ export function ParentReport({ profile: propProfile }: ParentReportProps = {}) {
             className="bg-indigo-600 hover:bg-indigo-700 text-white font-sans font-bold text-xs px-3.5 py-2 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 shadow-xs"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>دابەزاندنی ڕاپۆرت (PDF)</span>
+            <span>داگرتنی ڕاپۆرت (PDF)</span>
           </button>
 
           <button
-            onClick={handleSendEmail}
-            className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-sans font-bold text-xs px-3 py-2 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
+            onClick={() => setIsShareModalOpen(true)}
+            className="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800 font-sans font-bold text-xs px-3 py-2 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
           >
-            <Mail className="w-3.5 h-3.5" />
-            <span>ناردن بۆ مامۆستا</span>
+            <Share2 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+            <span>ناردن و هاوبەشکردن</span>
           </button>
 
           <button
             onClick={handlePrint}
-            className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-sans font-bold text-xs px-3 py-2 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
+            className="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800 font-sans font-bold text-xs px-3 py-2 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
             title="چاپکردنی ڕاستەوخۆ"
           >
             <Printer className="w-3.5 h-3.5" />
@@ -133,9 +179,87 @@ export function ParentReport({ profile: propProfile }: ParentReportProps = {}) {
       </div>
 
       {downloadNotice && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-sans rounded-xl flex items-center gap-2 animate-in fade-in">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+        <div className="p-3 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-sans rounded-xl flex items-center gap-2 animate-in fade-in">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
           <span>{downloadNotice}</span>
+        </div>
+      )}
+
+      {/* Share & Export Modal */}
+      {isShareModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-6 text-right border border-slate-200 dark:border-slate-800 shadow-xl space-y-4 animate-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
+                <Share2 className="w-5 h-5" />
+                <h3 className="font-sans font-bold text-base text-slate-900 dark:text-slate-100">
+                  هاوبەشکردنی ڕاپۆرتی پێشکەوتن
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsShareModalOpen(false)}
+                className="w-8 h-8 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-sans">
+              کورتەی ڕاپۆرتەکە بە شێوازێکی جوان داڕێژراوە تا ڕاستەوخۆ بۆ مامۆستا یان خێزان بنێردرێت:
+            </p>
+
+            {/* Formatted Text Preview */}
+            <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 font-sans space-y-1.5 max-h-40 overflow-y-auto">
+              <p className="font-bold text-slate-900 dark:text-slate-100">ڕاپۆرتی هوشیاری باوان - قوتابی {studentName}</p>
+              <p className="text-[11px] text-slate-500">پۆلی {studentGrade}ی {streamLabel} • بابەتی تەرکیز: {activeSubjectLabel}</p>
+              <p className="text-[11px] text-slate-600 dark:text-slate-400">تێکڕای بەدەستهاتوو: 82% • کاتژمێری خوێندن: ١٨.٥ کاتژمێر</p>
+              <p className="text-[10px] text-indigo-600 dark:text-indigo-400 font-mono">ناسنامەی ڕاپۆرت: {reportId}</p>
+            </div>
+
+            {/* Sharing Action Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
+              {/* WhatsApp Button */}
+              <button
+                onClick={handleShareWhatsApp}
+                className="flex items-center justify-center gap-2 p-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-sans font-bold text-xs transition cursor-pointer shadow-xs"
+              >
+                <MessageCircle className="w-4 h-4" />
+                <span>ناردن بە واتسئەپ (WhatsApp)</span>
+              </button>
+
+              {/* Telegram Button */}
+              <button
+                onClick={handleShareTelegram}
+                className="flex items-center justify-center gap-2 p-3 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-sans font-bold text-xs transition cursor-pointer shadow-xs"
+              >
+                <Send className="w-4 h-4" />
+                <span>ناردن بە تێلێگرام (Telegram)</span>
+              </button>
+
+              {/* Copy to Clipboard */}
+              <button
+                onClick={handleCopyText}
+                className="flex items-center justify-center gap-2 p-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-sans font-bold text-xs transition cursor-pointer border border-slate-200 dark:border-slate-700"
+              >
+                {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                <span>{copied ? "کۆپی کرا!" : "کۆپیکردنی دەق"}</span>
+              </button>
+
+              {/* Email Client */}
+              <button
+                onClick={handleSendEmail}
+                className="flex items-center justify-center gap-2 p-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-sans font-bold text-xs transition cursor-pointer border border-slate-200 dark:border-slate-700"
+                title="ناردن بە بەرنامەی ئیمەیڵ"
+              >
+                <Mail className="w-4 h-4" />
+                <span>کردنەوە لە ئیمەیڵ (Mail)</span>
+              </button>
+            </div>
+
+            <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center pt-1 font-sans">
+              تێبینی: کاتێک دەقی ڕاپۆرتەکە کۆپی دەکەیت، دەتوانیت لە هەر ئەپێکدا بە ئاسانی پەیستی بکەیت.
+            </p>
+          </div>
         </div>
       )}
 
