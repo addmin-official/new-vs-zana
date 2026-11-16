@@ -144,6 +144,10 @@ const config: Config = {
           "0%, 100%": { opacity: "1" },
           "50%": { opacity: "0.6" },
         },
+        "confetti-fall": {
+          "0%": { transform: "translateY(-100%) rotate(0deg)", opacity: "1" },
+          "100%": { transform: "translateY(100vh) rotate(360deg)", opacity: "0" },
+        },
       },
       animation: {
         fadeIn: "fadeIn 200ms cubic-bezier(0, 0, 0.2, 1)",
@@ -152,6 +156,7 @@ const config: Config = {
         scaleIn: "scaleIn 150ms cubic-bezier(0.34, 1.56, 0.64, 1)",
         shimmer: "shimmer 2s infinite linear",
         "pulse-soft": "pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+        "confetti-fall": "confetti-fall 3s cubic-bezier(0, 0, 0.2, 1) forwards",
       },
       scale: {
         97: "0.97",

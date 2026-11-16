@@ -14,6 +14,7 @@ import {
   animationDurations,
   animationEasings,
   pageTransitions,
+  keyframeDefinitions,
   Button,
   Input,
   Card,
@@ -126,6 +127,15 @@ describe("ZANA Animation System", () => {
     expect(pageTransitions.routeChange).toContain("fadeIn");
     expect(pageTransitions.modalOpen).toContain("scaleIn");
     expect(pageTransitions.drawerOpen).toContain("slideInUp");
+  });
+
+  it("defines keyframe definitions including confettiFall and pulseSoft", () => {
+    expect(keyframeDefinitions.fadeIn).toBeDefined();
+    expect(keyframeDefinitions.slideInUp).toBeDefined();
+    expect(keyframeDefinitions.scaleIn).toBeDefined();
+    expect(keyframeDefinitions.shimmer).toBeDefined();
+    expect(keyframeDefinitions.pulseSoft).toBeDefined();
+    expect(keyframeDefinitions.confettiFall).toBeDefined();
   });
 });
 

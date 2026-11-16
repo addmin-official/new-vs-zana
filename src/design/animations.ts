@@ -25,6 +25,9 @@ export const pageTransitions = {
   toast: `slideInUp ${animationDurations.normal} ${animationEasings.spring}`,
 } as const;
 
+/**
+ * Keyframe definitions for core ZANA animations
+ */
 export const keyframeDefinitions = {
   fadeIn: {
     from: { opacity: "0" },
@@ -50,8 +53,21 @@ export const keyframeDefinitions = {
     "0%, 100%": { opacity: "1" },
     "50%": { opacity: "0.6" },
   },
+  "pulse-soft": {
+    "0%, 100%": { opacity: "1" },
+    "50%": { opacity: "0.6" },
+  },
+  confettiFall: {
+    "0%": { transform: "translateY(-100%) rotate(0deg)", opacity: "1" },
+    "100%": { transform: "translateY(100vh) rotate(360deg)", opacity: "0" },
+  },
+  "confetti-fall": {
+    "0%": { transform: "translateY(-100%) rotate(0deg)", opacity: "1" },
+    "100%": { transform: "translateY(100vh) rotate(360deg)", opacity: "0" },
+  },
 } as const;
 
 export type AnimationDuration = keyof typeof animationDurations;
 export type AnimationEasing = keyof typeof animationEasings;
 export type PageTransition = keyof typeof pageTransitions;
+export type KeyframeDefinition = keyof typeof keyframeDefinitions;

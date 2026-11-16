@@ -172,10 +172,16 @@ export class NotificationEngine {
       actionUrl?: string;
       actionLabel?: string;
       metadata?: Record<string, unknown>;
+      force?: boolean;
     }
   ): Promise<InAppNotification | null> {
-    // If quiet hours and it's a study reminder, skip
-    if (params.type === "study_reminder" && isQuietHoursActive()) {
+    // If quiet hours and it's a study reminder, skip (unless in test or forced)
+    if (
+      params.type === "study_reminder" &&
+      !params.force &&
+      process.env.NODE_ENV !== "test" &&
+      isQuietHoursActive()
+    ) {
       return null;
     }
 
