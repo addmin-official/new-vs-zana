@@ -576,6 +576,7 @@ export default function App() {
               setActiveTab("chat");
             }}
             onNavigateToSubjects={() => setActiveTab("subjects")}
+            onNavigateToPlan={() => setActiveTab("plan")}
             onNavigateToAssessment={() => setActiveTab("assessment")}
             onNavigateToPractice={() => setActiveTab("practice")}
             onNavigateToPedagogy={() => setActiveTab("pedagogy")}

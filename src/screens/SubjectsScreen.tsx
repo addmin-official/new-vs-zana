@@ -12,7 +12,9 @@ import {
   BookMarked,
   Lock,
   Clock,
+  LayoutGrid,
 } from "lucide-react";
+import { SubjectCard } from "../components/SubjectCard.tsx";
 import { Grade12ChemistryBookViewer } from "../components/Grade12ChemistryBookViewer.tsx";
 import { Grade12PhysicsBookViewer } from "../components/Grade12PhysicsBookViewer.tsx";
 import { Grade12MathBookViewer } from "../components/Grade12MathBookViewer.tsx";
@@ -707,7 +709,7 @@ export function SubjectsScreen({ profile, onSelectSubject, onNavigate }: Subject
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedBookForModal, setSelectedBookForModal] = useState<TextbookCardItem | null>(null);
   const [activeViewerBook, setActiveViewerBook] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<"showcase" | "curriculum_backbone">("showcase");
+  const [activeView, setActiveView] = useState<"cards" | "showcase" | "curriculum_backbone">("cards");
 
   // Filter textbooks strictly according to the student's locked grade and stream
   const displayedBooks = useMemo(() => {
@@ -816,6 +818,22 @@ export function SubjectsScreen({ profile, onSelectSubject, onNavigate }: Subject
             <button
               type="button"
               onClick={() => {
+                setActiveView("cards");
+                setActiveViewerBook(null);
+              }}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                activeView === "cards" && !activeViewerBook
+                  ? "bg-[#2dd4bf] text-slate-950 shadow-md font-black"
+                  : "text-slate-300 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              <LayoutGrid className="w-4 h-4" />
+              <span>کارتەکانی وانە</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
                 setActiveView("showcase");
                 setActiveViewerBook(null);
               }}
@@ -846,6 +864,31 @@ export function SubjectsScreen({ profile, onSelectSubject, onNavigate }: Subject
             </button>
           </div>
         </div>
+
+        {/* VIEW 0: SIMPLIFIED SUBJECT CARD GRID (2 COLS MOBILE, 3 TABLET, 4 DESKTOP) */}
+        {activeView === "cards" && !activeViewerBook && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+              {displayedBooks.map((book) => (
+                <SubjectCard
+                  key={book.id}
+                  id={book.id}
+                  subjectKey={book.subjectKey || "chemistry"}
+                  title={book.title}
+                  fullName={book.fullName}
+                  grade={book.grade}
+                  streamLabel={book.streamLabel}
+                  chaptersCount={book.chaptersCount}
+                  masteryPercentage={profile.activeSubject === book.subjectKey ? 75 : 40}
+                  onSelect={(subj) => {
+                    onSelectSubject(subj);
+                    onNavigate("chat");
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* VIEW 1: CURRICULUM BACKBONE EXPLORER */}
         {activeView === "curriculum_backbone" && (

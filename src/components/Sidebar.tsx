@@ -1,23 +1,23 @@
 import React from "react";
 import {
-  Sparkles,
+  Home,
   MessageCircle,
   BookOpen,
   FlaskConical,
-  Atom,
-  Target,
   Compass,
-  Users,
-  FileText,
   User,
   GraduationCap,
   LogIn,
   LogOut,
   Heart,
   Cpu,
+  ChevronRight,
+  ChevronLeft,
 } from "lucide-react";
 import { useAppStore, UserRole } from "../store/appStore.ts";
-import { useTranslation } from "../hooks/useTranslation.ts";
+import { useUiStore } from "../store/uiStore.ts";
+import { useStudentProfile } from "../features/student/useStudentProfile.ts";
+import { GRADE_LABELS } from "../features/student/studentDefaults.ts";
 
 export type NavItemKey =
   | "home"
@@ -39,25 +39,123 @@ export type NavItemKey =
 export interface NavItem {
   key: NavItemKey;
   label: string;
-  icon: React.ReactNode;
+  icon: (active: boolean) => React.ReactNode;
   path: string;
   roles?: UserRole[];
 }
 
-export const NAV_ITEMS: NavItem[] = [
-  { key: "home", label: "چروسکەی ڕۆژانە", icon: <Sparkles className="w-5 h-5 shrink-0 text-amber-500" />, path: "/" },
-  { key: "chat", label: "گفتوگۆ و خوێندن", icon: <MessageCircle className="w-5 h-5 shrink-0" />, path: "/chat" },
-  { key: "subjects", label: "بابەتەکانی خوێندن", icon: <BookOpen className="w-5 h-5 shrink-0" />, path: "/subjects" },
-  { key: "practice", label: "تاقیگەی ڕاهێنان", icon: <FlaskConical className="w-5 h-5 shrink-0" />, path: "/practice" },
-  { key: "labs", label: "تاقیگەی مەجازی", icon: <Atom className="w-5 h-5 shrink-0 text-emerald-600" />, path: "/labs" },
-  { key: "assessment", label: "هەڵسەنگاندن", icon: <Target className="w-5 h-5 shrink-0 text-rose-500" />, path: "/assessment" },
-  { key: "plan", label: "پلانی فێربوون", icon: <Compass className="w-5 h-5 shrink-0 text-indigo-500" />, path: "/plan" },
-  { key: "rooms", label: "ژوورەکانی خوێندن", icon: <Users className="w-5 h-5 shrink-0 text-blue-500" />, path: "/rooms" },
-  { key: "report", label: "ڕاپۆرتی سەرپەرشتیار", icon: <FileText className="w-5 h-5 shrink-0 text-teal-600" />, path: "/report" },
-  { key: "teacher", label: "داشبۆردی مامۆستا", icon: <GraduationCap className="w-5 h-5 shrink-0 text-amber-600" />, path: "/teacher", roles: ["admin", "teacher"] },
-  { key: "parent", label: "دەروازەی سەرپەرشتیار", icon: <Heart className="w-5 h-5 shrink-0 text-rose-500" />, path: "/parent", roles: ["admin", "parent"] },
-  { key: "admin", label: "بەڕێوەبەرایەتی سیستم", icon: <Cpu className="w-5 h-5 shrink-0 text-indigo-600" />, path: "/admin", roles: ["admin"] },
-  { key: "profile", label: "پڕۆفایل و ڕێکخستنەکان", icon: <User className="w-5 h-5 shrink-0" />, path: "/profile" },
+export const NAV_ITEMS: { key: NavItemKey; label: string; path: string }[] = [
+  { key: "home", label: "ماڵەوە", path: "/" },
+  { key: "chat", label: "زانا", path: "/chat" },
+  { key: "subjects", label: "بابەتەکان", path: "/subjects" },
+  { key: "practice", label: "ڕاهێنان", path: "/practice" },
+  { key: "labs", label: "تاقیگە", path: "/labs" },
+  { key: "assessment", label: "هەڵسەنگاندن", path: "/assessment" },
+  { key: "plan", label: "پلان", path: "/plan" },
+  { key: "rooms", label: "ژوورەکان", path: "/rooms" },
+  { key: "report", label: "ڕاپۆرت", path: "/report" },
+  { key: "profile", label: "پرۆفایل", path: "/profile" },
+];
+
+// Student navigation: strictly simplified to 6 core destinations
+export const STUDENT_NAV_ITEMS: NavItem[] = [
+  {
+    key: "home",
+    label: "ماڵەوە",
+    path: "/",
+    icon: (active) => (
+      <Home
+        className={`w-5 h-5 shrink-0 transition-transform ${
+          active ? "fill-indigo-600 dark:fill-indigo-400 text-indigo-600 dark:text-indigo-400" : "text-slate-500"
+        }`}
+      />
+    ),
+  },
+  {
+    key: "chat",
+    label: "زانا (مامۆستا)",
+    path: "/chat",
+    icon: (active) => (
+      <MessageCircle
+        className={`w-5 h-5 shrink-0 transition-transform ${
+          active ? "fill-indigo-600 dark:fill-indigo-400 text-indigo-600 dark:text-indigo-400" : "text-slate-500"
+        }`}
+      />
+    ),
+  },
+  {
+    key: "subjects",
+    label: "بابەتەکان",
+    path: "/subjects",
+    icon: (active) => (
+      <BookOpen
+        className={`w-5 h-5 shrink-0 transition-transform ${
+          active ? "fill-indigo-600 dark:fill-indigo-400 text-indigo-600 dark:text-indigo-400" : "text-slate-500"
+        }`}
+      />
+    ),
+  },
+  {
+    key: "labs",
+    label: "تاقیگە",
+    path: "/labs",
+    icon: (active) => (
+      <FlaskConical
+        className={`w-5 h-5 shrink-0 transition-transform ${
+          active ? "fill-emerald-600 dark:fill-emerald-400 text-emerald-600 dark:text-emerald-400" : "text-slate-500"
+        }`}
+      />
+    ),
+  },
+  {
+    key: "plan",
+    label: "پلانم",
+    path: "/plan",
+    icon: (active) => (
+      <Compass
+        className={`w-5 h-5 shrink-0 transition-transform ${
+          active ? "fill-indigo-600 dark:fill-indigo-400 text-indigo-600 dark:text-indigo-400" : "text-slate-500"
+        }`}
+      />
+    ),
+  },
+  {
+    key: "profile",
+    label: "پرۆفایلم",
+    path: "/profile",
+    icon: (active) => (
+      <User
+        className={`w-5 h-5 shrink-0 transition-transform ${
+          active ? "fill-indigo-600 dark:fill-indigo-400 text-indigo-600 dark:text-indigo-400" : "text-slate-500"
+        }`}
+      />
+    ),
+  },
+];
+
+// Special items for non-student roles
+export const ADMIN_EXTRA_ITEMS: NavItem[] = [
+  {
+    key: "teacher",
+    label: "داشبۆردی مامۆستا",
+    path: "/teacher",
+    roles: ["admin", "teacher"],
+    icon: () => <GraduationCap className="w-5 h-5 shrink-0 text-amber-500" />,
+  },
+  {
+    key: "parent",
+    label: "دەروازەی سەرپەرشتیار",
+    path: "/parent",
+    roles: ["admin", "parent"],
+    icon: () => <Heart className="w-5 h-5 shrink-0 text-rose-500" />,
+  },
+  {
+    key: "admin",
+    label: "بەڕێوەبەرایەتی سیستم",
+    path: "/admin",
+    roles: ["admin"],
+    icon: () => <Cpu className="w-5 h-5 shrink-0 text-indigo-600" />,
+  },
 ];
 
 export interface SidebarProps {
@@ -79,148 +177,138 @@ export const Sidebar = React.memo(function Sidebar({
   onNavigateToLogin,
   onLogout,
 }: SidebarProps) {
-  const { t } = useTranslation();
+  const user = useAppStore((state) => state.user);
   const userRole = useAppStore((state) => state.userRole);
-  const setUserRole = useAppStore((state) => state.setUserRole);
+  const { profile } = useStudentProfile();
 
-  // Filter visible items based on user role
-  const visibleNavItems = NAV_ITEMS.filter((item) => {
-    if (userRole === "admin") return true; // Admin has full access to all dashboards
-    if (userRole === "parent") {
-      return ["parent", "report", "profile"].includes(item.key);
-    }
-    if (userRole === "teacher") {
-      return ["teacher", "subjects", "practice", "labs", "chat", "pedagogy", "profile"].includes(item.key);
-    }
-    // Default student role
-    if (item.roles && !item.roles.includes("student")) return false;
-    return true;
-  });
+  const isCollapsed = useUiStore((state) => state.isSidebarCollapsed);
+  const toggleSidebar = useUiStore((state) => state.toggleSidebar);
+
+  const studentName = profile?.name || user.name || "قوتابی";
+  const gradeKey = (profile?.grade || user.grade || "12") as keyof typeof GRADE_LABELS;
+  const gradeLabel = GRADE_LABELS[gradeKey] || `پۆلی ${gradeKey}`;
+
+  // Assemble visible items: student role sees ONLY the 6 simplified items
+  const itemsToRender = [...STUDENT_NAV_ITEMS];
+  if (userRole === "admin" || userRole === "teacher" || userRole === "parent") {
+    ADMIN_EXTRA_ITEMS.forEach((item) => {
+      if (item.roles?.includes(userRole)) {
+        itemsToRender.push(item);
+      }
+    });
+  }
 
   return (
     <aside
-      className={`w-[280px] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 hidden lg:flex flex-col h-full p-4 shrink-0 shadow-2xs overflow-y-auto ${className}`}
+      className={`bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 hidden md:flex flex-col h-full shrink-0 shadow-2xs select-none transition-all duration-200 ${
+        isCollapsed ? "w-[72px] p-2" : "w-[240px] p-4"
+      } ${className}`}
       dir="rtl"
+      aria-label="مینیوی پەڕە"
     >
-      {/* Featured Pedagogical Excellence Hub Button (Only if allowed for role) */}
-      {(userRole === "admin" || userRole === "student" || userRole === "teacher") && (
-        <div className="mb-3">
-          <button
-            onClick={() => onNavigate("pedagogy")}
-            onMouseEnter={() => onPrefetch?.("pedagogy")}
-            className={`w-full p-3 rounded-2xl border transition-all cursor-pointer text-right flex items-center justify-between ${
-              activeTab === "pedagogy"
-                ? "bg-gradient-to-r from-amber-500/20 to-indigo-500/20 border-amber-500/60 text-amber-900 dark:text-amber-200 shadow-xs"
-                : "bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200"
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
-                <GraduationCap className="w-4 h-4" />
+      {/* Header: Toggle & Student Badge */}
+      <div className="pb-3 border-b border-slate-100 dark:border-slate-800 mb-3">
+        <div className="flex items-center justify-between gap-2">
+          {!isCollapsed ? (
+            <div className="flex items-center gap-2.5 overflow-hidden">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-600/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-base shrink-0 ring-1 ring-indigo-500/30">
+                {studentName.charAt(0) || "ق"}
               </div>
-              <div>
-                <span className="text-xs font-black block leading-tight">تاقیگەی پێداگۆجی</span>
-                <span className="text-[10px] text-slate-400 block mt-0.5">٥ پایەی فێربوونی قووڵ</span>
+              <div className="min-w-0">
+                <span className="font-sans font-bold text-sm text-slate-900 dark:text-white truncate block">
+                  {studentName}
+                </span>
+                <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500 block truncate">
+                  {gradeLabel}
+                </span>
               </div>
             </div>
-            <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300">
-              نوێ
-            </span>
+          ) : (
+            <div className="mx-auto w-10 h-10 rounded-2xl bg-indigo-600/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-base ring-1 ring-indigo-500/30">
+              {studentName.charAt(0) || "ق"}
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            aria-label={isCollapsed ? "فراوانکردنی مینیو" : "بچووککردنەوەی مینیو"}
+            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer shrink-0"
+          >
+            {isCollapsed ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
           </button>
         </div>
-      )}
+      </div>
 
-      <div className="space-y-1 flex-1">
-        {visibleNavItems.map((item) => {
+      {/* Navigation Items */}
+      <nav className="space-y-1.5 flex-1 overflow-y-auto no-scrollbar">
+        {itemsToRender.map((item) => {
           const isActive =
             activeTab === item.key ||
-            (activeTab === "settings" && item.key === "profile");
+            (item.key === "profile" && activeTab === "settings");
+
           return (
             <button
               key={item.key}
+              type="button"
               onClick={() => onNavigate(item.key)}
               onMouseEnter={() => onPrefetch?.(item.key)}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm transition-all cursor-pointer text-right ${
+              title={isCollapsed ? item.label : undefined}
+              className={`w-full flex items-center gap-3 rounded-2xl transition-all duration-150 cursor-pointer min-h-[48px] touch-manipulation ${
+                isCollapsed ? "justify-center px-2 py-3" : "px-3.5 py-3 text-right"
+              } ${
                 isActive
-                  ? "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 font-bold border-r-3 border-indigo-600 shadow-2xs"
-                  : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium"
+                  ? "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 font-bold shadow-xs border-r-3 border-indigo-600"
+                  : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white font-medium"
               }`}
             >
-              <span className={isActive ? "text-indigo-600 dark:text-indigo-400" : "text-slate-500 dark:text-slate-400"}>
-                {item.icon}
-              </span>
-              <span className="font-sans text-xs">{t(`navigation.${item.key}`) || item.label}</span>
+              <div className="shrink-0">{item.icon(isActive)}</div>
+              {!isCollapsed && (
+                <span className="font-sans text-xs leading-none truncate">{item.label}</span>
+              )}
             </button>
           );
         })}
-      </div>
+      </nav>
 
-      {/* Role Switcher in Sidebar Footer */}
-      <div className="pt-2 pb-2 border-t border-slate-100 dark:border-slate-800">
-        <span className="text-[10px] font-bold text-slate-400 font-sans block mb-1.5">
-          شێوازی بینین (دەسەڵات):
-        </span>
-        <div className="grid grid-cols-2 gap-1 bg-slate-50 dark:bg-slate-800/80 p-1 rounded-xl">
-          {[
-            { id: "student", label: "قوتابی" },
-            { id: "teacher", label: "مامۆستا" },
-            { id: "parent", label: "سەرپەرشتیار" },
-            { id: "admin", label: "بەڕێوەبەر" },
-          ].map((r) => (
-            <button
-              key={r.id}
-              type="button"
-              onClick={() => {
-                const role = r.id as UserRole;
-                setUserRole(role);
-                if (role === "teacher") onNavigate("teacher");
-                else if (role === "parent") onNavigate("parent");
-                else if (role === "admin") onNavigate("admin");
-                else onNavigate("home");
-              }}
-              className={`py-1 px-1.5 rounded-lg text-[10px] font-bold transition cursor-pointer text-center ${
-                userRole === r.id
-                  ? "bg-indigo-600 text-white shadow-2xs"
-                  : "text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-              }`}
-            >
-              {r.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Auth Action Button */}
-      <div className="pt-2 pb-1 border-t border-slate-100 dark:border-slate-800">
+      {/* Footer: Auth Action & Branding */}
+      <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
         {!isPermanentUser ? (
           <button
             type="button"
             onClick={onNavigateToLogin}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800 transition cursor-pointer shadow-2xs"
+            title={isCollapsed ? "چوونەژوورەوە" : undefined}
+            className={`w-full flex items-center gap-2 rounded-2xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800 transition cursor-pointer min-h-[44px] ${
+              isCollapsed ? "justify-center p-2.5" : "px-3 py-2.5"
+            }`}
           >
             <LogIn className="w-4 h-4 shrink-0" />
-            <span>چوونەژوورەوە بە هەژمار</span>
+            {!isCollapsed && <span className="truncate">چوونەژوورەوە</span>}
           </button>
         ) : (
           <button
             type="button"
             onClick={onLogout}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-transparent hover:border-rose-200 transition cursor-pointer"
+            title={isCollapsed ? "چوونەدەرەوە" : undefined}
+            className={`w-full flex items-center gap-2 rounded-2xl text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-transparent hover:border-rose-200 transition cursor-pointer min-h-[44px] ${
+              isCollapsed ? "justify-center p-2.5" : "px-3 py-2.5"
+            }`}
           >
             <LogOut className="w-4 h-4 shrink-0" />
-            <span>چوونەدەرەوە لە هەژمار</span>
+            {!isCollapsed && <span className="truncate">چوونەدەرەوە</span>}
           </button>
         )}
-      </div>
 
-      {/* Footer Branding in Sidebar */}
-      <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-center">
-        <p className="font-sans font-bold text-xs text-slate-800 dark:text-slate-200">پلاتفۆرمی زانا 🎓</p>
-        <p className="font-sans text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">پڕۆگرامی فەرمی پۆلەکانی ٩ تا ١٢</p>
+        {!isCollapsed && (
+          <div className="text-center pt-1">
+            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 font-sans block">
+              پلاتفۆرمی زانا 🎓
+            </span>
+          </div>
+        )}
       </div>
     </aside>
   );
 });
 
 export default Sidebar;
-
