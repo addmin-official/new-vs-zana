@@ -18,6 +18,7 @@ import { useAppStore, UserRole } from "../store/appStore.ts";
 import { useUiStore } from "../store/uiStore.ts";
 import { useStudentProfile } from "../features/student/useStudentProfile.ts";
 import { GRADE_LABELS } from "../features/student/studentDefaults.ts";
+import { useFeatureFlagsContext } from "../features/flags/index.ts";
 
 export type NavItemKey =
   | "home"
@@ -183,16 +184,21 @@ export const Sidebar = React.memo(function Sidebar({
 
   const isCollapsed = useUiStore((state) => state.isSidebarCollapsed);
   const toggleSidebar = useUiStore((state) => state.toggleSidebar);
+  const { isEnabled } = useFeatureFlagsContext();
 
   const studentName = profile?.name || user.name || "قوتابی";
   const gradeKey = (profile?.grade || user.grade || "12") as keyof typeof GRADE_LABELS;
   const gradeLabel = GRADE_LABELS[gradeKey] || `پۆلی ${gradeKey}`;
 
   // Assemble visible items: student role sees ONLY the 6 simplified items
+  // Admin/Teacher/Parent extra items are conditionally shown ONLY if their feature flag is enabled
   const itemsToRender = [...STUDENT_NAV_ITEMS];
   if (userRole === "admin" || userRole === "teacher" || userRole === "parent") {
     ADMIN_EXTRA_ITEMS.forEach((item) => {
       if (item.roles?.includes(userRole)) {
+        if (item.key === "teacher" && !isEnabled("TEACHER_DASHBOARD")) return;
+        if (item.key === "parent" && !isEnabled("PARENT_PORTAL")) return;
+        if (item.key === "admin" && !isEnabled("ADMIN_DASHBOARD")) return;
         itemsToRender.push(item);
       }
     });

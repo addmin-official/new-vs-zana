@@ -23,6 +23,7 @@ import {
   SessionRecoveryData,
 } from "./auth/sessionRecovery.ts";
 import { checkUserExists } from "./auth/userProfileService.ts";
+import { FeatureFlagProvider, FeatureFlagRoute } from "./features/flags/index.ts";
 
 // Lazy-loaded routes for code-splitting and performance (LCP/FCP < 2s)
 const Home = lazy(() => import("./pages/Home.tsx").then((m) => ({ default: m.Home })));
@@ -646,26 +647,32 @@ export default function App() {
         return <ParentReport profile={profile} />;
       case "teacher":
         return (
-          <TeacherDashboard
-            onNavigateToSubjects={() => setActiveTab("subjects")}
-            onNavigateToPractice={() => setActiveTab("practice")}
-            onBackToApp={() => setActiveTab("home")}
-          />
+          <FeatureFlagRoute flag="TEACHER_DASHBOARD" onNavigateHome={() => setActiveTab("home")}>
+            <TeacherDashboard
+              onNavigateToSubjects={() => setActiveTab("subjects")}
+              onNavigateToPractice={() => setActiveTab("practice")}
+              onBackToApp={() => setActiveTab("home")}
+            />
+          </FeatureFlagRoute>
         );
       case "parent":
         return (
-          <ParentPortal
-            profile={profile}
-            onBackToApp={() => setActiveTab("home")}
-          />
+          <FeatureFlagRoute flag="PARENT_PORTAL" onNavigateHome={() => setActiveTab("home")}>
+            <ParentPortal
+              profile={profile}
+              onBackToApp={() => setActiveTab("home")}
+            />
+          </FeatureFlagRoute>
         );
       case "admin":
         return (
-          <SystemAdminDashboard
-            onBackToApp={() => setActiveTab("home")}
-            onNavigateToTeacher={() => setActiveTab("teacher")}
-            onNavigateToParent={() => setActiveTab("parent")}
-          />
+          <FeatureFlagRoute flag="ADMIN_DASHBOARD" onNavigateHome={() => setActiveTab("home")}>
+            <SystemAdminDashboard
+              onBackToApp={() => setActiveTab("home")}
+              onNavigateToTeacher={() => setActiveTab("teacher")}
+              onNavigateToParent={() => setActiveTab("parent")}
+            />
+          </FeatureFlagRoute>
         );
       case "profile":
       case "settings":
@@ -715,8 +722,9 @@ export default function App() {
   const pageTitle = pageTitleMap[activeTab] || "پلاتفۆرمی زانا 🎓";
 
   return (
-    <ThemeProvider>
-      <OfflineBanner />
+    <FeatureFlagProvider userId={currentUser?.uid}>
+      <ThemeProvider>
+        <OfflineBanner />
       <AppShell
         activeTab={activeTab}
         onTabChange={(tab) => {
@@ -790,6 +798,7 @@ export default function App() {
         />
       )}
     </ThemeProvider>
+  </FeatureFlagProvider>
   );
 }
 
