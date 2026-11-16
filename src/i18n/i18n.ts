@@ -157,7 +157,26 @@ export class I18nManager {
       return String(key);
     }
 
-    // If target value is an array, return randomly or first
+    // 3b. Kurdish & Arabic Pluralization rules for object-shaped entries
+    if (
+      value &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      options &&
+      typeof options.count === "number"
+    ) {
+      const pluralMap = value as Record<string, unknown>;
+      const count = options.count;
+      if (count === 0 && "zero" in pluralMap) {
+        value = pluralMap.zero;
+      } else if (count === 1 && "one" in pluralMap) {
+        value = pluralMap.one;
+      } else if ("other" in pluralMap) {
+        value = pluralMap.other;
+      }
+    }
+
+    // If target value is an array, return first or formatted
     if (Array.isArray(value)) {
       return value[0] !== undefined ? String(value[0]) : String(key);
     }

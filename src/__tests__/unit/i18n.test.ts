@@ -46,9 +46,18 @@ describe("ZANA i18n System & Kurdish Sorani Engine", () => {
 
     it("translates new lab, plan, practice and settings keys", () => {
       expect(t("labs.title")).toBe("تاقیگەی زانستیی کارلێککارانە و ٣D");
+      expect(t("labs.experiment")).toBe("تاقیکردنەوە");
+      expect(t("labs.hypothesis")).toBe("گریمانە");
+      expect(t("labs.variable")).toBe("گۆڕاو");
+      expect(t("labs.observation")).toBe("تێبینیکردن و بەدواداچوون");
       expect(t("plan.todayPlan")).toBe("ئەرکەکانی ئەمڕۆ");
       expect(t("practice.badges")).toBe("مەدالیاکانی بەدەستهێنان");
       expect(t("settings.numerals")).toBe("شێوازی ژمارەکان");
+    });
+
+    it("provides 30+ authentic Kurdish encouragement phrases", async () => {
+      const { ckb: ckbDict } = await import("../../i18n/locales/ckb.ts");
+      expect(ckbDict.feedback.encouragement.length).toBeGreaterThanOrEqual(30);
     });
   });
 

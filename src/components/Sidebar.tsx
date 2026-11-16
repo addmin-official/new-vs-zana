@@ -15,6 +15,7 @@ import { useAppStore } from "../store/appStore.ts";
 import { useUiStore } from "../store/uiStore.ts";
 import { useStudentProfile } from "../features/student/useStudentProfile.ts";
 import { GRADE_LABELS } from "../features/student/studentDefaults.ts";
+import { useTranslation } from "../hooks/useTranslation.ts";
 
 export type NavItemKey =
   | "home"
@@ -146,6 +147,7 @@ export const Sidebar = React.memo(function Sidebar({
   onNavigateToLogin,
   onLogout,
 }: SidebarProps) {
+  const { t } = useTranslation();
   const user = useAppStore((state) => state.user);
   const { profile } = useStudentProfile();
 
@@ -208,13 +210,26 @@ export const Sidebar = React.memo(function Sidebar({
             activeTab === item.key ||
             (item.key === "profile" && activeTab === "settings");
 
+          const label =
+            item.key === "home"
+              ? t("navigation.home")
+              : item.key === "chat"
+              ? t("navigation.chat")
+              : item.key === "labs"
+              ? t("navigation.lab")
+              : item.key === "plan"
+              ? t("navigation.plan")
+              : item.key === "profile"
+              ? t("navigation.profile")
+              : item.label;
+
           return (
             <button
               key={item.key}
               type="button"
               onClick={() => onNavigate(item.key)}
               onMouseEnter={() => onPrefetch?.(item.key)}
-              title={isCollapsed ? item.label : undefined}
+              title={isCollapsed ? label : undefined}
               className={`w-full flex items-center gap-3 rounded-2xl transition-all duration-150 cursor-pointer min-h-[48px] touch-manipulation ${
                 isCollapsed ? "justify-center px-2 py-3" : "px-3.5 py-3 text-right"
               } ${
@@ -225,7 +240,7 @@ export const Sidebar = React.memo(function Sidebar({
             >
               <div className="shrink-0">{item.icon(isActive)}</div>
               {!isCollapsed && (
-                <span className="font-sans text-xs leading-none truncate">{item.label}</span>
+                <span className="font-sans text-xs leading-none truncate">{label}</span>
               )}
             </button>
           );
@@ -250,13 +265,13 @@ export const Sidebar = React.memo(function Sidebar({
           <button
             type="button"
             onClick={onLogout}
-            title={isCollapsed ? "چوونەدەرەوە" : undefined}
+            title={isCollapsed ? t("navigation.logout") : undefined}
             className={`w-full flex items-center gap-2 rounded-2xl text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-transparent hover:border-rose-200 transition cursor-pointer min-h-[44px] ${
               isCollapsed ? "justify-center p-2.5" : "px-3 py-2.5"
             }`}
           >
             <LogOut className="w-4 h-4 shrink-0" />
-            {!isCollapsed && <span className="truncate">چوونەدەرەوە</span>}
+            {!isCollapsed && <span className="truncate">{t("navigation.logout")}</span>}
           </button>
         )}
 
