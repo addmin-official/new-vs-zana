@@ -18,11 +18,12 @@ import {
   getErrorMessage,
 } from "../services/authService.ts";
 import { checkUserExists } from "../auth/userProfileService.ts";
+import { getMyRole, UserRole } from "../auth/roles.ts";
 
 export interface LoginProps {
   onNavigateToRegister: () => void;
   onNavigateToForgotPassword: () => void;
-  onLoginSuccess?: (isNewUser?: boolean) => void;
+  onLoginSuccess?: (isNewUser?: boolean, role?: UserRole) => void;
 }
 
 export function Login({
@@ -43,6 +44,32 @@ export function Login({
 
   // Email format validation (real-time)
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
+  const handlePostLogin = async (user: { uid: string; getIdToken: (forceRefresh?: boolean) => Promise<string> }) => {
+    // Force refresh ID token to get latest claims from server
+    try {
+      await user.getIdToken(true);
+    } catch {
+      // Handled
+    }
+
+    const role = await getMyRole(user as unknown as import("firebase/auth").User, true);
+
+    if (role === "admin") {
+      if (typeof window !== "undefined") {
+        window.history.pushState(null, "", "/admin");
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      }
+    } else {
+      if (typeof window !== "undefined") {
+        window.history.pushState(null, "", "/home");
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      }
+    }
+
+    const check = await checkUserExists(user.uid);
+    onLoginSuccess?.(!check.exists, role);
+  };
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,9 +94,7 @@ export function Login({
     setLoading(true);
     try {
       const user = await loginWithEmail(trimmedEmail, password);
-      // Check if user is returning or new
-      const check = await checkUserExists(user.uid);
-      onLoginSuccess?.(!check.exists);
+      await handlePostLogin(user);
     } catch (err: unknown) {
       const parsedMsg = getErrorMessage(err);
       setErrorMessage(parsedMsg);
@@ -85,8 +110,7 @@ export function Login({
 
     try {
       const user = await loginWithGoogle();
-      const check = await checkUserExists(user.uid);
-      onLoginSuccess?.(!check.exists);
+      await handlePostLogin(user);
     } catch (err: unknown) {
       setErrorMessage(getErrorMessage(err));
     } finally {
@@ -100,8 +124,8 @@ export function Login({
     setGuestLoading(true);
 
     try {
-      await loginAnonymously();
-      onLoginSuccess?.(false);
+      const user = await loginAnonymously();
+      await handlePostLogin(user);
     } catch (err: unknown) {
       setErrorMessage(getErrorMessage(err));
     } finally {
@@ -156,7 +180,7 @@ export function Login({
                   <Sparkles className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-xs font-bold text-slate-200">مامۆستای سوقراتی</h3>
+                  <h3 className="text-xs font-bold text-slate-200">ڕێبەری زیرەکی سۆکراتی</h3>
                   <p className="text-[11px] text-slate-400">ڕێنمایی هەنگاو بە هەنگاو بەبێ پێدانی وەڵامی ڕاستەوخۆ</p>
                 </div>
               </div>

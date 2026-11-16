@@ -6,19 +6,15 @@ import {
   FlaskConical,
   Compass,
   User,
-  GraduationCap,
   LogIn,
   LogOut,
-  Heart,
-  Cpu,
   ChevronRight,
   ChevronLeft,
 } from "lucide-react";
-import { useAppStore, UserRole } from "../store/appStore.ts";
+import { useAppStore } from "../store/appStore.ts";
 import { useUiStore } from "../store/uiStore.ts";
 import { useStudentProfile } from "../features/student/useStudentProfile.ts";
 import { GRADE_LABELS } from "../features/student/studentDefaults.ts";
-import { useFeatureFlagsContext } from "../features/flags/index.ts";
 
 export type NavItemKey =
   | "home"
@@ -33,8 +29,6 @@ export type NavItemKey =
   | "report"
   | "profile"
   | "settings"
-  | "teacher"
-  | "parent"
   | "admin";
 
 export interface NavItem {
@@ -42,7 +36,6 @@ export interface NavItem {
   label: string;
   icon: (active: boolean) => React.ReactNode;
   path: string;
-  roles?: UserRole[];
 }
 
 export const NAV_ITEMS: { key: NavItemKey; label: string; path: string }[] = [
@@ -134,31 +127,6 @@ export const STUDENT_NAV_ITEMS: NavItem[] = [
   },
 ];
 
-// Special items for non-student roles
-export const ADMIN_EXTRA_ITEMS: NavItem[] = [
-  {
-    key: "teacher",
-    label: "داشبۆردی مامۆستا",
-    path: "/teacher",
-    roles: ["admin", "teacher"],
-    icon: () => <GraduationCap className="w-5 h-5 shrink-0 text-amber-500" />,
-  },
-  {
-    key: "parent",
-    label: "دەروازەی سەرپەرشتیار",
-    path: "/parent",
-    roles: ["admin", "parent"],
-    icon: () => <Heart className="w-5 h-5 shrink-0 text-rose-500" />,
-  },
-  {
-    key: "admin",
-    label: "بەڕێوەبەرایەتی سیستم",
-    path: "/admin",
-    roles: ["admin"],
-    icon: () => <Cpu className="w-5 h-5 shrink-0 text-indigo-600" />,
-  },
-];
-
 export interface SidebarProps {
   activeTab: NavItemKey;
   onNavigate: (tab: NavItemKey) => void;
@@ -179,30 +147,17 @@ export const Sidebar = React.memo(function Sidebar({
   onLogout,
 }: SidebarProps) {
   const user = useAppStore((state) => state.user);
-  const userRole = useAppStore((state) => state.userRole);
   const { profile } = useStudentProfile();
 
   const isCollapsed = useUiStore((state) => state.isSidebarCollapsed);
   const toggleSidebar = useUiStore((state) => state.toggleSidebar);
-  const { isEnabled } = useFeatureFlagsContext();
 
   const studentName = profile?.name || user.name || "قوتابی";
   const gradeKey = (profile?.grade || user.grade || "12") as keyof typeof GRADE_LABELS;
   const gradeLabel = GRADE_LABELS[gradeKey] || `پۆلی ${gradeKey}`;
 
-  // Assemble visible items: student role sees ONLY the 6 simplified items
-  // Admin/Teacher/Parent extra items are conditionally shown ONLY if their feature flag is enabled
+  // Student interface strictly renders only student learning items
   const itemsToRender = [...STUDENT_NAV_ITEMS];
-  if (userRole === "admin" || userRole === "teacher" || userRole === "parent") {
-    ADMIN_EXTRA_ITEMS.forEach((item) => {
-      if (item.roles?.includes(userRole)) {
-        if (item.key === "teacher" && !isEnabled("TEACHER_DASHBOARD")) return;
-        if (item.key === "parent" && !isEnabled("PARENT_PORTAL")) return;
-        if (item.key === "admin" && !isEnabled("ADMIN_DASHBOARD")) return;
-        itemsToRender.push(item);
-      }
-    });
-  }
 
   return (
     <aside

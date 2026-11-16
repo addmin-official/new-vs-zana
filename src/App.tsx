@@ -23,7 +23,7 @@ import {
   SessionRecoveryData,
 } from "./auth/sessionRecovery.ts";
 import { checkUserExists } from "./auth/userProfileService.ts";
-import { FeatureFlagProvider, FeatureFlagRoute } from "./features/flags/index.ts";
+import { FeatureFlagProvider } from "./features/flags/index.ts";
 
 // Lazy-loaded routes for code-splitting and performance (LCP/FCP < 2s)
 const Home = lazy(() => import("./pages/Home.tsx").then((m) => ({ default: m.Home })));
@@ -37,10 +37,8 @@ const ParentReport = lazy(() => import("./pages/ParentReport.tsx").then((m) => (
 const ProfileAndSettings = lazy(() => import("./pages/ProfileAndSettings.tsx").then((m) => ({ default: m.ProfileAndSettings })));
 const SubjectsScreen = lazy(() => import("./screens/SubjectsScreen.tsx").then((m) => ({ default: m.SubjectsScreen })));
 const BrainAdminDashboard = lazy(() => import("./features/brain/BrainAdminDashboard.tsx").then((m) => ({ default: m.BrainAdminDashboard })));
-const TeacherDashboard = lazy(() => import("./pages/TeacherDashboard.tsx").then((m) => ({ default: m.TeacherDashboard })));
-const ParentPortal = lazy(() => import("./pages/ParentPortal.tsx").then((m) => ({ default: m.ParentPortal })));
-const SystemAdminDashboard = lazy(() => import("./pages/BrainAdminDashboard.tsx").then((m) => ({ default: m.BrainAdminDashboard })));
-const AdminRoute = lazy(() => import("./routes/AdminRoute.tsx").then((m) => ({ default: m.AdminRoute })));
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard.tsx").then((m) => ({ default: m.AdminDashboard })));
+const AdminRoute = lazy(() => import("./auth/adminGuard.ts").then((m) => ({ default: m.AdminRoute })));
 const RegisterScreen = lazy(() => import("./pages/Register.tsx").then((m) => ({ default: m.Register })));
 const ForgotPasswordScreen = lazy(() => import("./screens/ForgotPasswordScreen.tsx").then((m) => ({ default: m.ForgotPasswordScreen })));
 const PedagogicalHubScreen = lazy(() => import("./screens/PedagogicalHubScreen.tsx"));
@@ -73,8 +71,6 @@ const PATH_TO_TAB: Record<string, NavItemKey> = {
   "/plan": "plan",
   "/rooms": "rooms",
   "/report": "report",
-  "/teacher": "teacher",
-  "/parent": "parent",
   "/admin": "admin",
   "/profile": "profile",
   "/settings": "settings",
@@ -91,8 +87,6 @@ const TAB_TO_PATH: Record<NavItemKey, string> = {
   plan: "/plan",
   rooms: "/rooms",
   report: "/report",
-  teacher: "/teacher",
-  parent: "/parent",
   admin: "/admin",
   profile: "/profile",
   settings: "/settings",
@@ -122,9 +116,7 @@ const routePrefetchMap: Partial<Record<NavItemKey, () => Promise<unknown>>> = {
   plan: () => import("./pages/StudyPathManager.tsx"),
   rooms: () => import("./pages/StudyRooms.tsx"),
   report: () => import("./pages/ParentReport.tsx"),
-  teacher: () => import("./pages/TeacherDashboard.tsx"),
-  parent: () => import("./pages/ParentPortal.tsx"),
-  admin: () => import("./pages/BrainAdminDashboard.tsx"),
+  admin: () => import("./pages/AdminDashboard.tsx"),
   profile: () => import("./pages/ProfileAndSettings.tsx"),
   settings: () => import("./pages/ProfileAndSettings.tsx"),
 };
@@ -645,34 +637,14 @@ export default function App() {
         return <StudyRooms />;
       case "report":
         return <ParentReport profile={profile} />;
-      case "teacher":
-        return (
-          <FeatureFlagRoute flag="TEACHER_DASHBOARD" onNavigateHome={() => setActiveTab("home")}>
-            <TeacherDashboard
-              onNavigateToSubjects={() => setActiveTab("subjects")}
-              onNavigateToPractice={() => setActiveTab("practice")}
-              onBackToApp={() => setActiveTab("home")}
-            />
-          </FeatureFlagRoute>
-        );
-      case "parent":
-        return (
-          <FeatureFlagRoute flag="PARENT_PORTAL" onNavigateHome={() => setActiveTab("home")}>
-            <ParentPortal
-              profile={profile}
-              onBackToApp={() => setActiveTab("home")}
-            />
-          </FeatureFlagRoute>
-        );
       case "admin":
         return (
-          <FeatureFlagRoute flag="ADMIN_DASHBOARD" onNavigateHome={() => setActiveTab("home")}>
-            <SystemAdminDashboard
-              onBackToApp={() => setActiveTab("home")}
-              onNavigateToTeacher={() => setActiveTab("teacher")}
-              onNavigateToParent={() => setActiveTab("parent")}
+          <AdminRoute fallbackRedirect="/home">
+            <AdminDashboard
+              onNavigateHome={() => setActiveTab("home")}
+              onLogout={handleLogout}
             />
-          </FeatureFlagRoute>
+          </AdminRoute>
         );
       case "profile":
       case "settings":
@@ -712,9 +684,7 @@ export default function App() {
     plan: "پلانی خوێندن (Study Path)",
     rooms: "ژووری خوێندنی بەکۆمەڵ (Study Rooms)",
     report: "ڕاپۆرتی هوشیاری باوان (Parent Report)",
-    teacher: "داشبۆردی مامۆستا (Teacher Portal)",
-    parent: "دەروازەی سەرپەرشتیار (Parent Portal)",
-    admin: "بەڕێوەبەرایەتی سیستم (System Intelligence)",
+    admin: "بەڕێوەبەرایەتی سیستم (Admin Console)",
     profile: "پڕۆفایل و ڕێکخستنەکان 👤",
     settings: "ڕێکخستنەکان",
   };

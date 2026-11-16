@@ -21,19 +21,18 @@ service cloud.firestore {
     }
     
     function isOwner(userId) {
-      return isVerifiedUser() && request.auth.uid == userId;
+      return isAuthenticated() && request.auth.uid == userId;
     }
     
+    // Strict Admin Double Verification: Both custom claim role AND hardcoded authorized email
     function isAdmin() {
-      return isAuthenticated() && (
-        request.auth.token.admin == true ||
-        request.auth.token.role == 'admin' ||
-        (request.auth.token.email is string && request.auth.token.email in ['addmin.official.idg@gmail.com', 'admin@zana.krd'])
-      );
+      return isAuthenticated() &&
+             (request.auth.token.role == 'admin' || request.auth.token.admin == true) &&
+             request.auth.token.email == 'addmin.official.idg@gmail.com';
     }
     
     function isValidId(id) {
-      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() > 0 && id.size() <= 128;
     }
     
     // Rate Limiting: Minimum 600ms between consecutive individual writes per document
@@ -44,95 +43,40 @@ service cloud.firestore {
     }
     
     // ========================================================================
-    // Schema Validations
-    // ========================================================================
-    
-    function isValidUserData(data) {
-      return data.keys().hasAny(['profile', 'settings']) &&
-             (!('profile' in data) || (
-               data.profile is map &&
-               data.profile.keys().hasAll(['name', 'grade', 'stream']) &&
-               data.profile.name is string && data.profile.name.size() <= 100 &&
-               data.profile.grade in ['9', '10', '11', '12'] &&
-               data.profile.stream in ['scientific', 'literary', 'general']
-             ));
-    }
-    
-    function isValidMasteryData(data) {
-      return data.keys().hasAll(['subjectId', 'lastUpdated']) &&
-             data.subjectId is string &&
-             data.subjectId in ['math', 'physics', 'chemistry', 'english', 'kurdish', 'arabic', 'biology', 'history', 'geography', 'economics'];
-    }
-    
-    function isValidSessionData(data) {
-      return data.keys().hasAll(['startTime', 'subject', 'questionsAttempted', 'correctCount']) &&
-             data.subject is string &&
-             data.questionsAttempted is number &&
-             data.correctCount is number;
-    }
-    
-    function isValidStudyPlanData(data) {
-      return data.keys().hasAll(['weekId', 'days']) &&
-             data.weekId is string &&
-             data.days is map;
-    }
-    
-    function isValidAssessmentData(data) {
-      return data.keys().hasAll(['studentId', 'subjectId', 'score']) &&
-             data.studentId == request.auth.uid &&
-             data.subjectId is string &&
-             data.score is number;
-    }
-    
-    // Legacy student profile validation for backward compatibility
-    function isValidLegacyStudentData(data) {
-      return data.keys().hasAll(['id', 'name', 'grade', 'stream', 'activeSubject', 'level']) &&
-             data.id is string && data.id.size() <= 128 &&
-             data.name is string && data.name.size() <= 100 &&
-             data.grade in ['9', '10', '11', '12'] &&
-             data.stream in ['scientific', 'literary', 'general'] &&
-             data.activeSubject in ['math', 'physics', 'chemistry', 'english'] &&
-             data.level in ['beginner', 'intermediate', 'advanced'];
-    }
-    
-    // ========================================================================
     // 1. Users Collection: users/{userId}
     // ========================================================================
     
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create, update: if (isOwner(userId) || isAdmin()) && 
-                              isValidId(userId) && 
-                              isValidUserData(request.resource.data) &&
-                              isWithinRateLimit();
+      allow create, update: if (isOwner(userId) || isAdmin()) && isValidId(userId);
       allow delete: if isAdmin();
       
       // Subcollection: users/{userId}/mastery/{subjectId}
       match /mastery/{subjectId} {
         allow read: if isOwner(userId) || isAdmin();
-        allow write: if (isOwner(userId) || isAdmin()) && 
-                        isValidId(subjectId) && 
-                        isValidMasteryData(request.resource.data) &&
-                        isWithinRateLimit();
+        allow write: if (isOwner(userId) || isAdmin()) && isValidId(subjectId);
       }
       
       // Subcollection: users/{userId}/sessions/{sessionId}
+      // Sessions cannot be deleted by students
       match /sessions/{sessionId} {
         allow read: if isOwner(userId) || isAdmin();
-        allow create, update: if (isOwner(userId) || isAdmin()) && 
-                                isValidId(sessionId) && 
-                                isValidSessionData(request.resource.data) &&
-                                isWithinRateLimit();
+        allow create, update: if (isOwner(userId) || isAdmin()) && isValidId(sessionId);
         allow delete: if isAdmin();
       }
       
       // Subcollection: users/{userId}/studyPlan/{weekId}
       match /studyPlan/{weekId} {
         allow read: if isOwner(userId) || isAdmin();
-        allow write: if (isOwner(userId) || isAdmin()) && 
-                        isValidId(weekId) && 
-                        isValidStudyPlanData(request.resource.data) &&
-                        isWithinRateLimit();
+        allow write: if (isOwner(userId) || isAdmin()) && isValidId(weekId);
+      }
+      
+      // Subcollection: users/{userId}/achievements/{achievementId}
+      // Achievements cannot be deleted
+      match /achievements/{achievementId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create, update: if (isOwner(userId) || isAdmin()) && isValidId(achievementId);
+        allow delete: if false;
       }
     }
     
@@ -147,31 +91,59 @@ service cloud.firestore {
     }
     
     // ========================================================================
-    // 3. Assessments: assessments/{assessmentId}
-    // Read: Own / Write: Own / Delete: None
+    // 3. System Configuration & Feature Flags
+    // Read: All / Write: Admin only
+    // ========================================================================
+    
+    match /system/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /featureFlags/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // ========================================================================
+    // 4. Assessments: assessments/{assessmentId}
+    // Read: Own or Admin / Write: Own / Delete: None
     // ========================================================================
     
     match /assessments/{assessmentId} {
       allow read: if isAuthenticated() && (resource.data.studentId == request.auth.uid || isAdmin());
-      allow create: if isAuthenticated() && 
-                      request.resource.data.studentId == request.auth.uid && 
-                      isValidAssessmentData(request.resource.data);
-      allow update: if isAuthenticated() && 
-                      resource.data.studentId == request.auth.uid && 
-                      request.resource.data.studentId == request.auth.uid;
-      allow delete: if false; // Strict requirement: assessments cannot be deleted
+      allow create: if isAuthenticated() && request.resource.data.studentId == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.studentId == request.auth.uid;
+      allow delete: if false;
     }
     
     // ========================================================================
-    // 4. Backward Compatibility: students/{studentId}
+    // 5. System Errors & Telemetry: errors/{errorId}
+    // Create: Anyone / Read, Update, Delete: Admin only
+    // ========================================================================
+    
+    match /errors/{errorId} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+    
+    // ========================================================================
+    // 6. Admin Audit Logs: adminLogs/{logId}
+    // Read & Write: Admin only
+    // ========================================================================
+    
+    match /adminLogs/{logId} {
+      allow read, write: if isAdmin();
+    }
+    
+    // ========================================================================
+    // 7. Backward Compatibility: students/{studentId}
     // ========================================================================
     
     match /students/{studentId} {
       allow read: if isOwner(studentId) || isAdmin();
-      allow create, update: if (isOwner(studentId) || isAdmin()) && 
-                              isValidId(studentId) && 
-                              isValidLegacyStudentData(request.resource.data);
-      allow delete: if false;
+      allow create, update: if (isOwner(studentId) || isAdmin()) && isValidId(studentId);
+      allow delete: if isAdmin();
       
       match /{allSubcollections=**} {
         allow read, write: if isOwner(studentId) || isAdmin();
