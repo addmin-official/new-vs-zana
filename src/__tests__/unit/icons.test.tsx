@@ -50,6 +50,12 @@ import {
   BookIcon,
   LabFlaskIcon,
   CalculatorIcon,
+  StreakFireIcon,
+  ConceptLockIcon,
+  ConceptUnlockIcon,
+  MasteryTierIcon,
+  MasteryTier1Icon,
+  MasteryTier5Icon,
 } from "../../assets/icons/ui/index.ts";
 
 describe("ZANA Subject SVG Icons (11 Grade 12 Curriculum Subjects)", () => {
@@ -171,6 +177,11 @@ describe("ZANA UI Icon Set (24x24, 1.5px stroke)", () => {
     { name: "Book", Component: BookIcon },
     { name: "LabFlask", Component: LabFlaskIcon },
     { name: "Calculator", Component: CalculatorIcon },
+    { name: "StreakFire", Component: StreakFireIcon },
+    { name: "ConceptLock", Component: ConceptLockIcon },
+    { name: "ConceptUnlock", Component: ConceptUnlockIcon },
+    { name: "MasteryTier1", Component: MasteryTier1Icon },
+    { name: "MasteryTier5", Component: MasteryTier5Icon },
   ];
 
   uiIcons.forEach(({ name, Component }) => {
@@ -181,6 +192,16 @@ describe("ZANA UI Icon Set (24x24, 1.5px stroke)", () => {
       expect(svg).toHaveAttribute("viewBox", "0 0 24 24");
       expect(svg).toHaveAttribute("stroke-width", "1.5");
       expect(svg).toHaveAttribute("fill", "none");
+    });
+  });
+
+  it("renders MasteryTierIcon dynamically for all 5 tiers", () => {
+    const tiers = [1, 2, 3, 4, 5] as const;
+    tiers.forEach((tier) => {
+      const { container } = render(<MasteryTierIcon tier={tier} data-testid={`tier-${tier}`} />);
+      const svg = container.querySelector("svg");
+      expect(svg).toBeInTheDocument();
+      expect(svg).toHaveAttribute("viewBox", "0 0 24 24");
     });
   });
 });

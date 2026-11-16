@@ -225,3 +225,142 @@ export const CalculatorIcon: React.FC<UiIconProps> = ({ size = 24, className = "
     <circle cx="16" cy="17" r="1" fill="currentColor" />
   </svg>
 );
+
+// ─── 11. Custom Motivation & Educational UI Icons ─────────────────────────────
+
+/**
+ * Streak fire icon with double flame accent
+ */
+export const StreakFireIcon: React.FC<UiIconProps> = ({ size = 24, className = "", ...props }) => (
+  <svg width={size} height={size} {...baseProps} className={className} {...props}>
+    <path
+      d="M12 2C12 2 16.5 6.5 16.5 12C16.5 15.5 14.5 17 14.5 17C14.5 17 15.2 15 14 13C11.8 15.5 10 17.5 10 20C10 21.2 10.8 22 12 22C6.5 22 4.5 16.5 4.5 12.5C4.5 7.5 9 4.5 12 2Z"
+      fill="currentColor"
+      fillOpacity="0.2"
+    />
+    <path
+      d="M12 14C12 14 13.5 16 13.5 17.5C13.5 18.8 12.8 19.5 12 20C11.2 19.5 10.5 18.8 10.5 17.5C10.5 16 12 14 12 14Z"
+      fill="currentColor"
+      fillOpacity="0.6"
+    />
+  </svg>
+);
+
+/**
+ * Concept locked icon
+ */
+export const ConceptLockIcon: React.FC<UiIconProps> = ({ size = 24, className = "", ...props }) => (
+  <svg width={size} height={size} {...baseProps} className={className} {...props}>
+    <rect x="5" y="11" width="14" height="10" rx="2" fill="currentColor" fillOpacity="0.1" />
+    <path d="M8 11V7C8 4.79086 9.79086 3 12 3C14.2091 3 16 4.79086 16 7V11" />
+    <circle cx="12" cy="16" r="1.25" fill="currentColor" />
+  </svg>
+);
+
+/**
+ * Concept unlocked icon
+ */
+export const ConceptUnlockIcon: React.FC<UiIconProps> = ({ size = 24, className = "", ...props }) => (
+  <svg width={size} height={size} {...baseProps} className={className} {...props}>
+    <rect x="5" y="11" width="14" height="10" rx="2" fill="currentColor" fillOpacity="0.1" />
+    <path d="M8 11V7C8 4.79086 9.79086 3 12 3C14.2091 3 16 4.79086 16 7" />
+    <circle cx="12" cy="16" r="1.25" fill="currentColor" />
+  </svg>
+);
+
+/**
+ * Mastery Tier 1 (Not Started)
+ */
+export const MasteryTier1Icon: React.FC<UiIconProps> = ({ size = 24, className = "", ...props }) => (
+  <svg width={size} height={size} {...baseProps} className={className} {...props}>
+    <circle cx="12" cy="12" r="9" strokeDasharray="3 3" opacity="0.6" />
+    <circle cx="12" cy="12" r="2.5" fill="currentColor" fillOpacity="0.25" />
+  </svg>
+);
+
+/**
+ * Mastery Tier 2 (Introduced)
+ */
+export const MasteryTier2Icon: React.FC<UiIconProps> = ({ size = 24, className = "", ...props }) => (
+  <svg width={size} height={size} {...baseProps} className={className} {...props}>
+    <circle cx="12" cy="12" r="9" opacity="0.3" />
+    <path d="M12 3A9 9 0 0 1 21 12" strokeWidth="2.5" />
+    <path d="M12 8L13 11L16 12L13 13L12 16L11 13L8 12L11 11Z" fill="currentColor" fillOpacity="0.5" />
+  </svg>
+);
+
+/**
+ * Mastery Tier 3 (Developing)
+ */
+export const MasteryTier3Icon: React.FC<UiIconProps> = ({ size = 24, className = "", ...props }) => (
+  <svg width={size} height={size} {...baseProps} className={className} {...props}>
+    <circle cx="12" cy="12" r="9" opacity="0.3" />
+    <path d="M12 3A9 9 0 0 1 21 12A9 9 0 0 1 12 21" strokeWidth="2.5" />
+    <path d="M12 7L13.5 10.5L17 12L13.5 13.5L12 17L10.5 13.5L7 12L10.5 10.5Z" fill="currentColor" fillOpacity="0.6" />
+  </svg>
+);
+
+/**
+ * Mastery Tier 4 (Proficient)
+ */
+export const MasteryTier4Icon: React.FC<UiIconProps> = ({ size = 24, className = "", ...props }) => (
+  <svg width={size} height={size} {...baseProps} className={className} {...props}>
+    <circle cx="12" cy="12" r="9" opacity="0.3" />
+    <path d="M12 3A9 9 0 0 1 21 12A9 9 0 0 1 12 21A9 9 0 0 1 3 12" strokeWidth="2.5" />
+    <path d="M12 6L14 10.5L19 11.5L15.5 15L16.5 20L12 17.5L7.5 20L8.5 15L5 11.5L10 10.5Z" fill="currentColor" fillOpacity="0.3" />
+    <circle cx="12" cy="12" r="3" fill="currentColor" />
+  </svg>
+);
+
+/**
+ * Mastery Tier 5 (Mastered)
+ */
+export const MasteryTier5Icon: React.FC<UiIconProps> = ({ size = 24, className = "", ...props }) => (
+  <svg width={size} height={size} {...baseProps} className={className} {...props}>
+    <circle cx="12" cy="12" r="9" strokeWidth="2" fill="currentColor" fillOpacity="0.12" />
+    <path d="M5 8L8 14L12 9L16 14L19 8L18 18H6L5 8Z" fill="currentColor" fillOpacity="0.3" />
+    <circle cx="12" cy="7" r="1.5" fill="currentColor" />
+    <circle cx="5" cy="6" r="1.2" fill="currentColor" />
+    <circle cx="19" cy="6" r="1.2" fill="currentColor" />
+    <path d="M7 16H17" strokeWidth="1.5" />
+  </svg>
+);
+
+export interface MasteryTierIconProps extends UiIconProps {
+  tier?: 1 | 2 | 3 | 4 | 5 | "notStarted" | "introduced" | "developing" | "proficient" | "mastered";
+}
+
+/**
+ * Dynamic Mastery Tier Icon supporting all 5 curriculum tiers
+ */
+export const MasteryTierIcon: React.FC<MasteryTierIconProps> = ({
+  tier = 1,
+  size = 24,
+  className = "",
+  ...props
+}) => {
+  const norm =
+    tier === "notStarted" || tier === 1
+      ? 1
+      : tier === "introduced" || tier === 2
+      ? 2
+      : tier === "developing" || tier === 3
+      ? 3
+      : tier === "proficient" || tier === 4
+      ? 4
+      : 5;
+
+  switch (norm) {
+    case 1:
+      return <MasteryTier1Icon size={size} className={className} {...props} />;
+    case 2:
+      return <MasteryTier2Icon size={size} className={className} {...props} />;
+    case 3:
+      return <MasteryTier3Icon size={size} className={className} {...props} />;
+    case 4:
+      return <MasteryTier4Icon size={size} className={className} {...props} />;
+    case 5:
+    default:
+      return <MasteryTier5Icon size={size} className={className} {...props} />;
+  }
+};
