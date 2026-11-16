@@ -33,21 +33,9 @@ import { useAdminStudentList, StudentListItem } from "../hooks/useAdminStudentLi
 import { useSystemHealth } from "../hooks/useSystemHealth.ts";
 import { useAdminAnomalies } from "../hooks/useAdminAnomalies.ts";
 
+import { useSystemAuditLogs } from "../hooks/useSystemAuditLogs.ts";
+
 export type AdminTab = "overview" | "students" | "content" | "system";
-
-interface SystemErrorLog {
-  id: string;
-  type: string;
-  path: string;
-  timestamp: string;
-  status: "CRITICAL" | "WARNING" | "INFO";
-}
-
-const INITIAL_ERROR_LOGS: SystemErrorLog[] = [
-  { id: "err_901", type: "AI_TIMEOUT_FALLBACK", path: "/api/chat/generate", timestamp: "16:42:10", status: "WARNING" },
-  { id: "err_902", type: "OFFLINE_STORAGE_QUOTA", path: "IndexedDB", timestamp: "15:20:05", status: "INFO" },
-  { id: "err_903", type: "UNAUTHORIZED_ADMIN_ATTEMPT", path: "/admin/system", timestamp: "12:15:30", status: "CRITICAL" },
-];
 
 export interface AdminDashboardProps {
   initialTab?: AdminTab;
@@ -107,7 +95,7 @@ export function AdminDashboard({
   const [passwordResetNotice, setPasswordResetNotice] = useState<string | null>(null);
   const [announcementText, setAnnouncementText] = useState("");
   const [isBroadcasting, setIsBroadcasting] = useState(false);
-  const [systemLogs] = useState<SystemErrorLog[]>(INITIAL_ERROR_LOGS);
+  const systemAudit = useSystemAuditLogs();
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const { flags } = useFeatureFlagsContext();
@@ -994,33 +982,49 @@ export function AdminDashboard({
 
             {/* Error Logs from Firestore / System */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-400" />
-                <span>تۆماری هەڵە و چاودێری (Error Logs & Auditing)</span>
-              </h3>
-
-              <div className="divide-y divide-slate-800 border border-slate-800 rounded-xl overflow-hidden font-mono text-xs">
-                {systemLogs.map((log) => (
-                  <div key={log.id} className="p-3 bg-slate-900/50 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5">
-                      <span
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                          log.status === "CRITICAL"
-                            ? "bg-rose-950 text-rose-400 border border-rose-800"
-                            : log.status === "WARNING"
-                            ? "bg-amber-950 text-amber-400 border border-amber-800"
-                            : "bg-slate-800 text-slate-400"
-                        }`}
-                      >
-                        {log.status}
-                      </span>
-                      <span className="text-white font-bold">{log.type}</span>
-                      <span className="text-slate-400 hidden sm:inline">{log.path}</span>
-                    </div>
-                    <span className="text-slate-500 text-[11px]">{log.timestamp}</span>
-                  </div>
-                ))}
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-400" />
+                  <span>تۆماری هەڵە و چاودێری (Error Logs & Auditing)</span>
+                </h3>
+                <span className="text-xs font-mono text-slate-400">
+                  {systemAudit.logs.length} ڕووداو
+                </span>
               </div>
+
+              {systemAudit.loading ? (
+                <div className="p-6 text-center text-slate-500 font-sans text-xs animate-pulse">
+                  چاوەڕێی هێنانی داتاکان...
+                </div>
+              ) : systemAudit.logs.length === 0 ? (
+                <div className="p-6 text-center text-emerald-400 bg-emerald-950/20 border border-emerald-900/40 rounded-xl font-bold font-sans text-xs flex items-center justify-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <span>سیستەم بە تەواوی سەقامگیرە؛ هیچ هەڵەیەک یاخود هەوڵێکی نایاسایی تۆمار نەکراوە.</span>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-800 border border-slate-800 rounded-xl overflow-hidden font-mono text-xs">
+                  {systemAudit.logs.map((log) => (
+                    <div key={log.id} className="p-3 bg-slate-900/50 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5">
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                            log.status === "CRITICAL"
+                              ? "bg-rose-950 text-rose-400 border border-rose-800"
+                              : log.status === "WARNING"
+                              ? "bg-amber-950 text-amber-400 border border-amber-800"
+                              : "bg-slate-800 text-slate-400"
+                          }`}
+                        >
+                          {log.status}
+                        </span>
+                        <span className="text-white font-bold">{log.type}</span>
+                        <span className="text-slate-400 hidden sm:inline">{log.path}</span>
+                      </div>
+                      <span className="text-slate-500 text-[11px]">{log.timestamp}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
