@@ -14,7 +14,6 @@ import {
 import {
   loginWithEmail,
   loginWithGoogle,
-  loginAnonymously,
   getErrorMessage,
 } from "../services/authService.ts";
 import { checkUserExists } from "../auth/userProfileService.ts";
@@ -39,7 +38,6 @@ export function Login({
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [guestLoading, setGuestLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Email format validation (real-time)
@@ -73,7 +71,7 @@ export function Login({
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (loading || googleLoading || guestLoading) return;
+    if (loading || googleLoading) return;
 
     setErrorMessage(null);
 
@@ -104,7 +102,7 @@ export function Login({
   };
 
   const handleGoogleSubmit = async () => {
-    if (loading || googleLoading || guestLoading) return;
+    if (loading || googleLoading) return;
     setErrorMessage(null);
     setGoogleLoading(true);
 
@@ -118,22 +116,7 @@ export function Login({
     }
   };
 
-  const handleGuestSubmit = async () => {
-    if (loading || googleLoading || guestLoading) return;
-    setErrorMessage(null);
-    setGuestLoading(true);
-
-    try {
-      const user = await loginAnonymously();
-      await handlePostLogin(user);
-    } catch (err: unknown) {
-      setErrorMessage(getErrorMessage(err));
-    } finally {
-      setGuestLoading(false);
-    }
-  };
-
-  const isAnyLoading = loading || googleLoading || guestLoading;
+  const isAnyLoading = loading || googleLoading;
 
   return (
     <div
@@ -370,18 +353,6 @@ export function Login({
                 </>
               )}
             </button>
-
-            {/* Quick Guest Access */}
-            <div className="text-center pt-1">
-              <button
-                type="button"
-                onClick={handleGuestSubmit}
-                disabled={isAnyLoading}
-                className="text-xs text-slate-400 hover:text-slate-200 transition cursor-pointer"
-              >
-                {guestLoading ? "باردەکرێت..." : "تاقیکردنەوە وەک میوان (بێ هەژمار)"}
-              </button>
-            </div>
 
             {/* Register Link */}
             <div className="text-center pt-3 border-t border-slate-800/80">
