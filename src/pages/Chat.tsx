@@ -252,8 +252,17 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
   });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatScrollContainerRef = useRef<HTMLDivElement>(null);
+  const isNearBottomRef = useRef<boolean>(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lastSendTimeRef = useRef<number>(0);
+
+  const handleChatScroll = () => {
+    if (!chatScrollContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = chatScrollContainerRef.current;
+    // User is near bottom if within 140px of the bottom
+    isNearBottomRef.current = scrollHeight - scrollTop - clientHeight < 140;
+  };
 
   // ─── Socratic Mode State ──────────────────────────────────────────────────
   const [socraticChainCount, setSocraticChainCount] = useState<number>(0);
@@ -353,7 +362,9 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
   }, [currentSubject, fetchChapters]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (isNearBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [chatMessages, isLoading, currentMode]);
 
   const handleSwitchSubject = (subj: SubjectKey) => {
@@ -1082,6 +1093,8 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
 
         {/* 5. Mode Views */}
         <div
+          ref={chatScrollContainerRef}
+          onScroll={handleChatScroll}
           role="log"
           aria-live="polite"
           aria-label="پەیامەکانی مامۆستا زانا"
@@ -1955,7 +1968,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
               <button
                 type="button"
                 onClick={() => setShowCameraModal(true)}
-                className="w-11 h-11 rounded-xl bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 flex items-center justify-center shrink-0 border border-slate-200 transition-colors cursor-pointer"
+                className="w-12 h-12 min-w-[48px] min-h-[48px] rounded-xl bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 flex items-center justify-center shrink-0 border border-slate-200 transition-colors cursor-pointer"
                 title="وێنەگرتن یان بارکردنی پرسیار"
                 aria-label="وێنەی پرسیار"
               >
@@ -1972,7 +1985,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                     startListening();
                   }
                 }}
-                className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 border transition-all cursor-pointer ${
+                className={`w-12 h-12 min-w-[48px] min-h-[48px] rounded-xl flex items-center justify-center shrink-0 border transition-all cursor-pointer ${
                   isListening
                     ? "bg-rose-500 hover:bg-rose-600 text-white border-rose-600 animate-pulse shadow-md shadow-rose-200"
                     : "bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 border-slate-200"
@@ -1994,6 +2007,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                   onChange={(e) => setInputContent(e.target.value)}
                   onKeyDown={handleKeyDown}
                   rows={1}
+                  inputMode="text"
                   placeholder={
                     isTrialExpired
                       ? "تاقیکردنەوەی ٣ ڕۆژەکەت بەسەرچوو. تکایە بەشداری بکە..."
@@ -2003,7 +2017,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                       ? "وەڵام یان تێڕوانینی خۆت بنووسە بۆ مامۆستا زانا (سوقراتی)..."
                       : "پرسیارت لەسەر ئەم بەندە بپرسە..."
                   }
-                  className="w-full resize-none rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-sans text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-all max-h-32 leading-relaxed"
+                  className="w-full resize-none rounded-xl border border-slate-300 px-4 py-2.5 text-base sm:text-sm font-sans text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-all min-h-[48px] max-h-32 leading-relaxed touch-manipulation"
                   disabled={isLoading || isTrialExpired}
                   aria-label="دەقی پرسیار یان وەڵام"
                 />
@@ -2012,7 +2026,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
               <button
                 type="submit"
                 disabled={isLoading || isTrialExpired || (!inputContent.trim() && !isListening)}
-                className="w-11 h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white flex items-center justify-center shrink-0 shadow-xs transition-colors cursor-pointer"
+                className="w-12 h-12 min-w-[48px] min-h-[48px] rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white flex items-center justify-center shrink-0 shadow-xs transition-colors cursor-pointer"
                 aria-label={ku.chat.send}
               >
                 {isLoading ? (
@@ -2021,6 +2035,11 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                   <Send className="w-5 h-5 -rotate-90 rtl:rotate-90" />
                 )}
               </button>
+
+              {/* Accessible Live Region for Screen Readers */}
+              <div className="sr-only" aria-live="polite" aria-busy={isLoading}>
+                {isLoading ? "مامۆستا زانا سەرقاڵی شیکردنەوە و ئامادەکردنی وەڵامە..." : ""}
+              </div>
             </form>
           </div>
         )}

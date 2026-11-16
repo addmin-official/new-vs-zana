@@ -21,6 +21,18 @@
 }
 
 @layer base {
+  :root {
+    --sat: env(safe-area-inset-top, 0px);
+    --sar: env(safe-area-inset-right, 0px);
+    --sab: env(safe-area-inset-bottom, 0px);
+    --sal: env(safe-area-inset-left, 0px);
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
   html, body {
     min-height: 100%;
     width: 100%;
@@ -50,7 +62,58 @@
   html.dark, html.dark body {
     background-color: #090D16;
     color: #F8FAFC;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
+
+  /* Dark mode: image brightness reduction to prevent eye strain */
+  html.dark img {
+    filter: brightness(0.9);
+  }
+
+  /* WCAG 2.1 AA Focus Rings: Visible, 3px brand colored, offset */
+  :focus-visible {
+    outline: 3px solid #6366f1 !important;
+    outline-offset: 2px !important;
+  }
+
+  /* Prevent double-tap zoom delay on touch devices */
+  button, a, input, textarea, select, [role="button"], [role="tab"] {
+    touch-action: manipulation;
+  }
+
+  /* Mobile touch feedback */
+  button:active, [role="button"]:active, a:active {
+    transform: scale(0.97);
+    transition: transform 100ms ease;
+  }
+
+  /* Prevent iOS Safari auto-zoom on input focus (minimum 16px font-size) */
+  @media screen and (max-width: 768px) {
+    input, textarea, select {
+      font-size: 16px !important;
+    }
+  }
+}
+
+/* Safe Area Utility Classes */
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Minimum 48x48px Tap Target standard */
+.min-touch {
+  min-width: 48px;
+  min-height: 48px;
+}
+
+/* Modal and drawer overscroll containment */
+.overscroll-contain {
+  overscroll-behavior: contain;
 }
 
 /* Kurdish typography scales (10% larger baseline + 1.8 line height) */
@@ -101,7 +164,16 @@
   animation: confetti-pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
 
+/* Comprehensive WCAG 2.1 AA Reduced Motion Support */
 @media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
   .animate-bounce-subtle,
   .animate-progress-fill,
   .animate-confetti-pop {
@@ -111,5 +183,11 @@
     transition: none !important;
     transform: none !important;
   }
+  button:active, [role="button"]:active, a:active {
+    transform: none !important;
+  }
+  /* Allow quick color and opacity fades (< 200ms) */
+  .fade-allowed {
+    transition: opacity 150ms ease, color 150ms ease, background-color 150ms ease !important;
+  }
 }
-

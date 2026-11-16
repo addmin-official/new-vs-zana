@@ -267,10 +267,12 @@ export function Register({
         {/* Error Alert */}
         {errorMessage && (
           <div
+            id="register-error-msg"
             role="alert"
+            aria-live="assertive"
             className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2.5 animate-in fade-in duration-200 text-right"
           >
-            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" aria-hidden="true" />
             <span>{errorMessage}</span>
           </div>
         )}
@@ -281,7 +283,7 @@ export function Register({
             {/* Full Name */}
             <div className="space-y-1.5 text-right">
               <label htmlFor={nameInputId} className="block text-xs font-bold text-slate-300">
-                ناوی تەواو
+                ناوی تەواو <span className="text-rose-400" aria-hidden="true">*</span>
               </label>
               <div className="relative">
                 <input
@@ -291,31 +293,40 @@ export function Register({
                   onChange={(e) => setFullName(e.target.value)}
                   disabled={loading || googleLoading}
                   placeholder="ناوی قوتابی"
-                  className="w-full bg-slate-800/80 border border-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 text-white rounded-xl px-4 py-3 text-sm placeholder:text-slate-500 transition-all pl-10"
+                  autoComplete="name"
+                  aria-required="true"
+                  aria-invalid={Boolean(errorMessage)}
+                  aria-describedby={errorMessage ? "register-error-msg" : undefined}
+                  className="w-full bg-slate-800/80 border border-slate-700 focus:border-indigo-500 focus:ring-3 focus:ring-indigo-500/30 text-white rounded-xl px-4 py-3 text-base sm:text-sm placeholder:text-slate-500 transition-all pl-10 min-h-[48px] touch-manipulation"
                 />
-                <UserIcon className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <UserIcon className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true" />
               </div>
             </div>
 
             {/* Email */}
             <div className="space-y-1.5 text-right">
               <label htmlFor={emailInputId} className="block text-xs font-bold text-slate-300">
-                ئیمەیڵ
+                ئیمەیڵ <span className="text-rose-400" aria-hidden="true">*</span>
               </label>
               <div className="relative">
                 <input
                   id={emailInputId}
                   type="email"
+                  inputMode="email"
                   dir="ltr"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={loading || googleLoading}
                   placeholder="student@example.com"
-                  className="w-full bg-slate-800/80 border border-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 text-white rounded-xl px-4 py-3 text-sm placeholder:text-slate-500 transition-all pl-10 text-left font-mono"
+                  autoComplete="email"
+                  aria-required="true"
+                  aria-invalid={Boolean(errorMessage)}
+                  aria-describedby={errorMessage ? "register-error-msg" : undefined}
+                  className="w-full bg-slate-800/80 border border-slate-700 focus:border-indigo-500 focus:ring-3 focus:ring-indigo-500/30 text-white rounded-xl px-4 py-3 text-base sm:text-sm placeholder:text-slate-500 transition-all pl-10 text-left font-mono min-h-[48px] touch-manipulation"
                 />
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none">
-                  {isEmailValid && <Check className="w-4 h-4 text-emerald-400" />}
-                  <Mail className="w-4 h-4 text-slate-400" />
+                  {isEmailValid && <Check className="w-4 h-4 text-emerald-400" aria-hidden="true" />}
+                  <Mail className="w-4 h-4 text-slate-400" aria-hidden="true" />
                 </div>
               </div>
             </div>
@@ -323,7 +334,7 @@ export function Register({
             {/* Password */}
             <div className="space-y-1.5 text-right">
               <label htmlFor={passInputId} className="block text-xs font-bold text-slate-300">
-                وشەی نهێنی (لانیکەم ٦ پیت)
+                وشەی نهێنی (لانیکەم ٦ پیت) <span className="text-rose-400" aria-hidden="true">*</span>
               </label>
               <div className="relative">
                 <input
@@ -334,21 +345,25 @@ export function Register({
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={loading || googleLoading}
                   placeholder="••••••••"
-                  className="w-full bg-slate-800/80 border border-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 text-white rounded-xl px-4 py-3 text-sm placeholder:text-slate-500 transition-all pl-10 text-left font-mono"
+                  autoComplete="new-password"
+                  aria-required="true"
+                  aria-invalid={Boolean(errorMessage)}
+                  aria-describedby={errorMessage ? "register-error-msg" : undefined}
+                  className="w-full bg-slate-800/80 border border-slate-700 focus:border-indigo-500 focus:ring-3 focus:ring-indigo-500/30 text-white rounded-xl px-4 py-3 text-base sm:text-sm placeholder:text-slate-500 transition-all pl-11 text-left font-mono min-h-[48px] touch-manipulation"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  tabIndex={-1}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 p-1"
+                  className="absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 p-2.5 rounded-lg focus-visible:ring-2 focus-visible:ring-indigo-400 min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation cursor-pointer"
+                  aria-label={showPassword ? "شاردنەوەی وشەی نهێنی" : "نیشاندانی وشەی نهێنی"}
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showPassword ? <EyeOff className="w-4 h-4" aria-hidden="true" /> : <Eye className="w-4 h-4" aria-hidden="true" />}
                 </button>
               </div>
 
               {/* Password Strength Bar */}
               {password.length > 0 && (
-                <div className="space-y-1 pt-1">
+                <div className="space-y-1 pt-1" aria-live="polite">
                   <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
                     <div
                       className={`h-full ${passStrength.color} transition-all duration-300`}
@@ -365,7 +380,7 @@ export function Register({
             {/* Confirm Password */}
             <div className="space-y-1.5 text-right">
               <label htmlFor={confirmPassInputId} className="block text-xs font-bold text-slate-300">
-                دووبارەکردنەوەی وشەی نهێنی
+                دووبارەکردنەوەی وشەی نهێنی <span className="text-rose-400" aria-hidden="true">*</span>
               </label>
               <div className="relative">
                 <input
@@ -376,10 +391,14 @@ export function Register({
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   disabled={loading || googleLoading}
                   placeholder="••••••••"
-                  className="w-full bg-slate-800/80 border border-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 text-white rounded-xl px-4 py-3 text-sm placeholder:text-slate-500 transition-all pl-10 text-left font-mono"
+                  autoComplete="new-password"
+                  aria-required="true"
+                  aria-invalid={Boolean(errorMessage)}
+                  aria-describedby={errorMessage ? "register-error-msg" : undefined}
+                  className="w-full bg-slate-800/80 border border-slate-700 focus:border-indigo-500 focus:ring-3 focus:ring-indigo-500/30 text-white rounded-xl px-4 py-3 text-base sm:text-sm placeholder:text-slate-500 transition-all pl-10 text-left font-mono min-h-[48px] touch-manipulation"
                 />
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                  {doPasswordsMatch && <Check className="w-4 h-4 text-emerald-400" />}
+                  {doPasswordsMatch && <Check className="w-4 h-4 text-emerald-400" aria-hidden="true" />}
                 </div>
               </div>
             </div>
@@ -388,23 +407,23 @@ export function Register({
             <button
               type="submit"
               disabled={loading || googleLoading}
-              className="w-full py-3.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25 cursor-pointer disabled:opacity-60"
+              className="w-full min-h-[48px] py-3.5 px-4 bg-indigo-600 hover:bg-indigo-500 active:scale-97 text-white font-bold text-sm rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25 cursor-pointer disabled:opacity-60 focus-visible:ring-3 focus-visible:ring-indigo-400 touch-manipulation"
             >
               {loading ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
                   <span>چاوەڕێبکە...</span>
                 </>
               ) : (
                 <>
                   <span>بەردەوام بە بەرەو قۆناغی دواتر</span>
-                  <ArrowLeft className="w-4 h-4" />
+                  <ArrowLeft className="w-4 h-4" aria-hidden="true" />
                 </>
               )}
             </button>
 
             {/* Divider */}
-            <div className="relative flex items-center justify-center py-2">
+            <div className="relative flex items-center justify-center py-2" aria-hidden="true">
               <div className="border-t border-slate-800 w-full" />
               <span className="bg-slate-900 px-3 text-xs text-slate-500 font-bold absolute">یان</span>
             </div>
@@ -414,7 +433,8 @@ export function Register({
               type="button"
               onClick={handleGoogleSignUp}
               disabled={loading || googleLoading}
-              className="w-full py-3 px-4 bg-slate-800/80 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold text-xs rounded-xl transition flex items-center justify-center gap-3 cursor-pointer disabled:opacity-60"
+              className="w-full min-h-[48px] py-3 px-4 bg-slate-800/80 hover:bg-slate-800 active:scale-97 border border-slate-700 text-slate-200 font-bold text-xs sm:text-sm rounded-xl transition flex items-center justify-center gap-3 cursor-pointer disabled:opacity-60 focus-visible:ring-3 focus-visible:ring-indigo-400 touch-manipulation"
+              aria-label="خۆتۆمارکردن لەڕێگەی هەژماری گووگڵ"
             >
               {googleLoading ? (
                 <>
@@ -463,10 +483,14 @@ export function Register({
           <form onSubmit={handleProfileSubmit} className="space-y-5 text-right">
             {/* Grade Selector (Visual Cards) */}
             <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-300">
+              <label id="grade-group-label" className="block text-xs font-bold text-slate-300">
                 پۆلەکەت دیاریبکە:
               </label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div
+                role="radiogroup"
+                aria-labelledby="grade-group-label"
+                className="grid grid-cols-2 sm:grid-cols-4 gap-3"
+              >
                 {[
                   { grade: "9" as StudentGrade, label: "پۆلی ٩", desc: "بنەڕەتی" },
                   { grade: "10" as StudentGrade, label: "پۆلی ١٠", desc: "ئامادەیی گشتی" },
@@ -476,10 +500,12 @@ export function Register({
                   <button
                     key={item.grade}
                     type="button"
+                    role="radio"
+                    aria-checked={selectedGrade === item.grade}
                     onClick={() => setSelectedGrade(item.grade)}
-                    className={`p-3.5 rounded-2xl border text-center transition-all cursor-pointer ${
+                    className={`p-3.5 rounded-2xl border text-center transition-all cursor-pointer min-h-[56px] touch-manipulation focus-visible:ring-3 focus-visible:ring-indigo-400 ${
                       selectedGrade === item.grade
-                        ? "bg-indigo-600/20 border-indigo-500 text-white ring-2 ring-indigo-500/30"
+                        ? "bg-indigo-600/25 border-indigo-500 text-white ring-2 ring-indigo-500/30"
                         : "bg-slate-800/60 border-slate-700 text-slate-300 hover:bg-slate-800"
                     }`}
                   >
@@ -493,10 +519,14 @@ export function Register({
             {/* Stream Selector (Grade 11 & 12 only) */}
             {(selectedGrade === "11" || selectedGrade === "12") && (
               <div className="space-y-2 pt-2 animate-in fade-in duration-200">
-                <label className="block text-xs font-bold text-slate-300">
+                <label id="stream-group-label" className="block text-xs font-bold text-slate-300">
                   شاخە و بەشەکەت:
                 </label>
-                <div className="grid grid-cols-3 gap-3">
+                <div
+                  role="radiogroup"
+                  aria-labelledby="stream-group-label"
+                  className="grid grid-cols-3 gap-3"
+                >
                   {[
                     { id: "scientific" as AcademicStream, label: "زانستی", icon: "⚗️" },
                     { id: "literary" as AcademicStream, label: "وێژەیی", icon: "📚" },
@@ -505,14 +535,16 @@ export function Register({
                     <button
                       key={stream.id}
                       type="button"
+                      role="radio"
+                      aria-checked={selectedStream === stream.id}
                       onClick={() => setSelectedStream(stream.id)}
-                      className={`p-3 rounded-2xl border text-center transition-all cursor-pointer ${
+                      className={`p-3 rounded-2xl border text-center transition-all cursor-pointer min-h-[56px] touch-manipulation focus-visible:ring-3 focus-visible:ring-indigo-400 ${
                         selectedStream === stream.id
-                          ? "bg-indigo-600/20 border-indigo-500 text-white ring-2 ring-indigo-500/30"
+                          ? "bg-indigo-600/25 border-indigo-500 text-white ring-2 ring-indigo-500/30"
                           : "bg-slate-800/60 border-slate-700 text-slate-300 hover:bg-slate-800"
                       }`}
                     >
-                      <span className="text-xl block">{stream.icon}</span>
+                      <span className="text-xl block" aria-hidden="true">{stream.icon}</span>
                       <span className="text-xs font-bold block mt-1">{stream.label}</span>
                     </button>
                   ))}
@@ -532,9 +564,9 @@ export function Register({
                   value={schoolName}
                   onChange={(e) => setSchoolName(e.target.value)}
                   placeholder="وەک: ئامادەیی کوردستان"
-                  className="w-full bg-slate-800/80 border border-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 text-white rounded-xl px-4 py-3 text-sm placeholder:text-slate-500 transition-all pl-10"
+                  className="w-full bg-slate-800/80 border border-slate-700 focus:border-indigo-500 focus:ring-3 focus:ring-indigo-500/30 text-white rounded-xl px-4 py-3 text-base sm:text-sm placeholder:text-slate-500 transition-all pl-10 min-h-[48px] touch-manipulation"
                 />
-                <School className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <School className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true" />
               </div>
             </div>
 
@@ -543,18 +575,19 @@ export function Register({
               <button
                 type="button"
                 onClick={() => setCurrentStep(1)}
-                className="py-3 px-4 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+                className="min-h-[48px] py-3 px-5 rounded-xl border border-slate-700 hover:bg-slate-800 active:scale-97 text-slate-300 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer focus-visible:ring-3 focus-visible:ring-slate-400 touch-manipulation"
+                aria-label="گەڕانەوە بۆ هەنگاوی یەکەم"
               >
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRight className="w-4 h-4" aria-hidden="true" />
                 <span>گەڕانەوە</span>
               </button>
 
               <button
                 type="submit"
-                className="flex-1 py-3.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25 cursor-pointer"
+                className="flex-1 min-h-[48px] py-3.5 px-4 bg-indigo-600 hover:bg-indigo-500 active:scale-97 text-white font-bold text-sm rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25 cursor-pointer focus-visible:ring-3 focus-visible:ring-indigo-400 touch-manipulation"
               >
                 <span>بەردەوام بە</span>
-                <ArrowLeft className="w-4 h-4" />
+                <ArrowLeft className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
           </form>

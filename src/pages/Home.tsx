@@ -155,9 +155,16 @@ export function Home({
           </div>
 
           {/* Today's Goal Progress Circular Ring */}
-          <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50">
+          <div
+            className="flex items-center gap-2.5 px-3 py-1.5 rounded-2xl bg-indigo-50/80 dark:bg-indigo-950/50 border border-indigo-100 dark:border-indigo-900/60"
+            role="progressbar"
+            aria-valuenow={goalPercentage}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`ئامانجی ئەمڕۆ: %${goalPercentage} تەواوکراوە`}
+          >
             <div className="relative w-9 h-9 flex items-center justify-center shrink-0">
-              <svg className="w-9 h-9 -rotate-90" viewBox="0 0 36 36">
+              <svg className="w-9 h-9 -rotate-90" viewBox="0 0 36 36" aria-hidden="true">
                 <circle
                   cx="18"
                   cy="18"
@@ -178,7 +185,7 @@ export function Home({
                   strokeLinecap="round"
                 />
               </svg>
-              <span className="absolute text-[10px] font-black text-indigo-700 dark:text-indigo-300 font-mono">
+              <span className="absolute text-[10px] font-black text-indigo-700 dark:text-indigo-300 font-mono" aria-hidden="true">
                 %{formatNumber(goalPercentage)}
               </span>
             </div>
@@ -186,7 +193,7 @@ export function Home({
               <span className="block text-[11px] font-bold text-indigo-950 dark:text-indigo-200 leading-tight">
                 ئامانجی ئەمڕۆ
               </span>
-              <span className="block text-[10px] text-indigo-700 dark:text-indigo-400 font-medium">
+              <span className="block text-[10px] text-indigo-800 dark:text-indigo-300 font-medium">
                 {formatNumber(completedTasksCount)} لە {formatNumber(totalTasksCount)} بابەت تەواو کرا
               </span>
             </div>
@@ -200,13 +207,13 @@ export function Home({
       <section aria-labelledby="continue-learning-title">
         <div className="relative overflow-hidden p-6 sm:p-8 rounded-3xl bg-gradient-to-br from-indigo-600 via-indigo-700 to-indigo-900 text-white shadow-xl shadow-indigo-600/20 card-interactive">
           {/* Decorative ambient blurred highlights */}
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute bottom-0 left-0 w-48 h-48 bg-amber-400/10 rounded-full blur-2xl pointer-events-none" />
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" aria-hidden="true" />
+          <div className="absolute bottom-0 left-0 w-48 h-48 bg-amber-400/10 rounded-full blur-2xl pointer-events-none" aria-hidden="true" />
 
           <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
             <div className="space-y-3 max-w-lg">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 text-indigo-100 text-xs font-bold backdrop-blur-xs">
-                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" aria-hidden="true" />
                 <span>دواین وانەی خوێندراو</span>
               </div>
 
@@ -228,7 +235,14 @@ export function Home({
                   <span>ئاستی تێگەیشتن لە چەمک</span>
                   <span className="font-bold font-mono">%{formatNumber(72)}</span>
                 </div>
-                <div className="w-full h-2.5 bg-white/20 rounded-full overflow-hidden">
+                <div
+                  className="w-full h-2.5 bg-white/20 rounded-full overflow-hidden"
+                  role="progressbar"
+                  aria-valuenow={72}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label={`ئاستی تێگەیشتن لە ${lastConceptName}`}
+                >
                   <div
                     className="h-full bg-gradient-to-r from-amber-300 to-emerald-400 rounded-full animate-progress-fill"
                     style={{ width: "72%" }}
@@ -237,14 +251,15 @@ export function Home({
               </div>
             </div>
 
-            {/* THE SINGLE PRIMARY CTA BUTTON FOR THE PAGE */}
+            {/* THE SINGLE PRIMARY CTA BUTTON FOR THE PAGE (52px tap target) */}
             <button
               type="button"
               onClick={() => onNavigateToChat?.(activeSubjectKey)}
-              className="w-full md:w-auto px-8 py-4 rounded-2xl bg-white hover:bg-slate-100 text-indigo-900 font-black text-base shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-3 shrink-0 cursor-pointer active:scale-95 min-h-[52px]"
+              aria-label={`بەردەوام بە لە خوێندنی ${lastSubjectTitle}، چەمکی ${lastConceptName}`}
+              className="w-full md:w-auto px-8 py-4 rounded-2xl bg-white hover:bg-slate-100 active:scale-97 text-indigo-900 font-black text-base shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-3 shrink-0 cursor-pointer min-h-[52px] focus-visible:ring-3 focus-visible:ring-white touch-manipulation"
             >
               <span>بەردەوام بە</span>
-              <ArrowLeft className="w-5 h-5 -rotate-180" />
+              <ArrowLeft className="w-5 h-5 -rotate-180" aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -256,7 +271,7 @@ export function Home({
       <section aria-labelledby="today-plan-title" className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+            <Calendar className="w-4 h-4 text-indigo-600 dark:text-indigo-400" aria-hidden="true" />
             <h2 id="today-plan-title" className="font-sans font-black text-lg text-slate-900 dark:text-white">
               ئەرکەکانی ئەمڕۆ
             </h2>
@@ -265,7 +280,8 @@ export function Home({
             <button
               type="button"
               onClick={onNavigateToPlan}
-              className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+              className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer min-h-[36px] py-1 px-2 focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-lg flex items-center"
+              aria-label="بینینی پلانی خوێندنی تەواوی هەفتە"
             >
               پلانی تەواو ببینە ←
             </button>
@@ -278,7 +294,9 @@ export function Home({
               <div
                 key={task.id}
                 onClick={() => toggleTask(task.id)}
-                role="button"
+                role="checkbox"
+                aria-checked={task.completed}
+                aria-label={`ئەرکی ${task.subjectName}، ${task.conceptName}، ${task.estimatedMinutes} خولەک، ${task.completed ? "تەواوکراوە" : "تەواونەکراوە"}`}
                 tabIndex={0}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
@@ -286,35 +304,35 @@ export function Home({
                     toggleTask(task.id);
                   }
                 }}
-                className={`card-interactive p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between min-h-[120px] ${
+                className={`card-interactive p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between min-h-[128px] focus-visible:ring-3 focus-visible:ring-indigo-500 touch-manipulation ${
                   task.completed
-                    ? "bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/60"
-                    : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-700"
+                    ? "bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800/70"
+                    : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-indigo-400 dark:hover:border-indigo-600"
                 }`}
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
+                <div className="flex items-start justify-between gap-2 pointer-events-none">
+                  <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
                     {getSubjectCustomIcon(task.subjectKey, "w-5 h-5")}
                   </div>
                   <div
                     className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${
                       task.completed
-                        ? "bg-emerald-500 text-white shadow-xs"
-                        : "border-2 border-slate-300 dark:border-slate-600"
+                        ? "bg-emerald-600 text-white shadow-xs"
+                        : "border-2 border-slate-400 dark:border-slate-600"
                     }`}
                   >
-                    {task.completed && <CheckCircle2 className="w-4 h-4" />}
+                    {task.completed && <CheckCircle2 className="w-4 h-4" aria-hidden="true" />}
                   </div>
                 </div>
 
-                <div className="mt-2">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase block">
+                <div className="mt-2 pointer-events-none">
+                  <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase block">
                     {task.subjectName}
                   </span>
                   <h3
                     className={`font-sans font-bold text-xs mt-0.5 line-clamp-2 ${
                       task.completed
-                        ? "text-slate-500 line-through"
+                        ? "text-slate-500 dark:text-slate-400 line-through"
                         : "text-slate-900 dark:text-white"
                     }`}
                   >
@@ -322,8 +340,8 @@ export function Home({
                   </h3>
                 </div>
 
-                <div className="flex items-center gap-1 text-[11px] text-slate-400 mt-2">
-                  <Clock className="w-3.5 h-3.5" />
+                <div className="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400 mt-2 pointer-events-none">
+                  <Clock className="w-3.5 h-3.5" aria-hidden="true" />
                   <span>{formatNumber(task.estimatedMinutes)} خولەک</span>
                 </div>
               </div>
@@ -332,7 +350,7 @@ export function Home({
         ) : (
           /* Empty state for Study Plan */
           <div className="p-8 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center space-y-3">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto" aria-hidden="true">
               <Compass className="w-6 h-6" />
             </div>
             <p className="font-sans font-bold text-sm text-slate-800 dark:text-slate-200">
@@ -342,7 +360,8 @@ export function Home({
               <button
                 type="button"
                 onClick={onNavigateToPlan}
-                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs cursor-pointer"
+                className="px-5 py-3 min-h-[48px] rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-97 text-white font-bold text-xs shadow-xs cursor-pointer focus-visible:ring-3 focus-visible:ring-indigo-400 touch-manipulation"
+                aria-label="دروستکردنی پلانی خوێندنی نوێ"
               >
                 پلان دروست بکە
               </button>
@@ -363,22 +382,29 @@ export function Home({
             <button
               type="button"
               onClick={onNavigateToSubjects}
-              className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+              className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer min-h-[36px] py-1 px-2 focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-lg flex items-center"
+              aria-label="بینینی هەموو وانەکانی مەنهەج"
             >
               هەموو وانەکان ببینە ←
             </button>
           )}
         </div>
 
-        <div className="flex items-center gap-3 overflow-x-auto pb-2 no-scrollbar">
+        <div
+          role="region"
+          aria-label="لیستی ئاسانی وانەکان بۆ گفتوگۆی ڕاستەوخۆ"
+          tabIndex={0}
+          className="flex items-center gap-3 overflow-x-auto pb-2 no-scrollbar focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-2xl"
+        >
           {quickSubjects.map((subj) => (
             <button
               key={subj.key}
               type="button"
               onClick={() => onNavigateToChat?.(subj.key)}
-              className="card-interactive shrink-0 p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-indigo-400 hover:shadow-md transition-all text-right flex flex-col justify-between w-36 h-36 cursor-pointer touch-manipulation"
+              aria-label={`وانەی ${subj.title}، ئاستی زاڵبوون %${subj.mastery}`}
+              className="card-interactive shrink-0 p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-md transition-all text-right flex flex-col justify-between w-36 h-36 cursor-pointer touch-manipulation focus-visible:ring-3 focus-visible:ring-indigo-500"
             >
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between pointer-events-none">
                 <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center">
                   {getSubjectCustomIcon(subj.key, "w-5 h-5")}
                 </div>
@@ -387,11 +413,11 @@ export function Home({
                 </span>
               </div>
 
-              <div>
+              <div className="pointer-events-none">
                 <span className="font-sans font-black text-sm text-slate-900 dark:text-white block">
                   {subj.title}
                 </span>
-                <span className="text-[10px] text-slate-400 block mt-0.5">گفتوگۆ لەگەڵ زانا</span>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-0.5">گفتوگۆ لەگەڵ زانا</span>
               </div>
             </button>
           ))}
@@ -402,21 +428,25 @@ export function Home({
       {/* SECTION 5 — RECENT ACHIEVEMENT (SINGLE CARD)                  */}
       {/* ═════════════════════════════════════════════════════════════ */}
       <section aria-labelledby="achievement-title" className="space-y-2">
-        <h2 id="achievement-title" className="font-sans font-bold text-xs text-slate-400 uppercase tracking-wider">
+        <h2 id="achievement-title" className="font-sans font-bold text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider">
           تازەترین دەستکەوت
         </h2>
 
         {recentAchievement ? (
-          <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-50/70 via-orange-50/40 to-white dark:from-amber-950/20 dark:via-slate-900 dark:to-slate-900 border border-amber-200/80 dark:border-amber-800/40 flex items-center justify-between gap-4 shadow-xs animate-confetti-pop">
+          <div
+            className="p-4 rounded-2xl bg-gradient-to-r from-amber-50/80 via-orange-50/50 to-white dark:from-amber-950/30 dark:via-slate-900 dark:to-slate-900 border border-amber-200/90 dark:border-amber-800/50 flex items-center justify-between gap-4 shadow-xs animate-confetti-pop"
+            role="status"
+            aria-label={`تازەترین دەستکەوت: ${recentAchievement.title}`}
+          >
             <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center text-xl shrink-0">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center text-xl shrink-0" aria-hidden="true">
                 <Trophy className="w-6 h-6 text-amber-500" />
               </div>
               <div>
                 <h3 className="font-sans font-black text-sm text-slate-900 dark:text-white">
                   تازەترین دەستکەوت: {recentAchievement.title}
                 </h3>
-                <p className="font-sans text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                <p className="font-sans text-xs text-slate-600 dark:text-slate-300 mt-0.5">
                   {recentAchievement.description}
                 </p>
               </div>
@@ -428,8 +458,8 @@ export function Home({
           </div>
         ) : (
           /* Empty state for Achievements */
-          <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center text-xs text-slate-400">
-            دەستکەوتەکانت ئێرە دەردەکەون
+          <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center text-xs text-slate-500 dark:text-slate-400">
+            دەستکەوتەکانت لێرە دەردەکەون
           </div>
         )}
       </section>

@@ -223,10 +223,12 @@ export function Login({
             {/* Error Message Box */}
             {errorMessage && (
               <div
+                id="login-error-msg"
                 role="alert"
+                aria-live="assertive"
                 className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2.5 animate-in fade-in duration-200"
               >
-                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" aria-hidden="true" />
                 <span>{errorMessage}</span>
               </div>
             )}
@@ -238,25 +240,29 @@ export function Login({
                   htmlFor={emailInputId}
                   className="block text-xs font-bold text-slate-300"
                 >
-                  ئیمەیڵ
+                  ئیمەیڵ <span className="text-rose-400" aria-hidden="true">*</span>
                 </label>
                 <div className="relative">
                   <input
                     id={emailInputId}
                     type="email"
+                    inputMode="email"
                     dir="ltr"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     disabled={isAnyLoading}
                     placeholder="student@example.com"
                     autoComplete="email"
-                    className="w-full bg-slate-800/80 border border-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 text-white rounded-xl px-4 py-3 text-sm placeholder:text-slate-500 placeholder:text-left transition-all duration-200 disabled:opacity-50 pl-10 text-left font-mono"
+                    aria-required="true"
+                    aria-invalid={Boolean(errorMessage)}
+                    aria-describedby={errorMessage ? "login-error-msg" : undefined}
+                    className="w-full bg-slate-800/80 border border-slate-700 focus:border-indigo-500 focus:ring-3 focus:ring-indigo-500/30 text-white rounded-xl px-4 py-3 text-base sm:text-sm placeholder:text-slate-500 placeholder:text-left transition-all duration-200 disabled:opacity-50 pl-10 text-left font-mono touch-manipulation min-h-[48px]"
                   />
                   <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none">
                     {isEmailValid && (
-                      <Check className="w-4 h-4 text-emerald-400 animate-in zoom-in duration-150" />
+                      <Check className="w-4 h-4 text-emerald-400 animate-in zoom-in duration-150" aria-hidden="true" />
                     )}
-                    <Mail className="w-4 h-4 text-slate-400" />
+                    <Mail className="w-4 h-4 text-slate-400" aria-hidden="true" />
                   </div>
                 </div>
               </div>
@@ -268,12 +274,12 @@ export function Login({
                     htmlFor={passwordInputId}
                     className="text-xs font-bold text-slate-300"
                   >
-                    وشەی نهێنی
+                    وشەی نهێنی <span className="text-rose-400" aria-hidden="true">*</span>
                   </label>
                   <button
                     type="button"
                     onClick={onNavigateToForgotPassword}
-                    className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer"
+                    className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer py-1 px-2 focus-visible:ring-2 focus-visible:ring-indigo-400 rounded-lg min-h-[36px] flex items-center"
                   >
                     وشەی نهێنیت لەیاد چوو؟
                   </button>
@@ -288,16 +294,18 @@ export function Login({
                     disabled={isAnyLoading}
                     placeholder="••••••••"
                     autoComplete="current-password"
-                    className="w-full bg-slate-800/80 border border-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 text-white rounded-xl px-4 py-3 text-sm placeholder:text-slate-500 placeholder:text-left transition-all duration-200 disabled:opacity-50 pl-10 text-left font-mono"
+                    aria-required="true"
+                    aria-invalid={Boolean(errorMessage)}
+                    aria-describedby={errorMessage ? "login-error-msg" : undefined}
+                    className="w-full bg-slate-800/80 border border-slate-700 focus:border-indigo-500 focus:ring-3 focus:ring-indigo-500/30 text-white rounded-xl px-4 py-3 text-base sm:text-sm placeholder:text-slate-500 placeholder:text-left transition-all duration-200 disabled:opacity-50 pl-11 text-left font-mono touch-manipulation min-h-[48px]"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    tabIndex={-1}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer p-1"
+                    className="absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer p-2.5 rounded-lg focus-visible:ring-2 focus-visible:ring-indigo-400 min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
                     aria-label={showPassword ? "شاردنەوەی وشەی نهێنی" : "نیشاندانی وشەی نهێنی"}
                   >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showPassword ? <EyeOff className="w-4 h-4" aria-hidden="true" /> : <Eye className="w-4 h-4" aria-hidden="true" />}
                   </button>
                 </div>
               </div>
@@ -306,11 +314,11 @@ export function Login({
               <button
                 type="submit"
                 disabled={isAnyLoading}
-                className="w-full py-3.5 px-4 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold text-sm rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed mt-2"
+                className="w-full min-h-[48px] py-3.5 px-4 bg-indigo-600 hover:bg-indigo-500 active:scale-97 text-white font-bold text-sm rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed mt-2 focus-visible:ring-3 focus-visible:ring-indigo-400 touch-manipulation"
               >
                 {loading ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
                     <span>چاوەڕێبکە...</span>
                   </>
                 ) : (
@@ -320,7 +328,7 @@ export function Login({
             </form>
 
             {/* Divider */}
-            <div className="relative flex items-center justify-center py-2">
+            <div className="relative flex items-center justify-center py-2" aria-hidden="true">
               <div className="border-t border-slate-800 w-full" />
               <span className="bg-slate-900 px-3 text-xs text-slate-500 font-bold absolute">یان</span>
             </div>
@@ -330,7 +338,8 @@ export function Login({
               type="button"
               onClick={handleGoogleSubmit}
               disabled={isAnyLoading}
-              className="w-full py-3 px-4 bg-slate-800/80 hover:bg-slate-800 border border-slate-700 text-slate-200 font-bold text-xs rounded-xl transition-all duration-200 flex items-center justify-center gap-3 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full min-h-[48px] py-3 px-4 bg-slate-800/80 hover:bg-slate-800 active:scale-97 border border-slate-700 text-slate-200 font-bold text-xs sm:text-sm rounded-xl transition-all duration-200 flex items-center justify-center gap-3 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed focus-visible:ring-3 focus-visible:ring-indigo-400 touch-manipulation"
+              aria-label="چوونەژوورەوە لەڕێگەی هەژماری گووگڵ"
             >
               {googleLoading ? (
                 <>

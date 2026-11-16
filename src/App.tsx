@@ -435,12 +435,14 @@ export default function App() {
     if (authScreen === "welcome") {
       return (
         <ThemeProvider>
-          <Suspense fallback={<ScreenLoadingFallback />}>
-            <WelcomeScreen
-              onGetStarted={() => navigateAuth("register")}
-              onNavigateToLogin={() => navigateAuth("login")}
-            />
-          </Suspense>
+          <ErrorBoundary>
+            <Suspense fallback={<ScreenLoadingFallback />}>
+              <WelcomeScreen
+                onGetStarted={() => navigateAuth("register")}
+                onNavigateToLogin={() => navigateAuth("login")}
+              />
+            </Suspense>
+          </ErrorBoundary>
         </ThemeProvider>
       );
     }
@@ -448,28 +450,30 @@ export default function App() {
     if (authScreen === "register") {
       return (
         <ThemeProvider>
-          <Suspense fallback={<ScreenLoadingFallback />}>
-            <RegisterScreen
-              onNavigateToLogin={() => navigateAuth("login")}
-              onRegisterSuccess={(regData) => {
-                setIsAuthExplicit(false);
-                if (typeof window !== "undefined") {
-                  sessionStorage.setItem("zana_guest_bypassed", "true");
-                  window.history.replaceState(null, "", "/");
-                }
-                setIsGuestBypassed(true);
-                setIsForcedOnboarding(false);
-                handleOnboardingComplete(
-                  regData.name,
-                  regData.grade,
-                  regData.subject,
-                  "intermediate",
-                  regData.stream
-                );
-                setActiveTabState("home");
-              }}
-            />
-          </Suspense>
+          <ErrorBoundary>
+            <Suspense fallback={<ScreenLoadingFallback />}>
+              <RegisterScreen
+                onNavigateToLogin={() => navigateAuth("login")}
+                onRegisterSuccess={(regData) => {
+                  setIsAuthExplicit(false);
+                  if (typeof window !== "undefined") {
+                    sessionStorage.setItem("zana_guest_bypassed", "true");
+                    window.history.replaceState(null, "", "/");
+                  }
+                  setIsGuestBypassed(true);
+                  setIsForcedOnboarding(false);
+                  handleOnboardingComplete(
+                    regData.name,
+                    regData.grade,
+                    regData.subject,
+                    "intermediate",
+                    regData.stream
+                  );
+                  setActiveTabState("home");
+                }}
+              />
+            </Suspense>
+          </ErrorBoundary>
         </ThemeProvider>
       );
     }
@@ -477,44 +481,48 @@ export default function App() {
     if (authScreen === "forgot-password") {
       return (
         <ThemeProvider>
-          <Suspense fallback={<ScreenLoadingFallback />}>
-            <ForgotPasswordScreen
-              onNavigateToLogin={() => navigateAuth("login")}
-            />
-          </Suspense>
+          <ErrorBoundary>
+            <Suspense fallback={<ScreenLoadingFallback />}>
+              <ForgotPasswordScreen
+                onNavigateToLogin={() => navigateAuth("login")}
+              />
+            </Suspense>
+          </ErrorBoundary>
         </ThemeProvider>
       );
     }
 
     return (
       <ThemeProvider>
-        <Suspense fallback={<ScreenLoadingFallback />}>
-          <LoginScreen
-            onNavigateToRegister={() => navigateAuth("register")}
-            onNavigateToForgotPassword={() => navigateAuth("forgot-password")}
-            onLoginSuccess={(isNewUser) => {
-              setIsAuthExplicit(false);
-              setIsGuestBypassed(true);
-              if (typeof window !== "undefined") {
-                sessionStorage.setItem("zana_guest_bypassed", "true");
-                const target = isBrainActive ? "/admin/brain" : "/";
-                window.history.replaceState(null, "", target);
-              }
-              if (!isNewUser) {
-                setIsForcedOnboarding(false);
-                const rec = getSessionRecovery();
-                if (rec) {
-                  setSessionRecoveryNotice(rec);
-                  setActiveTabState(resolveTabFromPath(rec.lastRoute));
-                } else {
-                  setActiveTabState("home");
+        <ErrorBoundary>
+          <Suspense fallback={<ScreenLoadingFallback />}>
+            <LoginScreen
+              onNavigateToRegister={() => navigateAuth("register")}
+              onNavigateToForgotPassword={() => navigateAuth("forgot-password")}
+              onLoginSuccess={(isNewUser) => {
+                setIsAuthExplicit(false);
+                setIsGuestBypassed(true);
+                if (typeof window !== "undefined") {
+                  sessionStorage.setItem("zana_guest_bypassed", "true");
+                  const target = isBrainActive ? "/admin/brain" : "/";
+                  window.history.replaceState(null, "", target);
                 }
-              } else {
-                setIsForcedOnboarding(true);
-              }
-            }}
-          />
-        </Suspense>
+                if (!isNewUser) {
+                  setIsForcedOnboarding(false);
+                  const rec = getSessionRecovery();
+                  if (rec) {
+                    setSessionRecoveryNotice(rec);
+                    setActiveTabState(resolveTabFromPath(rec.lastRoute));
+                  } else {
+                    setActiveTabState("home");
+                  }
+                } else {
+                  setIsForcedOnboarding(true);
+                }
+              }}
+            />
+          </Suspense>
+        </ErrorBoundary>
       </ThemeProvider>
     );
   }
@@ -523,18 +531,20 @@ export default function App() {
   if (isBrainActive) {
     return (
       <ThemeProvider>
-        <Suspense fallback={<ScreenLoadingFallback />}>
-          <AdminRoute>
-            <BrainAdminDashboard
-              onBackToApp={() => {
-                if (typeof window !== "undefined" && window.location.pathname.startsWith("/admin")) {
-                  window.history.pushState(null, "", "/");
-                }
-                setIsBrainActive(false);
-              }}
-            />
-          </AdminRoute>
-        </Suspense>
+        <ErrorBoundary>
+          <Suspense fallback={<ScreenLoadingFallback />}>
+            <AdminRoute>
+              <BrainAdminDashboard
+                onBackToApp={() => {
+                  if (typeof window !== "undefined" && window.location.pathname.startsWith("/admin")) {
+                    window.history.pushState(null, "", "/");
+                  }
+                  setIsBrainActive(false);
+                }}
+              />
+            </AdminRoute>
+          </Suspense>
+        </ErrorBoundary>
       </ThemeProvider>
     );
   }
@@ -544,14 +554,16 @@ export default function App() {
     return (
       <ThemeProvider>
         <div className="min-h-screen w-full bg-[#071927] flex flex-col items-center py-4 sm:py-8 px-2 sm:px-4 overflow-y-auto overflow-x-hidden transition-colors duration-300">
-          <Suspense fallback={<ScreenLoadingFallback />}>
-            <OnboardingScreen
-              onComplete={(...args) => {
-                handleOnboardingComplete(...args);
-                setIsForcedOnboarding(false);
-              }}
-            />
-          </Suspense>
+          <ErrorBoundary>
+            <Suspense fallback={<ScreenLoadingFallback />}>
+              <OnboardingScreen
+                onComplete={(...args) => {
+                  handleOnboardingComplete(...args);
+                  setIsForcedOnboarding(false);
+                }}
+              />
+            </Suspense>
+          </ErrorBoundary>
         </div>
       </ThemeProvider>
     );
