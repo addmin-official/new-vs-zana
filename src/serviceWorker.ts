@@ -3,6 +3,8 @@
  * Configures service worker lifecycle, background sync triggers, and cache revalidation.
  */
 
+import { startSync } from "./offline/syncQueue.ts";
+
 export interface ServiceWorkerState {
   isRegistered: boolean;
   isOnline: boolean;
@@ -26,6 +28,15 @@ class ServiceWorkerManager {
     if (typeof window !== "undefined") {
       window.addEventListener("online", () => this.updateOnlineStatus(true));
       window.addEventListener("offline", () => this.updateOnlineStatus(false));
+
+      // Listen for background sync triggers or cache messages from service worker
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.addEventListener("message", (event) => {
+          if (event.data?.type === "BACKGROUND_SYNC_TRIGGERED" || event.data?.type === "SYNC_QUEUE") {
+            void startSync();
+          }
+        });
+      }
     }
   }
 
@@ -50,7 +61,8 @@ class ServiceWorkerManager {
     this.notify();
 
     if (isOnline) {
-      // Trigger background sync for queued mastery updates
+      // Trigger sync queue execution and background sync
+      void startSync();
       void this.triggerOfflineSync();
     }
   }
@@ -107,7 +119,10 @@ class ServiceWorkerManager {
       const syncReg = this.state.registration as ServiceWorkerRegistration & {
         sync: { register: (tag: string) => Promise<void> };
       };
-      await syncReg.sync.register("sync-mastery-updates");
+      await Promise.allSettled([
+        syncReg.sync.register("sync-mastery-updates"),
+        syncReg.sync.register("sync-zana-queue"),
+      ]);
     } catch (err) {
       console.warn("[SW Manager] Background sync registration skipped:", err);
     }

@@ -26,6 +26,7 @@ import { useStudentMastery } from "../learning/hooks/useStudentMastery.ts";
 import { notificationService } from "../services/notificationService.ts";
 import { NotificationPreferences, DEFAULT_NOTIFICATION_PREFERENCES } from "../domain/notification.ts";
 import { useTranslation } from "../hooks/useTranslation.ts";
+import { DownloadManager } from "../components/DownloadManager.tsx";
 
 export interface ProfileAndSettingsProps {
   profile?: StudentProfile;
@@ -789,6 +790,11 @@ export function ProfileAndSettings({
                   <span>١٢٣ • {t("settings.easternNumerals")}</span>
                 </button>
               </div>
+            </div>
+
+            {/* Offline Subjects & Storage Section */}
+            <div className="pt-4 border-t border-slate-100">
+              <DownloadManager />
             </div>
           </div>
         </div>
