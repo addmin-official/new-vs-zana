@@ -1,6 +1,6 @@
 import { initializeApp, getApp, getApps, FirebaseApp } from "firebase/app";
 import { getFirestore, initializeFirestore, connectFirestoreEmulator, enableIndexedDbPersistence, Firestore } from "firebase/firestore";
-import { getAuth, connectAuthEmulator, Auth } from "firebase/auth";
+import { getAuth, connectAuthEmulator, Auth, setPersistence, browserLocalPersistence } from "firebase/auth";
 import firebaseConfig, { isFirebaseConfigured } from "./firebaseConfig.ts";
 
 let _app: FirebaseApp | null = null;
@@ -72,6 +72,11 @@ export function getFirebaseAuth(): Auth | null {
 
   try {
     _auth = getAuth(app);
+    if (typeof window !== "undefined") {
+      setPersistence(_auth, browserLocalPersistence).catch((err) => {
+        console.warn("Could not set browserLocalPersistence:", err);
+      });
+    }
     if (isEmulatorEnabled()) {
       try {
         connectAuthEmulator(_auth, "http://127.0.0.1:9099", { disableWarnings: true });

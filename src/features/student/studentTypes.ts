@@ -19,6 +19,13 @@ export interface StudentProfile {
   authoritative: boolean;
   source: "guest-local" | "server-authoritative";
   isStale?: boolean;
+  school?: string;
+  email?: string | null;
+  preferredLanguage?: string;
+  xp?: number;
+  streakDays?: number;
+  lastActiveDate?: string;
+  masteryBySubject?: Record<string, unknown>;
   // Progress & Gamification fields (synced with Firestore)
   totalScore?: number;
   streak?: number;
@@ -48,6 +55,8 @@ export interface StudentProfileDraft {
   stream: AcademicStream;
   activeSubject: SubjectKey;
   level: StudentLevel;
+  school?: string;
+  email?: string | null;
 }
 
 export interface VerifiedIdentity {

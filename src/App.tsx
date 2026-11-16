@@ -1,5 +1,6 @@
 import { useState, useEffect, lazy, Suspense } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
+import { Sparkles } from "lucide-react";
 import { AppShell } from "./components/AppShell.tsx";
 import { LoadingScreen } from "./screens/LoadingScreen.tsx";
 import { useStudentProfile } from "./features/student/useStudentProfile.ts";
@@ -7,7 +8,6 @@ import { SubjectKey } from "./features/student/studentTypes.ts";
 import { ThemeProvider } from "./context/ThemeContext.tsx";
 import { getFirebaseAuth, isFirebaseConfigured } from "./services/firebase.ts";
 import { getCurrentUser, logoutUser, subscribeToAuthChanges } from "./services/authService.ts";
-import { deleteStudentProfile } from "./features/student/studentStorage.ts";
 import { useAppStore } from "./store/appStore.ts";
 import { NavItemKey } from "./components/Sidebar.tsx";
 import { DevQuickToolbar } from "./components/DevQuickToolbar.tsx";
@@ -15,6 +15,14 @@ import { usePerformanceMonitor } from "./hooks/usePerformanceMonitor.ts";
 import { OfflineBanner } from "./components/pwa/OfflineBanner.tsx";
 import { PwaInstallPrompt } from "./components/pwa/PwaInstallPrompt.tsx";
 import { ErrorBoundary } from "./client/components/common/ErrorBoundary.tsx";
+import {
+  saveSessionPosition,
+  getSessionRecovery,
+  clearSessionRecovery,
+  getSubjectKurdishName,
+  SessionRecoveryData,
+} from "./auth/sessionRecovery.ts";
+import { checkUserExists } from "./auth/userProfileService.ts";
 
 // Lazy-loaded routes for code-splitting and performance (LCP/FCP < 2s)
 const Home = lazy(() => import("./pages/Home.tsx").then((m) => ({ default: m.Home })));
@@ -32,11 +40,11 @@ const TeacherDashboard = lazy(() => import("./pages/TeacherDashboard.tsx").then(
 const ParentPortal = lazy(() => import("./pages/ParentPortal.tsx").then((m) => ({ default: m.ParentPortal })));
 const SystemAdminDashboard = lazy(() => import("./pages/BrainAdminDashboard.tsx").then((m) => ({ default: m.BrainAdminDashboard })));
 const AdminRoute = lazy(() => import("./routes/AdminRoute.tsx").then((m) => ({ default: m.AdminRoute })));
-const RegisterScreen = lazy(() => import("./screens/RegisterScreen.tsx").then((m) => ({ default: m.RegisterScreen })));
+const RegisterScreen = lazy(() => import("./pages/Register.tsx").then((m) => ({ default: m.Register })));
 const ForgotPasswordScreen = lazy(() => import("./screens/ForgotPasswordScreen.tsx").then((m) => ({ default: m.ForgotPasswordScreen })));
 const PedagogicalHubScreen = lazy(() => import("./screens/PedagogicalHubScreen.tsx"));
 const OnboardingScreen = lazy(() => import("./screens/OnboardingScreen.tsx").then((m) => ({ default: m.OnboardingScreen })));
-const LoginScreen = lazy(() => import("./screens/LoginScreen.tsx").then((m) => ({ default: m.LoginScreen })));
+const LoginScreen = lazy(() => import("./pages/Login.tsx").then((m) => ({ default: m.Login })));
 const WelcomeScreen = lazy(() => import("./screens/WelcomeScreen.tsx").then((m) => ({ default: m.WelcomeScreen })));
 
 function ScreenLoadingFallback() {
@@ -139,6 +147,10 @@ export default function App() {
     if (!auth) return false;
     return auth.currentUser === null;
   });
+  const [authTimedOut, setAuthTimedOut] = useState(false);
+  const [sessionRecoveryNotice, setSessionRecoveryNotice] = useState<SessionRecoveryData | null>(
+    () => getSessionRecovery()
+  );
   const [authScreen, setAuthScreen] = useState<"welcome" | "login" | "register" | "forgot-password">(() => {
     if (typeof window !== "undefined") {
       const p = window.location.pathname.replace(/\/+$/, "");
@@ -194,19 +206,52 @@ export default function App() {
     }
   };
 
-  // Auth State Listeners
+  // 10s Auth loading timeout guard
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    if (authLoading) {
+      timer = setTimeout(() => {
+        setAuthTimedOut(true);
+        setAuthLoading(false);
+      }, 10000);
+    }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [authLoading]);
+
+  // Auth State Listeners & Returning User Auto-Detection
   useEffect(() => {
     const unsubCustom = subscribeToAuthChanges((u) => {
       setCurrentUser(u);
       setAuthLoading(false);
+      setAuthTimedOut(false);
     });
 
     const auth = getFirebaseAuth();
     let unsubFirebase = () => {};
     if (auth) {
-      unsubFirebase = onAuthStateChanged(auth, (u) => {
-        setCurrentUser(u || getCurrentUser());
+      unsubFirebase = onAuthStateChanged(auth, async (u) => {
+        const effectiveUser = u || getCurrentUser();
+        setCurrentUser(effectiveUser);
         setAuthLoading(false);
+        setAuthTimedOut(false);
+
+        // Returning user detection: load Firestore profile without forcing re-registration
+        if (effectiveUser && !effectiveUser.isAnonymous) {
+          try {
+            const check = await checkUserExists(effectiveUser.uid);
+            if (check.exists && check.profile) {
+              setIsForcedOnboarding(false);
+              const rec = getSessionRecovery();
+              if (rec) {
+                setSessionRecoveryNotice(rec);
+              }
+            }
+          } catch (e) {
+            console.warn("Returning user profile check failed:", e);
+          }
+        }
       });
     }
 
@@ -215,6 +260,13 @@ export default function App() {
       unsubFirebase();
     };
   }, []);
+
+  // Save session recovery position as student studies
+  useEffect(() => {
+    if (activeTab && activeTab !== "admin") {
+      saveSessionPosition(activeTab, profile?.activeSubject || useAppStore.getState().user.activeSubject);
+    }
+  }, [activeTab, profile?.activeSubject]);
 
   // Listen to popstate for browser history navigation
   useEffect(() => {
@@ -309,7 +361,8 @@ export default function App() {
     } catch (e) {
       console.warn("Logout error:", e);
     }
-    deleteStudentProfile();
+    // Note: Do NOT delete the persistent student profile from disk on logout!
+    // This allows returning users to log back in without having to re-register.
     resetProfileOnly();
     useAppStore.getState().logout();
     setCurrentUser(null);
@@ -320,7 +373,7 @@ export default function App() {
     setIsGuestBypassed(false);
     setAuthScreen("login");
     setIsAuthExplicit(true);
-    setActiveTab("home");
+    setActiveTabState("home");
   };
 
   const handleOnboardingComplete = (
@@ -331,6 +384,7 @@ export default function App() {
     stream?: string
   ) => {
     const newProf = completeOnboarding(name, grade, subject, level, stream);
+    setIsForcedOnboarding(false);
     const curProgress = useAppStore.getState().userProgress;
     useAppStore.setState({
       user: {
@@ -365,7 +419,19 @@ export default function App() {
   if (authLoading) {
     return (
       <ThemeProvider>
-        <LoadingScreen message="چاوەڕوان بە... بارکردنی پلاتفۆڕمی زانا" />
+        <LoadingScreen
+          message="چاوەڕێبکە... پشکنینی ناسنامە"
+          isTimedOut={authTimedOut}
+          onRetry={() => {
+            setAuthTimedOut(false);
+            setAuthLoading(true);
+            const auth = getFirebaseAuth();
+            if (auth) {
+              setCurrentUser(auth.currentUser);
+            }
+            setAuthLoading(false);
+          }}
+        />
       </ThemeProvider>
     );
   }
@@ -396,9 +462,10 @@ export default function App() {
                 setIsAuthExplicit(false);
                 if (typeof window !== "undefined") {
                   sessionStorage.setItem("zana_guest_bypassed", "true");
-                  window.history.replaceState(null, "", "/chat");
+                  window.history.replaceState(null, "", "/");
                 }
                 setIsGuestBypassed(true);
+                setIsForcedOnboarding(false);
                 handleOnboardingComplete(
                   regData.name,
                   regData.grade,
@@ -406,7 +473,7 @@ export default function App() {
                   "intermediate",
                   regData.stream
                 );
-                setActiveTab("chat");
+                setActiveTabState("home");
               }}
             />
           </Suspense>
@@ -432,14 +499,26 @@ export default function App() {
           <LoginScreen
             onNavigateToRegister={() => navigateAuth("register")}
             onNavigateToForgotPassword={() => navigateAuth("forgot-password")}
-            onLoginSuccess={() => {
+            onLoginSuccess={(isNewUser) => {
               setIsAuthExplicit(false);
+              setIsGuestBypassed(true);
               if (typeof window !== "undefined") {
                 sessionStorage.setItem("zana_guest_bypassed", "true");
                 const target = isBrainActive ? "/admin/brain" : "/";
                 window.history.replaceState(null, "", target);
               }
-              setIsGuestBypassed(true);
+              if (!isNewUser) {
+                setIsForcedOnboarding(false);
+                const rec = getSessionRecovery();
+                if (rec) {
+                  setSessionRecoveryNotice(rec);
+                  setActiveTabState(resolveTabFromPath(rec.lastRoute));
+                } else {
+                  setActiveTabState("home");
+                }
+              } else {
+                setIsForcedOnboarding(true);
+              }
             }}
           />
         </Suspense>
@@ -651,6 +730,47 @@ export default function App() {
         onLogout={handleLogout}
       >
         <ErrorBoundary>
+          {sessionRecoveryNotice && (
+            <div className="mb-4 p-4 rounded-2xl bg-indigo-950/70 border border-indigo-500/30 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg animate-in fade-in duration-200">
+              <div className="flex items-center gap-3">
+                <span className="w-9 h-9 rounded-xl bg-indigo-600/30 border border-indigo-500/40 flex items-center justify-center text-indigo-300 shrink-0">
+                  <Sparkles className="w-5 h-5 text-indigo-400" />
+                </span>
+                <div>
+                  <h4 className="text-xs font-bold text-white">
+                    بەخێربێیتەوە! دواجار لە {getSubjectKurdishName(sessionRecoveryNotice.lastSubject)} بوویت
+                  </h4>
+                  <p className="text-[11px] text-slate-400">
+                    دەتوانیت ڕاستەوخۆ لەو وانەیەی کە لێی وەستابوویت بەردەوام بیت.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 self-end sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = resolveTabFromPath(sessionRecoveryNotice.lastRoute);
+                    setActiveTab(target);
+                    clearSessionRecovery();
+                    setSessionRecoveryNotice(null);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition cursor-pointer"
+                >
+                  بەردەوام بە
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearSessionRecovery();
+                    setSessionRecoveryNotice(null);
+                  }}
+                  className="px-2.5 py-2 rounded-xl text-slate-400 hover:text-white text-xs transition cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          )}
           <Suspense fallback={<ScreenLoadingFallback />}>
             {renderScreen()}
           </Suspense>
