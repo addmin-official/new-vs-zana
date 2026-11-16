@@ -27,6 +27,7 @@ import { notificationService } from "../services/notificationService.ts";
 import { NotificationPreferences, DEFAULT_NOTIFICATION_PREFERENCES } from "../domain/notification.ts";
 import { useTranslation } from "../hooks/useTranslation.ts";
 import { DownloadManager } from "../components/DownloadManager.tsx";
+import { StudentGamificationCard } from "../components/StudentGamificationCard.tsx";
 
 export interface ProfileAndSettingsProps {
   profile?: StudentProfile;
@@ -393,6 +394,13 @@ export function ProfileAndSettings({
               </div>
             </div>
           </div>
+
+          {/* Gamification Progress: Level, XP Bar & Streak Calendar */}
+          <StudentGamificationCard
+            userId={studentProfile?.id || user.id}
+            initialXp={realTotalXp}
+            initialStreak={studentProfile?.streakDays ?? user.streakDays ?? 0}
+          />
 
           {/* Mastery Profile Dashboard Card */}
           <div className="pt-4 border-t border-slate-100 space-y-4">

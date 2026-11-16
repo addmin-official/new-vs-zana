@@ -413,3 +413,22 @@ export async function getAllItems(): Promise<SyncQueueItem[]> {
 export async function getPendingCount(): Promise<number> {
   return getPendingSyncCount();
 }
+
+/**
+ * Unified syncQueue namespace helper
+ */
+export const syncQueue = {
+  startSync,
+  subscribe: subscribeSyncEvents,
+  on: (eventType: SyncEventType, listener: (event: SyncEvent) => void): (() => void) => {
+    return subscribeSyncEvents((event: SyncEvent) => {
+      if (event.type === eventType) {
+        listener(event);
+      }
+    });
+  },
+  getPendingCount,
+  getFailedItems,
+  getAllItems,
+  retryFailed,
+};

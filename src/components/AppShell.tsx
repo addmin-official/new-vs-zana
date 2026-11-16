@@ -5,7 +5,8 @@ import { Sidebar, NavItemKey } from "./Sidebar.tsx";
 import { BottomNav } from "./BottomNav.tsx";
 import { Toast } from "./Toast.tsx";
 import { useAppStore } from "../store/appStore.ts";
-import { NotificationCenter } from "./notifications/NotificationCenter.tsx";
+import { NotificationCenter } from "./NotificationCenter.tsx";
+import { AchievementToast } from "./AchievementToast.tsx";
 import { notificationService } from "../services/notificationService.ts";
 import { useTranslation } from "../hooks/useTranslation.ts";
 
@@ -84,6 +85,7 @@ export function AppShell({
     <div className="h-screen h-[100dvh] max-h-[100dvh] w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col antialiased selection:bg-blue-100 selection:text-blue-900 font-sans overflow-hidden" dir="rtl">
       {/* Toast Notifications */}
       <Toast notifications={notifications} onDismiss={removeNotification} />
+      <AchievementToast />
 
       {/* Ambient Offline Banner */}
       {!isOnline && (
