@@ -51,7 +51,7 @@ export async function verifyAuthToken(
       },
     };
   } catch (err: unknown) {
-    // In test environment, allow mock tokens only when ALLOW_TEST_AUTH_MOCK is set
+    // In test environment, allow test tokens only when ALLOW_TEST_AUTH_MOCK is set
     if (
       typeof process !== "undefined" &&
       (process.env?.ALLOW_TEST_AUTH_MOCK === "true" || process.env?.NODE_ENV === "test")

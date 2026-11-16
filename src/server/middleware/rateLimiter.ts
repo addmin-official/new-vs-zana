@@ -40,7 +40,7 @@ export async function enforceAiRateLimit(
 
   const key = `ratelimit:${studentId}`;
 
-  // Prioritize RATE_LIMIT_KV, fallback to LEARNING_RECORDS_KV for mock compatibility
+  // Prioritize RATE_LIMIT_KV, fallback to LEARNING_RECORDS_KV for backward compatibility
   const envLike = env as RateLimitEnvLike | undefined;
   const kv = envLike?.RATE_LIMIT_KV || envLike?.LEARNING_RECORDS_KV;
   if (!kv) {

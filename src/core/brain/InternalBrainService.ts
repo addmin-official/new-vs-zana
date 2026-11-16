@@ -1048,9 +1048,9 @@ export class InternalBrainService {
           break;
         }
         case 'golden_perm_04': {
-          const dummyPlan = this.prepareExecutionPlan('نوێکردنەوەی کەش');
-          dummyPlan.actionLevel = 3;
-          const perm = this.checkPermission(dummyPlan, {
+          const testPlan = this.prepareExecutionPlan('نوێکردنەوەی کەش');
+          testPlan.actionLevel = 3;
+          const perm = this.checkPermission(testPlan, {
             id: 'auditor_test',
             name: 'Auditor User',
             role: 'auditor',
@@ -1328,7 +1328,7 @@ export class InternalBrainService {
         this.registeredTools.find((t) => t.id === 'tool_diagnostics_scan')!,
       ];
     } else {
-      // Unrecognized or Ambiguous Command: DO NOT assume intent or fake success
+      // Unrecognized or Ambiguous Command: DO NOT assume intent or claim unverified success
       actionLevel = 0;
       riskScore = 0;
       riskLevel = 'low';

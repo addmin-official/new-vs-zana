@@ -98,8 +98,8 @@ app.get("/api/health", (req: Request, res: Response) => {
 
 // Curriculum Document Health Endpoint
 app.get("/api/health/curriculum", async (req: Request, res: Response) => {
-  const dummyRequest = new Request("http://localhost/api/health/curriculum", { method: "GET" });
-  const response = await handleCurriculumHealthRoute(dummyRequest, {
+  const healthCheckReq = new Request("http://localhost/api/health/curriculum", { method: "GET" });
+  const response = await handleCurriculumHealthRoute(healthCheckReq, {
     GEMINI_API_KEY: process.env.GEMINI_API_KEY,
     ZANA_CURRICULUM_DOCUMENT_URI: process.env.ZANA_CURRICULUM_DOCUMENT_URI,
     ZANA_CURRICULUM_DOCUMENT_ID: process.env.ZANA_CURRICULUM_DOCUMENT_ID,

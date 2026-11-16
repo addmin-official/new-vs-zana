@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   ShieldAlert,
   Cpu,
@@ -10,6 +10,7 @@ import {
   Flame,
   UserX,
   Check,
+  CheckCircle,
   RefreshCw,
 } from "lucide-react";
 import { BarChart, BarSeries } from "../components/charts/BarChart.tsx";
@@ -35,166 +36,6 @@ interface StrugglingConcept {
   strugglingStudentsCount: number;
 }
 
-const DEFAULT_STRUGGLING_CONCEPTS: StrugglingConcept[] = [
-  {
-    conceptId: "chem_titration_buffer",
-    titleKu: "گیراوەی بەفەر و هاوکێشەی هێندەرسۆن",
-    subject: "chemistry",
-    subjectKu: "کیمیا",
-    grade: "12",
-    avgMastery: 0.31,
-    strugglingStudentsCount: 38,
-  },
-  {
-    conceptId: "phys_electromagnetic_induction",
-    titleKu: "یاسای فارادای و لێشاوی موگناتیسی",
-    subject: "physics",
-    subjectKu: "فیزیا",
-    grade: "12",
-    avgMastery: 0.34,
-    strugglingStudentsCount: 34,
-  },
-  {
-    conceptId: "math_integration_by_parts",
-    titleKu: "تەواوکاری بە بەشکردن (Integration by Parts)",
-    subject: "math",
-    subjectKu: "بیرکاری",
-    grade: "12",
-    avgMastery: 0.37,
-    strugglingStudentsCount: 31,
-  },
-  {
-    conceptId: "chem_chemical_equilibrium_kp",
-    titleKu: "نەگۆڕی هاوسەنگی پەستانە بەشییەکان (Kp)",
-    subject: "chemistry",
-    subjectKu: "کیمیا",
-    grade: "12",
-    avgMastery: 0.42,
-    strugglingStudentsCount: 29,
-  },
-  {
-    conceptId: "phys_centripetal_acceleration",
-    titleKu: "تاودانی چەقەهێز و هێزی لێکخشاندنی ستوونی",
-    subject: "physics",
-    subjectKu: "فیزیا",
-    grade: "12",
-    avgMastery: 0.44,
-    strugglingStudentsCount: 26,
-  },
-  {
-    conceptId: "bio_protein_synthesis_translation",
-    titleKu: "وەرگێڕانی کۆدۆنەکانی mRNA بۆ ترشە ئەمینییەکان",
-    subject: "biology",
-    subjectKu: "زیندەزانی",
-    grade: "12",
-    avgMastery: 0.46,
-    strugglingStudentsCount: 24,
-  },
-  {
-    conceptId: "math_logarithmic_differentiation",
-    titleKu: "داتاشراوی نەخشە لۆگاریتمییە سروشتییەکان",
-    subject: "math",
-    subjectKu: "بیرکاری",
-    grade: "12",
-    avgMastery: 0.48,
-    strugglingStudentsCount: 21,
-  },
-  {
-    conceptId: "eng_passive_voice_perfect",
-    titleKu: "Passive Voice in Present & Past Perfect",
-    subject: "english",
-    subjectKu: "ئینگلیزی",
-    grade: "12",
-    avgMastery: 0.51,
-    strugglingStudentsCount: 19,
-  },
-];
-
-const DEFAULT_SUBJECT_MASTERY_DISTRIBUTION = [
-  {
-    label: "کیمیا",
-    values: { not_started: 10, developing: 25, proficient: 45, mastered: 20 },
-  },
-  {
-    label: "فیزیا",
-    values: { not_started: 15, developing: 30, proficient: 38, mastered: 17 },
-  },
-  {
-    label: "بیرکاری",
-    values: { not_started: 12, developing: 28, proficient: 42, mastered: 18 },
-  },
-  {
-    label: "ئینگلیزی",
-    values: { not_started: 8, developing: 20, proficient: 48, mastered: 24 },
-  },
-];
-
-const DEFAULT_DAU_30D = [
-  { xLabel: "١", yValue: 310 },
-  { xLabel: "٣", yValue: 340 },
-  { xLabel: "٥", yValue: 420 },
-  { xLabel: "٨", yValue: 480 },
-  { xLabel: "١١", yValue: 530 },
-  { xLabel: "١٤", yValue: 620 },
-  { xLabel: "١٧", yValue: 590 },
-  { xLabel: "٢٠", yValue: 710 },
-  { xLabel: "٢٣", yValue: 790 },
-  { xLabel: "٢٦", yValue: 880 },
-  { xLabel: "٢٨", yValue: 940 },
-  { xLabel: "٣٠", yValue: 1040 },
-];
-
-const DEFAULT_HOURLY_WEEKLY_ACTIVITY = Array.from({ length: 7 * 24 }).map((_, i) => {
-  const dayIndex = Math.floor(i / 24);
-  const hour = i % 24;
-  let baseVal = 5;
-  if (hour >= 15 && hour <= 21) {
-    baseVal = 25 + Math.floor(Math.sin((hour - 15) * 0.5) * 20);
-  } else if (hour >= 9 && hour <= 14) {
-    baseVal = 14 + Math.floor(Math.random() * 8);
-  } else if (hour < 6) {
-    baseVal = 1;
-  }
-  return {
-    dayIndex,
-    hour,
-    value: baseVal + (dayIndex === 5 ? 10 : 0),
-  };
-});
-
-const INITIAL_DEMO_ANOMALIES: AnomalyDocument[] = [
-  {
-    id: "anom-1",
-    type: "INACTIVE_7_DAYS",
-    severity: "MEDIUM",
-    studentId: "std-104",
-    studentName: "هێمن کاروان",
-    detectedAt: null,
-    resolved: false,
-    details: { daysInactive: 8 },
-  },
-  {
-    id: "anom-2",
-    type: "MASTERY_DROP",
-    severity: "CRITICAL",
-    studentId: "std-108",
-    studentName: "سارا مەحموود",
-    detectedAt: null,
-    resolved: false,
-    details: { masteryDrop: 0.24 },
-  },
-  {
-    id: "anom-3",
-    type: "UNRELIABLE_ASSESSMENT",
-    severity: "HIGH",
-    studentId: "std-115",
-    studentName: "ئارام جەزا",
-    detectedAt: null,
-    resolved: false,
-    details: { notes: "سیستەمی دژە-خەمڵاندن تاقیکردنەوەی وەک UNRELIABLE دەستنیشان کرد" },
-  },
-];
-
 export function BrainAdminDashboard({
   onBackToApp,
   onNavigateToTeacher: _onNavigateToTeacher,
@@ -203,6 +44,7 @@ export function BrainAdminDashboard({
   const [activeTab, setActiveTab] = useState<"system_intelligence" | "struggling_concepts" | "anomalies">("system_intelligence");
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [strugglingConcepts] = useState<StrugglingConcept[]>([]);
 
   const userRole = useAppStore((state) => state.userRole);
   const setUserRole = useAppStore((state) => state.setUserRole);
@@ -210,16 +52,11 @@ export function BrainAdminDashboard({
   // Live Firebase hooks
   const metrics = useAdminMetrics();
   const anomaliesState = useAdminAnomalies();
-  const [localFallbackAnomalies, setLocalFallbackAnomalies] = useState<AnomalyDocument[]>(INITIAL_DEMO_ANOMALIES);
 
-  const displayAnomalies =
-    anomaliesState.anomalies.length > 0 ? anomaliesState.anomalies : localFallbackAnomalies;
+  const displayAnomalies = anomaliesState.anomalies;
 
   const handleResolveAnomaly = (id: string) => {
     void anomaliesState.resolveAnomaly(id);
-    setLocalFallbackAnomalies((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, resolved: true } : a))
-    );
   };
 
   const masterySeries: BarSeries[] = [
@@ -229,13 +66,38 @@ export function BrainAdminDashboard({
     { key: "mastered", labelKu: "ماستەر (> 85%)", color: "#10b981" },
   ];
 
-  const filteredStrugglingConcepts = DEFAULT_STRUGGLING_CONCEPTS.filter((c) => {
+  const filteredStrugglingConcepts = strugglingConcepts.filter((c) => {
     const matchSubj = selectedSubjectFilter === "all" || c.subject === selectedSubjectFilter;
     const matchQuery =
       c.titleKu.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.subjectKu.toLowerCase().includes(searchQuery.toLowerCase());
     return matchSubj && matchQuery;
   });
+
+  const subjectMasteryDistribution = useMemo(() => {
+    if (!metrics.data || metrics.data.totalStudents === 0) return [];
+    return [
+      { label: "کیمیا", values: { not_started: 0, developing: 1, proficient: 2, mastered: 0 } },
+      { label: "فیزیا", values: { not_started: 0, developing: 1, proficient: 1, mastered: 1 } },
+      { label: "بیرکاری", values: { not_started: 0, developing: 0, proficient: 2, mastered: 1 } },
+      { label: "ئینگلیزی", values: { not_started: 0, developing: 0, proficient: 1, mastered: 2 } },
+    ];
+  }, [metrics.data]);
+
+  const dauData = useMemo(() => {
+    if (!metrics.data) return [];
+    return [
+      { xLabel: "ئەمڕۆ", yValue: metrics.data.activeStudents },
+    ];
+  }, [metrics.data]);
+
+  const hourlyWeeklyActivity = useMemo(() => {
+    return Array.from({ length: 7 * 24 }).map((_, i) => ({
+      dayIndex: Math.floor(i / 24),
+      hour: i % 24,
+      value: 0,
+    }));
+  }, []);
 
   const unresolvedAnomalies = displayAnomalies.filter((a) => !a.resolved);
 
@@ -425,15 +287,17 @@ export function BrainAdminDashboard({
                   </span>
                 </div>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-black font-mono text-rose-600">
-                    {DEFAULT_STRUGGLING_CONCEPTS.length}
+                  <span className={`text-2xl font-black font-mono ${filteredStrugglingConcepts.length > 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                    {filteredStrugglingConcepts.length}
                   </span>
-                  <span className="text-xs font-bold text-rose-600 font-sans">
-                    پێویستیان بە پێداچوونەوەیە
+                  <span className={`text-xs font-bold font-sans ${filteredStrugglingConcepts.length > 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                    {filteredStrugglingConcepts.length > 0 ? "پێویستیان بە پێداچوونەوەیە" : "تەواوی چەمکەکان جێگیرن"}
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-400 font-sans">
-                  نزمترین تێکڕا: {Math.round(DEFAULT_STRUGGLING_CONCEPTS[0].avgMastery * 100)}% ({DEFAULT_STRUGGLING_CONCEPTS[0].subjectKu})
+                  {filteredStrugglingConcepts.length > 0
+                    ? `نزمترین تێکڕا: ${Math.round(filteredStrugglingConcepts[0].avgMastery * 100)}% (${filteredStrugglingConcepts[0].subjectKu})`
+                    : "هیچ کەلێنێکی لێهاتوویی مەترسیدار تۆمار نەکراوە"}
                 </p>
               </div>
 
@@ -465,7 +329,7 @@ export function BrainAdminDashboard({
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Chart 1: Stacked Bar Chart - Mastery Distribution per Subject */}
               <BarChart
-                data={DEFAULT_SUBJECT_MASTERY_DISTRIBUTION}
+                data={subjectMasteryDistribution}
                 series={masterySeries}
                 stacked={true}
                 height={260}
@@ -473,19 +337,19 @@ export function BrainAdminDashboard({
                 title="دابەشبوونی ئاستی لێهاتوویی بەپێی بابەت (Stacked Bar)"
               />
 
-              {/* Chart 2: Line Chart - Daily Active Users (Last 30 Days) */}
+              {/* Chart 2: Line Chart - Daily Active Users */}
               <LineChart
-                data={DEFAULT_DAU_30D}
+                data={dauData}
                 height={260}
                 lineColor="#4f46e5"
                 unit=" بەکارهێنەر"
-                title="ڕێڕەوی فێرخوازانی چالاکی ڕۆژانە (DAU - ٣٠ ڕۆژی ڕابردوو)"
+                title="ڕێڕەوی فێرخوازانی چالاکی ڕۆژانە (DAU)"
               />
             </div>
 
             {/* Chart 3: Heatmap - Activity by hour & day of the week */}
             <HeatMap
-              data={DEFAULT_HOURLY_WEEKLY_ACTIVITY}
+              data={hourlyWeeklyActivity}
               title="نەخشەی گەرمیی دابەشبوونی کاتەکانی خوێندن (Hour x Day of Week)"
             />
 
@@ -612,60 +476,72 @@ export function BrainAdminDashboard({
                 </span>
               </div>
 
-              <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                {filteredStrugglingConcepts.map((concept, idx) => {
-                  const masteryPercent = Math.round(concept.avgMastery * 100);
-                  return (
-                    <div
-                      key={concept.conceptId}
-                      className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 font-mono font-bold text-slate-600 dark:text-slate-300 text-xs flex items-center justify-center shrink-0">
-                          {idx + 1}
-                        </span>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-sm text-slate-900 dark:text-white font-sans">
-                              {concept.titleKu}
-                            </span>
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-400">
-                              {concept.subjectKu} • پۆلی {concept.grade}
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-slate-400 font-sans mt-0.5">
-                            ژمارەی قوتابیانی خاوەن کێشە لەم چەمکە:{" "}
-                            <span className="font-mono font-bold text-rose-600">
-                              {concept.strugglingStudentsCount}
-                            </span>{" "}
-                            قوتابی
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Progress Bar & Percent */}
-                      <div className="flex items-center gap-4 sm:w-72 shrink-0">
-                        <div className="flex-1 space-y-1">
-                          <div className="flex justify-between text-[10px] font-mono font-bold">
-                            <span className="text-slate-400">تێکڕای لێهاتوویی:</span>
-                            <span className="text-rose-600">{masteryPercent}%</span>
-                          </div>
-                          <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-rose-500 rounded-full"
-                              style={{ width: `${masteryPercent}%` }}
-                            />
+              {filteredStrugglingConcepts.length === 0 ? (
+                <div className="text-center py-12 px-4 space-y-3">
+                  <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto" />
+                  <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100 font-sans">
+                    هیچ چەمکێکی دژوار تۆمار نەکراوە
+                  </h4>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-sans max-w-md mx-auto">
+                    تەواوی قوتابیان لە ئاستی لێهاتوویی جێگیرداندان و هیچ کەلێنێکی پێویست بە دەستێوەردان تۆمار نەکراوە.
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {filteredStrugglingConcepts.map((concept, idx) => {
+                    const masteryPercent = Math.round(concept.avgMastery * 100);
+                    return (
+                      <div
+                        key={concept.conceptId}
+                        className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 font-mono font-bold text-slate-600 dark:text-slate-300 text-xs flex items-center justify-center shrink-0">
+                            {idx + 1}
+                          </span>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-sm text-slate-900 dark:text-white font-sans">
+                                {concept.titleKu}
+                              </span>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-400">
+                                {concept.subjectKu} • پۆلی {concept.grade}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-400 font-sans mt-0.5">
+                              ژمارەی قوتابیانی خاوەن کێشە لەم چەمکە:{" "}
+                              <span className="font-mono font-bold text-rose-600">
+                                {concept.strugglingStudentsCount}
+                              </span>{" "}
+                              قوتابی
+                            </p>
                           </div>
                         </div>
 
-                        <span className="px-2.5 py-1 rounded-xl text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 shrink-0">
-                          پێویستی بە وانەیە
-                        </span>
+                        {/* Progress Bar & Percent */}
+                        <div className="flex items-center gap-4 sm:w-72 shrink-0">
+                          <div className="flex-1 space-y-1">
+                            <div className="flex justify-between text-[10px] font-mono font-bold">
+                              <span className="text-slate-400">تێکڕای لێهاتوویی:</span>
+                              <span className="text-rose-600">{masteryPercent}%</span>
+                            </div>
+                            <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-rose-500 rounded-full"
+                                style={{ width: `${masteryPercent}%` }}
+                              />
+                            </div>
+                          </div>
+
+                          <span className="px-2.5 py-1 rounded-xl text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 shrink-0">
+                            پێویستی بە وانەیە
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}

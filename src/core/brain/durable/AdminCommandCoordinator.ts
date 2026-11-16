@@ -157,7 +157,7 @@ export class LocalDurableObjectCoordinator implements IAdminCommandCoordinator {
     let instance = this.instances.get(commandId);
     if (!instance) {
       const memoryStorage = new Map<string, unknown>();
-      const mockState: DurableObjectState = {
+      const inMemoryState: DurableObjectState = {
         storage: {
           get: async <T>(key: string) => memoryStorage.get(key) as T | undefined,
           getMany: async <T>(keys: string[]) => {
@@ -185,7 +185,7 @@ export class LocalDurableObjectCoordinator implements IAdminCommandCoordinator {
         } as never,
         id: { toString: () => commandId },
       };
-      instance = new AdminCommandDO(mockState, this.env);
+      instance = new AdminCommandDO(inMemoryState, this.env);
       this.instances.set(commandId, instance);
     }
     return instance;

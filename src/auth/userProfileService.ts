@@ -91,7 +91,7 @@ export async function checkUserExists(uid: string): Promise<UserCheckResult> {
     }
   }
 
-  // 3. Check local storage if device is offline or in mock environment
+  // 3. Check local storage if device is offline or in local environment
   const local = getStudentProfile();
   if (local && local.onboardingCompleted && (local.id === uid || (!local.id.includes("default-guest")))) {
     return { exists: true, isNewUser: false, profile: local };

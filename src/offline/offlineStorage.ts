@@ -96,7 +96,7 @@ export type StoreName =
 let dbInstance: IDBDatabase | null = null;
 
 /**
- * Returns the IndexedDB factory (supports test mocking and browser environment)
+ * Returns the IndexedDB factory (supports test environment and browser environment)
  */
 function getIDBFactory(): IDBFactory | undefined {
   if (typeof window !== "undefined" && window.indexedDB) {

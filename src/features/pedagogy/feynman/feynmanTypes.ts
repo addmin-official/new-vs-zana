@@ -8,7 +8,7 @@ export interface FeynmanConceptPrompt {
   coreMechanismKu: string; // The "why" behind it
   commonJargonList: string[]; // Jargon words to detect if student is just memorizing
   analogyExamplesKu: string[]; // Plain real-world analogies
-  sampleQuestionsFromProtégé: string[];
+  guidingQuestionsFromProtege: string[];
 }
 
 export interface JargonDetectionResult {

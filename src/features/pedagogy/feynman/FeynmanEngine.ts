@@ -15,7 +15,7 @@ export const FEYNMAN_CONCEPTS_CATALOG: FeynmanConceptPrompt[] = [
     coreMechanismKu: "کاتێک پەستان زیاد دەبێت، گەردیلەکانی گاز زیاتر لێکتر نزیک دەبنەوە و بەر ڕووی شلەکە دەکەون، بەوەش ژمارەی زیاتری گەردیلە دەکەونە ناو شلەکە.",
     commonJargonList: ["پەستانی بەشی", "ڕاستەوانە", "هاوسەنگی داینامیکی", "خەستی مۆلاری"],
     analogyExamplesKu: ["قوتووی کۆلا پێش کردنەوەی و دوای کردنەوەی", "کیسی چیپس لە ناو فڕۆکە"],
-    sampleQuestionsFromProtégé: [
+    guidingQuestionsFromProtege: [
       "ببورە مامۆستا، بۆچی کاتێک سەری قوتووی پێپسی دەکەینەوە، لەپڕ بڵقەکان دێنە سەرەوە؟ گازەکە لە کوێ بوو؟",
       "ئەگەر پلەی گەرمی زیاد بکەم لەبری پەستان، ئایا گازەکە زیاتر دەتوێتەوە یان کەمتر؟ بۆچی؟",
       "دەتوانیت پێم بڵێیت چی ڕوودەدات بە گەردیلەکان کاتێک پەستان دەکەینە سەریان؟"
@@ -31,7 +31,7 @@ export const FEYNMAN_CONCEPTS_CATALOG: FeynmanConceptPrompt[] = [
     coreMechanismKu: "سیستەم وەک تەرازوویەک کار دەکات؛ ئەگەر لایەکی قورس بکەیت، بۆ ڕاگرتنی خۆی ماددەکان دەگوێزێتەوە بۆ لایەکەی تر تا هاوسەنگی دروست ببێتەوە.",
     commonJargonList: ["هاوسەنگی دینامیکی", "لاریی کارلێک", "نەگۆڕی هاوسەنگی Keq", "هەڵگەڕاوە"],
     analogyExamplesKu: ["تەرازووی کێشان", "ژوورێکی قەرەباڵغ کە خەڵک لە دەرگایەکەوە دەچنە ژوورێکی ئارام"],
-    sampleQuestionsFromProtégé: [
+    guidingQuestionsFromProtege: [
       "مامۆستا، ئەگەر گەرمی زیاد بکەم لە کارلێکێکی گەرمیبەخش، بۆچی کارلێکەکە بەرەو دواوە دەگەڕێتەوە؟",
       "ئایا نەگۆڕی هاوسەنگی (Keq) دەگۆڕێت ئەگەر پەستان زیاد بکەین؟ چۆن ئەوە ڕوون دەکەیتەوە؟"
     ]
@@ -46,7 +46,7 @@ export const FEYNMAN_CONCEPTS_CATALOG: FeynmanConceptPrompt[] = [
     coreMechanismKu: "هێز بە تەنیا بوونی نییە، هەمیشە بە جووت لە نێوان دوو تەن دروست دەبێت کاتێک کارلێک دەکەن.",
     commonJargonList: ["ئاڕاستەبڕ", "هاوکێشەی یەکسان", "تەنە پەیوەستەکان", "بڕی بزووتن"],
     analogyExamplesKu: ["پەیداکردنی ڕۆیشتن بە پێ لەسەر زەوی", "فڕینی باڵۆن کاتێک دەمی بەردەدەیت", "تەقاندنی گوللە و گەڕانەوەی تفەنگ"],
-    sampleQuestionsFromProtégé: [
+    guidingQuestionsFromProtege: [
       "مامۆستا، ئەگەر کردار و پەرچەکردار یەکسان و پێچەوانەن، بۆچی یەکتر سفر ناکەنەوە و جووڵە دروست دەبێت؟",
       "کاتێک من لەسەر زەوی دەڕۆم، زەوی چۆن هێز لەسەر پێیەکانم دروست دەکات؟"
     ]
@@ -61,7 +61,7 @@ export const FEYNMAN_CONCEPTS_CATALOG: FeynmanConceptPrompt[] = [
     coreMechanismKu: "بریتییە لە زانینی خێرایی گۆڕان لە یەک چرکەی زۆر ورددا بە نزیککردنەوەی ماوەی کاتەکە بۆ سفر.",
     commonJargonList: ["لێژیی چەماوە", "سنووری لێکەوت", "دەلتا ئێکس", "ساتەوەختی"],
     analogyExamplesKu: ["سپیدۆمیتەری ئۆتۆمبێل لە چرکەیەکی دیاریکراودا بەرامبەر تێکڕای خێرایی سەفەرێک"],
-    sampleQuestionsFromProtégé: [
+    guidingQuestionsFromProtege: [
       "جیاوازی چییە لە نێوان تێکڕای خێرایی و داتاشراوی خێرایی؟",
       "بۆچی ناتوانین تەنها دابەشی سفری بکەین بەبێ بەکارهێنانی سنوور (Limit)؟"
     ]
@@ -162,8 +162,8 @@ export class FeynmanEngine {
     }
 
     // Pick next naive question from protégé
-    const qIndex = dialogueHistoryLength % prompt.sampleQuestionsFromProtégé.length;
-    const nextQuestion = prompt.sampleQuestionsFromProtégé[qIndex] || prompt.sampleQuestionsFromProtégé[0];
+    const qIndex = dialogueHistoryLength % prompt.guidingQuestionsFromProtege.length;
+    const nextQuestion = prompt.guidingQuestionsFromProtege[qIndex] || prompt.guidingQuestionsFromProtege[0];
 
     return {
       scorePercent: finalScore,

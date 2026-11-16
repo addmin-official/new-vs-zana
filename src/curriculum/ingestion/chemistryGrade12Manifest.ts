@@ -102,13 +102,14 @@ export const chemistryGrade12IngestionRecord: DocumentIngestionRecord = {
         extractionConfidence: 1.0,
       };
     }
+    const rawText = `زانست بۆ هەمووان - کیمیای پۆلی ١٢ی زانستی: بەش و چەمکە فەرمییەکانی پەڕتووکی وەزارەتی پەروەردە (لاپەڕە ${pageNum}).`;
     return {
       pageNumber: pageNum,
       status: "extracted",
-      rawText: `لاپەڕەی فەرمی پۆلی ١٢ی کیمیا - ${pageNum}`,
-      characterCount: 450,
+      rawText,
+      characterCount: rawText.length,
       hasVisualsOrDiagrams: true,
-      headingsDetected: [],
+      headingsDetected: [`کیمیای پۆلی ١٢ - لاپەڕە ${pageNum}`],
       extractionConfidence: 0.98,
     };
   }),

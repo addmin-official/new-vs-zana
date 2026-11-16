@@ -87,8 +87,8 @@ describe("Patch 19.1 - Chemistry Grade 12 Textbook Ingestion Foundation", () => 
 
   it("detects and eliminates duplicate or near-duplicate semantic chunks", async () => {
     const { SemanticChunker } = await import("./SemanticChunker");
-    const mockSection = chemistryGrade12IngestionRecord.detectedSections[0];
-    const initialChunks = SemanticChunker.chunkSection(mockSection, {
+    const targetSection = chemistryGrade12IngestionRecord.detectedSections[0];
+    const initialChunks = SemanticChunker.chunkSection(targetSection, {
       minTokens: 200,
       maxTokens: 400,
       grade: "12",

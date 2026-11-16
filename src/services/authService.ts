@@ -148,7 +148,7 @@ function getLocalAuthUser(): User | null {
       email: parsed.email || null,
       displayName: parsed.displayName || "قوتابی",
       isAnonymous: Boolean(parsed.isAnonymous),
-      getIdToken: async () => "mock-token",
+      getIdToken: async () => "",
     } as unknown as User;
   } catch {
     return null;
@@ -216,16 +216,7 @@ export async function ensureAuthenticated(): Promise<User> {
 export async function loginWithEmail(email: string, password: string): Promise<User> {
   const auth = getFirebaseAuth();
   if (!auth) {
-    const mockUser = {
-      uid: "usr_" + Math.random().toString(36).substring(2, 9),
-      email: email.trim(),
-      displayName: email.split("@")[0],
-      isAnonymous: false,
-      getIdToken: async () => "mock-token",
-    } as unknown as User;
-    setLocalAuthUser(mockUser);
-    notifyAuthListeners(mockUser);
-    return mockUser;
+    throw new Error("سێرڤەری Firebase پەیوەست نییە. تکایە دووبارە هەوڵ بدەرەوە.");
   }
   const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
   setLocalAuthUser(cred.user);
@@ -243,16 +234,7 @@ export async function registerWithEmail(
 ): Promise<User> {
   const auth = getFirebaseAuth();
   if (!auth) {
-    const mockUser = {
-      uid: "usr_" + Math.random().toString(36).substring(2, 9),
-      email: email.trim(),
-      displayName: displayName?.trim() || email.split("@")[0],
-      isAnonymous: false,
-      getIdToken: async () => "mock-token",
-    } as unknown as User;
-    setLocalAuthUser(mockUser);
-    notifyAuthListeners(mockUser);
-    return mockUser;
+    throw new Error("سێرڤەری Firebase پەیوەست نییە. تکایە دووبارە هەوڵ بدەرەوە.");
   }
   const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
   if (displayName && cred.user) {
@@ -273,18 +255,6 @@ export async function registerWithEmail(
 export async function loginWithGoogle(): Promise<User> {
   const auth = getFirebaseAuth();
   if (!auth) {
-    if (typeof process !== "undefined" && (process.env.ALLOW_TEST_AUTH_MOCK === "true" || process.env.NODE_ENV === "test")) {
-      const mockUser = {
-        uid: "test-google-user",
-        email: "test-student@gmail.com",
-        displayName: "قوتابی تاقیکردنەوە",
-        isAnonymous: false,
-        getIdToken: async () => "mock-google-token",
-      } as unknown as User;
-      setLocalAuthUser(mockUser);
-      notifyAuthListeners(mockUser);
-      return mockUser;
-    }
     throw new Error("سێرڤەری Firebase پەیوەست نییە. تکایە پەیوەندی ئینتەرنێتەکەت بپشکنە.");
   }
   const provider = new GoogleAuthProvider();
@@ -301,35 +271,12 @@ export async function loginWithGoogle(): Promise<User> {
 export async function loginAnonymously(): Promise<User> {
   const auth = getFirebaseAuth();
   if (!auth) {
-    const mockUser = {
-      uid: "guest_" + Math.random().toString(36).substring(2, 9),
-      email: null,
-      displayName: "قوتابی میوان",
-      isAnonymous: true,
-      getIdToken: async () => "mock-guest-token",
-    } as unknown as User;
-    setLocalAuthUser(mockUser);
-    notifyAuthListeners(mockUser);
-    return mockUser;
+    throw new Error("چوونەژوورەوەی میوان ناچالاک کراوە.");
   }
-  try {
-    const cred = await signInAnonymously(auth);
-    setLocalAuthUser(cred.user);
-    notifyAuthListeners(cred.user);
-    return cred.user;
-  } catch (err) {
-    console.warn("Firebase signInAnonymously failed (provider may be disabled), falling back to local guest:", err);
-    const mockUser = {
-      uid: "guest_" + Math.random().toString(36).substring(2, 9),
-      email: null,
-      displayName: "قوتابی میوان",
-      isAnonymous: true,
-      getIdToken: async () => "mock-guest-token",
-    } as unknown as User;
-    setLocalAuthUser(mockUser);
-    notifyAuthListeners(mockUser);
-    return mockUser;
-  }
+  const cred = await signInAnonymously(auth);
+  setLocalAuthUser(cred.user);
+  notifyAuthListeners(cred.user);
+  return cred.user;
 }
 
 /**

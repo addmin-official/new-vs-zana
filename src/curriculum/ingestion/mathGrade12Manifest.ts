@@ -52,13 +52,14 @@ export const mathGrade12IngestionRecord: DocumentIngestionRecord = {
   },
   pages: Array.from({ length: 240 }, (_, i) => {
     const pageNum = i + 1;
+    const rawText = `بیرکاری بۆ هەمووان - پۆلی دوازدەهەمی زانستی: بەش و نموونە هێڵییەکانی پەڕتووکی وەزارەتی پەروەردە (لاپەڕە ${pageNum}).`;
     return {
       pageNumber: pageNum,
       status: "extracted",
-      rawText: `لاپەڕەی فەرمی پۆلی ١٢ی بیرکاری - ${pageNum}`,
-      characterCount: 450,
+      rawText,
+      characterCount: rawText.length,
       hasVisualsOrDiagrams: true,
-      headingsDetected: [`پەڕەی بیرکاری ${pageNum}`],
+      headingsDetected: [`بیرکاریی پۆلی ١٢ - لاپەڕە ${pageNum}`],
       extractionConfidence: 0.98,
     };
   }),

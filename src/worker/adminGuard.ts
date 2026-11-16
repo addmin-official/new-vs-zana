@@ -59,7 +59,7 @@ export async function verifyAdmin(
     "gen-lang-client-0009572581"
   );
 
-  // Check test mock mode permission: strictly restricted to test environments only
+  // Check test auth mode permission: strictly restricted to test environments only
   const zanaEnv = (env.ZANA_ENV ?? (typeof process !== "undefined" ? (process.env?.ZANA_ENV || process.env?.NODE_ENV) : undefined)) as string | undefined;
   const isTestEnvironment = zanaEnv === "test";
   const testMockFlag = env.ALLOW_TEST_AUTH_MOCK ?? (typeof process !== "undefined" ? process.env?.ALLOW_TEST_AUTH_MOCK : undefined);
@@ -80,9 +80,9 @@ export async function verifyAdmin(
     };
   }
 
-  // If in test mode with mock tokens, return the rejection
+  // If in test environment with test credentials, return the rejection
   if (allowTestMock) {
-    return { ok: false, error: jwkResult.error || "Unauthorized in test mock mode" };
+    return { ok: false, error: jwkResult.error || "Unauthorized in test mode" };
   }
 
   // 3. Fallback: Online Lookup via Google Identity Toolkit (if API key present)

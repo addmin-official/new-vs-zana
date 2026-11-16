@@ -2208,6 +2208,61 @@ export default {
         }
       }
 
+      // GET /api/users
+      if (pathname === "/api/users" && request.method === "GET") {
+        if (!env.DB) {
+          return new Response(JSON.stringify({ ok: true, users: [] }), {
+            status: 200,
+            headers: responseHeaders,
+          });
+        }
+        try {
+          const res = await env.DB.prepare(
+            "SELECT id, email, name, role, grade, stream, created_at as createdAt, last_active as lastActive FROM users ORDER BY created_at DESC LIMIT 100"
+          ).bind().all<unknown>();
+          return new Response(
+            JSON.stringify({ ok: true, users: res?.results || [] }),
+            { status: 200, headers: responseHeaders }
+          );
+        } catch (dbErr: unknown) {
+          return new Response(
+            JSON.stringify({ error: "DATABASE_ERROR", detail: (dbErr as Error)?.message || String(dbErr) }),
+            { status: 500, headers: responseHeaders }
+          );
+        }
+      }
+
+      // GET /api/curriculum/pages
+      if (pathname === "/api/curriculum/pages" && request.method === "GET") {
+        if (!env.DB) {
+          return new Response(JSON.stringify({ ok: true, pages: [] }), {
+            status: 200,
+            headers: responseHeaders,
+          });
+        }
+        try {
+          const subject = url.searchParams.get("subject");
+          let query = "SELECT id, subject, grade, page_number as pageNumber, chapter_title as chapterTitle, lesson_title as lessonTitle, extracted_text as extractedText, source_pdf as sourcePdf, created_at as createdAt FROM curriculum_pages";
+          let res;
+          if (subject) {
+            query += " WHERE subject = ? ORDER BY page_number ASC LIMIT 200";
+            res = await env.DB.prepare(query).bind(subject).all<unknown>();
+          } else {
+            query += " ORDER BY subject, page_number ASC LIMIT 200";
+            res = await env.DB.prepare(query).bind().all<unknown>();
+          }
+          return new Response(
+            JSON.stringify({ ok: true, pages: res?.results || [] }),
+            { status: 200, headers: responseHeaders }
+          );
+        } catch (dbErr: unknown) {
+          return new Response(
+            JSON.stringify({ error: "DATABASE_ERROR", detail: (dbErr as Error)?.message || String(dbErr) }),
+            { status: 500, headers: responseHeaders }
+          );
+        }
+      }
+
       // GET /api/admin/subscriptions
       if (pathname === "/api/admin/subscriptions" && request.method === "GET") {
         if (!env.DB) {

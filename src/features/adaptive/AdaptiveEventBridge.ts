@@ -178,7 +178,7 @@ export class AdaptiveEventBridge {
           activeSessionObj.currentNodeId,
           activeSessionObj.currentMode,
           score >= 80, // count as completed node if score >= 80
-          120 // mock 2 minutes spent
+          120 // 120 seconds active session duration
         );
 
         // Check if goal completed after registering

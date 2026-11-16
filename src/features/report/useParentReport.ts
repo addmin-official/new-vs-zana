@@ -39,12 +39,8 @@ export function useParentReport(profile: StudentProfile) {
 
       const res = await ZanaApiClient.getParentReport(profile, stats);
       
-      // Determine some smart mock weak areas based on the subject
-      let weakAreas = ["هاوکێشەی هێڵی"];
-      if (profile.activeSubject === "math") weakAreas = ["ڕێساکانی گرتە (Derivative Rules)", "ڕووبەری سێگۆشە"];
-      else if (profile.activeSubject === "physics") weakAreas = ["یاسای ئۆم", "جووڵە بە تاودانی نەگۆڕ"];
-      else if (profile.activeSubject === "chemistry") weakAreas = ["هاوسەنگکردنی کارلێکەکان", "پێوەری pH"];
-      else if (profile.activeSubject === "english") weakAreas = ["Modal verbs", "Passive Voice"];
+      // Use authentic student weak areas from progress record
+      const weakAreas = progress.weakAreas && progress.weakAreas.length > 0 ? progress.weakAreas : [];
 
       const updatedProgress = {
         ...progress,
