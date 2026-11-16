@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useSoundEffects } from "../hooks/useSoundEffects.ts";
 import { useAppStore } from "../store/appStore.ts";
+import { normalizeSubjectKey } from "../data/assessments/curriculum-questions.ts";
 
 export type QuestionType = "mcq" | "true_false" | "numeric";
 
@@ -33,10 +34,12 @@ export const SUBJECT_ASSESSMENT_METADATA: Record<string, { label: string; icon: 
   english: { label: "ئینگلیزی", icon: "📖" },
   kurdish: { label: "زمان و ئەدەبی کوردی", icon: "📚" },
   arabic: { label: "زمانی عەرەبی", icon: "📜" },
-  sports: { label: "پەروەردەی وەرزشی", icon: "⚽" },
+  islamic: { label: "ئایینی ئیسلام", icon: "🕌" },
   history: { label: "مێژوو", icon: "🏛️" },
-  economy: { label: "ئابووری", icon: "📊" },
   geography: { label: "جوگرافیا", icon: "🌍" },
+  computer: { label: "کۆمپیوتەر", icon: "💻" },
+  sports: { label: "پەروەردەی وەرزشی", icon: "⚽" },
+  economy: { label: "ئابووری", icon: "📊" },
 };
 
 export const SUBJECT_ASSESSMENT_QUESTIONS: Record<string, AssessmentQuestion[]> = {
@@ -903,6 +906,160 @@ export const SUBJECT_ASSESSMENT_QUESTIONS: Record<string, AssessmentQuestion[]> 
       explanation: "بەپێی نوێکردنەوەکانی فیفا و IFAB، ڕێگە بە پێنج (٥) گۆڕانکاری دراوە لە سێ وەستاندا لە ماوەی ٩٠ خولەکدا.",
     },
   ],
+
+  islamic: [
+    {
+      id: "islam-q1",
+      type: "mcq",
+      topic: "پایەکانی ئیمان",
+      question: "باوەڕبوون بە قەزا و قەدەر (خێر و شەڕی لە لایەن خوداوەیە) پایەی چەندەمە لە پایەکانی ئیمان لە ئیسلامدا؟",
+      options: ["پایەی سێیەم", "پایەی چوارەم", "پایەی شەشەم", "پایەی دووەم"],
+      correctIndex: 2,
+      explanation: "پایەکانی ئیمان شەشن: باوەڕبوون بە خودا، فریشتەکان، کتێبە ئاسمانییەکان، پێغەمبەران، ڕۆژی دوایی، و قەزا و قەدەر.",
+    },
+    {
+      id: "islam-q2",
+      type: "mcq",
+      topic: "زانستی قورئان",
+      question: "لە زانستی قورئاندا، ئەو سوورەتانەی کە لە دوای کۆچکردنی پێغەمبەر ﷺ بۆ مەدینە دابەزیون بە چ سوورەتێک دەناسرێن؟",
+      options: ["سوورەتی مەککی", "سوورەتی مەدەنی", "سوورەتی تەفسیری", "سوورەتی موحکەم"],
+      correctIndex: 1,
+      explanation: "هەر سوورەتێک پێش کۆچ دابەزیبێت مەککییە و ئەوەی دوای کۆچ دابەزیبێت مەدەنییە.",
+    },
+    {
+      id: "islam-q3",
+      type: "mcq",
+      topic: "زانستی فەرموودە",
+      question: "ئەو فەرموودەیەی کە سەنەدەکەی بەردەوام بێت و گێڕەرەوەکانی دادپەروەر بن و لەبەرکردنیان تەواو بێت بە چی دەناسرێت؟",
+      options: ["فەرموودەی سەحیح (صحيح)", "فەرموودەی لاواز (ضعيف)", "فەرموودەی دەستکرد (موضوع)", "فەرموودەی مەوقووف"],
+      correctIndex: 0,
+      explanation: "فەرموودەی سەحیح بەرزترین پلەی فەرموودەی ڕاستە کە بە زنجیرەی گێڕەرەوەی باوەڕپێکراو و لەبەرکراو دەگاتەوە بە پێغەمبەر ﷺ.",
+    },
+    {
+      id: "islam-q4",
+      type: "true_false",
+      topic: "فیقهی ئیسلامی",
+      question: "ڕیبا (سوو) لە مامەڵە داراییەکاندا لە ئیسلامدا بە دەقی ئاشکرای قورئانی پیرۆز بە حەرامکراوی گەورە دانراوە.",
+      options: ["ڕاستە", "هەڵەیە"],
+      correctIndex: 0,
+      explanation: "ڕاستە؛ خودای گەورە لە قورئاندا دەفەرموێت: (وَأَحَلَّ اللَّهُ الْبَيْعَ وَحَرَّمَ الرِّبَا).",
+    },
+    {
+      id: "islam-q5",
+      type: "numeric",
+      topic: "مێژووی ئیسلام",
+      question: "ڕێککەوتننامەی ئاشتیی حودەیبییە لە نێوان موسڵمانان و قوڕەیش لە ساڵی چەندی کۆچیدا بوو؟ (ژمارەکە بنووسە)",
+      options: [],
+      correctNumeric: 6,
+      tolerance: 0,
+      explanation: "ڕێککەوتننامەی حودەیبییە لە ساڵی ٦ی کۆچیدا ئەنجامدرا.",
+    },
+    {
+      id: "islam-q6",
+      type: "mcq",
+      topic: "ئەرکە داراییەکان",
+      question: "زەکاتی سامان و پارەی نەختینە کاتێک دەگاتە حەددی نیساب و ساڵێکی بەسەردا دەڕوات، بە چ ڕێژەیەک دەردەکرێت؟",
+      options: ["١٠٪ (یەک لە دە)", "٥٪ (یەک لە بیست)", "٢.٥٪ (یەک لە چل)", "١٪"],
+      correctIndex: 2,
+      explanation: "ڕێژەی زەکاتی پارە و زێڕ و زیو بریتییە لە ٢.٥٪ (کە دەکاتە یەک لەسەر چل).",
+    },
+    {
+      id: "islam-q7",
+      type: "mcq",
+      topic: "ڕەوشتی ئیسلامی",
+      question: "چاکەکردن لەگەڵ دایک و باوک (بڕ الوالدين) لە ئیسلامدا چ پێگەیەکی هەیە؟",
+      options: [
+        "تەنها کارێکی سووک و ئارەزوومەندانەیە",
+        "لە گەورەترین ئەرک و فەرزەکانە و هاوتای پەرستنی خودا هاتووە",
+        "تەنها لە کاتی دەوڵەمەندیدا پێویستە",
+        "پێویست ناکات ئەگەر پیر بووبن",
+      ],
+      correctIndex: 1,
+      explanation: "لە قورئاندا چاکەکردن لەگەڵ دایک و باوک بە یەکێک لە گەورەترین فەرمانە ئیلاهییەکان دانراوە: (وَقَضَىٰ رَبُّكَ أَلَّا تَعْبُدُوا إِلَّا إِيَّاهُ وَبِالْوَالِدَيْنِ إِحْسَانًا).",
+    },
+  ],
+
+  computer: [
+    {
+      id: "comp-q1",
+      type: "mcq",
+      topic: "تۆڕەکانی کۆمپیوتەر",
+      question: "کام پرۆتۆکۆڵە لە تۆڕی ئینتەرنێتدا بەرپرسە لە گۆڕینی ناوی دۆمەین (وەک zana.edu) بۆ ناونیشانی IPی ژمارەیی؟",
+      options: ["DHCP", "FTP", "DNS (Domain Name System)", "SMTP"],
+      correctIndex: 2,
+      explanation: "پرۆتۆکۆڵی DNS ناوی دۆمەینەکان دەگۆڕێت بۆ ناونیشانی IPی ئامێرەکان.",
+    },
+    {
+      id: "comp-q2",
+      type: "mcq",
+      topic: "ئاسایشی زانیاری",
+      question: "لە ئاسایشی زانیاریدا، هێرشی فیشینگ (Phishing) بریتییە لە چ جۆرە هەوڵێک لە لایەن هاککەرانەوە؟",
+      options: [
+        "سووتاندنی کارت شاشەی کۆمپیوتەر",
+        "هەڵخەڵەتاندنی بەکارهێنەر بە پەیج و ئیمەیڵی ساختە بۆ دزینی وشەی نهێنی",
+        "خاوکردنەوەی فانی ساردکەرەوە",
+        "پاککردنەوەی داتای کۆن",
+      ],
+      correctIndex: 1,
+      explanation: "فیشینگ بریتییە لە دانانی تەڵە و بەستەری ساختە بۆ بەدەستهێنانی نهێنی و ئەکاونتەکانی بەکارهێنەر.",
+    },
+    {
+      id: "comp-q3",
+      type: "mcq",
+      topic: "بنکەدراوە (Databases)",
+      question: "لە بنکەدراوەی پەیوەندیداردا، کلیلی سەرەکی (Primary Key) خاوەنی چ تایبەتمەندییەکی سەرەکییە؟",
+      options: [
+        "ناسێنەری بێ وێنەیە بۆ هەر تۆمارێک و نابێت دووبارە یان بەتاڵ بێت",
+        "دەتوانێت بەتاڵ (NULL) بێت بە ئارەزووی خۆت",
+        "تەنها لە خشتەی دووەمدا دروست دەکرێت",
+        "پێویستە هەمیشە ووشەی کوردی بێت",
+      ],
+      correctIndex: 0,
+      explanation: "کلیلی سەرەکی (Primary Key) ناسێنەری بێ وێنەیە و ڕێگری دەکات لە دووبارەبوونەوەی تۆمارەکان لە خشتەدا.",
+    },
+    {
+      id: "comp-q4",
+      type: "true_false",
+      topic: "شفرەکردن (Encryption)",
+      question: "شفرەکردن بریتییە لە پرۆسەی گۆڕینی داتای ئاسایی بۆ دەقێکی نهێنی تا کەسانی بێ دەسەڵات نەتوانن بیخوێننەوە.",
+      options: ["ڕاستە", "هەڵەیە"],
+      correctIndex: 0,
+      explanation: "ڕاستە؛ شفرەکردن (Encryption) بنەمای پاراستنی پەیوەندییەکانە لە وێب و ئەپڵیکەیشنەکاندا.",
+    },
+    {
+      id: "comp-q5",
+      type: "numeric",
+      topic: "یەکەکانی پێوانەی داتا",
+      question: "لە زانستی کۆمپیوتەردا، چەند بیت (Bit) پێویستە بۆ پێکهێنانی یەک بایت (Byte)؟ (ژمارەکە بنووسە)",
+      options: [],
+      correctNumeric: 8,
+      tolerance: 0,
+      explanation: "هەر ١ بایت لە ٨ بیت پێکدێت (1 Byte = 8 Bits).",
+    },
+    {
+      id: "comp-q6",
+      type: "mcq",
+      topic: "بەرنامەسازی",
+      question: "لە بەرنامەسازیدا، کام پێکهاتە بەکاردێت بۆ دووبارەکردنەوەی بلۆکێکی کۆد تا مەرجێک دێتە دی؟",
+      options: ["Variable", "Constant", "Loop (ئەڵقە وەک for و while)", "Class"],
+      correctIndex: 2,
+      explanation: "ئەڵقەکان (Loops) ڕێگە دەدەن کردارێک چەندین جار دووبارە بکرێتەوە بەپێی مەرجی دیاریکراو.",
+    },
+    {
+      id: "comp-q7",
+      type: "mcq",
+      topic: "تەکنەلۆژیای هەور (Cloud)",
+      question: "شێوازی SaaS لە تەکنەلۆژیای هەوردا کورتکراوەی چییە و چ واتایەک دەبەخشێت؟",
+      options: [
+        "System as a Service",
+        "Software as a Service (نەرمەکاڵا وەک خزمەتگوزاری سەر وێب)",
+        "Security and Antivirus",
+        "Speed and Acceleration",
+      ],
+      correctIndex: 1,
+      explanation: "مۆدێلی SaaS (Software as a Service) وەک Google Docs ڕێگە دەدات بەرنامەکان لەسەر وێب بەکاربهێنرێن بەبێ داگرتن لەسەر ئامێر.",
+    },
+  ],
 };
 
 export interface AdaptiveAssessmentProps {
@@ -920,8 +1077,9 @@ export function AdaptiveAssessment({
   const user = useAppStore((state) => state.user);
 
   // Derive active subject questions and metadata strictly for the active subject
-  const rawSubj = (user.activeSubject || "chemistry").toLowerCase();
-  const activeSubjKey = SUBJECT_ASSESSMENT_QUESTIONS[rawSubj] ? rawSubj : "chemistry";
+  const rawSubj = (user.activeSubject || "chemistry").toLowerCase().trim();
+  const normalizedKey = normalizeSubjectKey(rawSubj);
+  const activeSubjKey = SUBJECT_ASSESSMENT_QUESTIONS[normalizedKey] ? normalizedKey : "chemistry";
   const activeSubjectMeta = SUBJECT_ASSESSMENT_METADATA[activeSubjKey] || { label: "کیمیا", icon: "⚗️" };
   const questions = useMemo(() => {
     return SUBJECT_ASSESSMENT_QUESTIONS[activeSubjKey] || SUBJECT_ASSESSMENT_QUESTIONS.chemistry;

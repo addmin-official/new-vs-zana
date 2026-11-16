@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { AssessmentQuestionItem, REAL_ASSESSMENT_QUESTIONS, getQuestionsBySubject } from "../data/assessments/curriculum-questions.ts";
+import { AssessmentQuestionItem, getQuestionsBySubject } from "../data/assessments/curriculum-questions.ts";
 
 export function useAssessmentQuestions(subject: string, grade = 12) {
   const [questions, setQuestions] = useState<AssessmentQuestionItem[]>([]);
@@ -26,7 +26,8 @@ export function useAssessmentQuestions(subject: string, grade = 12) {
 
       if (isMounted) {
         const fallback = getQuestionsBySubject(subject, grade);
-        setQuestions(fallback.length > 0 ? fallback : REAL_ASSESSMENT_QUESTIONS);
+        // Strictly return questions for the requested subject - never mix subjects
+        setQuestions(fallback);
         setLoading(false);
       }
     }

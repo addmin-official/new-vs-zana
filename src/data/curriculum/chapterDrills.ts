@@ -1,5 +1,5 @@
 import { ALL_REAL_CURRICULUM } from "./index.ts";
-import { REAL_ASSESSMENT_QUESTIONS } from "../assessments/curriculum-questions.ts";
+import { REAL_ASSESSMENT_QUESTIONS, normalizeSubjectKey } from "../assessments/curriculum-questions.ts";
 
 export interface PracticeStep {
   problem: string;
@@ -768,9 +768,17 @@ export function getChapterData(
     ];
 
   // 3. Lookup question for solved example if available
-  const matchingQuestion = REAL_ASSESSMENT_QUESTIONS.find(
-    (q) => q.subject.toLowerCase() === normSubject && q.chapter_id.includes(`ch${chapterId}`)
-  );
+  const matchingQuestion = REAL_ASSESSMENT_QUESTIONS.find((q) => {
+    const qSubj = normalizeSubjectKey(q.subject);
+    const targetSubj = normalizeSubjectKey(normSubject);
+    if (qSubj !== targetSubj && q.subject.toLowerCase() !== normSubject) return false;
+    return (
+      q.chapter_id.includes(`ch${chapterId}`) ||
+      q.chapter_id.includes(`u${chapterId}`) ||
+      q.chapter_id.includes(`-${chapterId}-`) ||
+      q.chapter_id.endsWith(`-${chapterId}`)
+    );
+  });
 
   const solvedExample =
     foundCustom?.solvedExample ||

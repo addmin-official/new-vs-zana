@@ -44,6 +44,7 @@ import { handleFeedbackRoute } from "../server/api/feedback.ts";
 import { handleTelemetryExportRoute } from "../server/api/internal/telemetryExport.ts";
 import { handleHealthRoute, handleCurriculumHealthRoute } from "../server/api/health.ts";
 import { handleStudyRoomsRoute } from "../server/api/studyRooms.ts";
+import { getQuestionsBySubject } from "../data/assessments/curriculum-questions.ts";
 import { verifyAdmin, type AdminVerifyResult } from "./adminGuard.ts";
 import { InternalBrainService } from "../core/brain/InternalBrainService.ts";
 import type { AdminRole, ExecutionPlan, AdminPreferenceMemory } from "../core/brain/types.ts";
@@ -1718,6 +1719,14 @@ export default {
         const result = await ap.getResult(attemptId);
 
         return new Response(JSON.stringify({ attempt, result }), { status: 200, headers: responseHeaders });
+      }
+
+      // GET /api/assessment/questions?subject=...&grade=...
+      if (pathname === "/api/assessment/questions" && request.method === "GET") {
+        const subjectParam = url.searchParams.get("subject") || "chemistry";
+        const gradeParam = parseInt(url.searchParams.get("grade") || "12", 10);
+        const questions = getQuestionsBySubject(subjectParam, gradeParam);
+        return new Response(JSON.stringify({ questions }), { status: 200, headers: responseHeaders });
       }
 
       // Planning routes
