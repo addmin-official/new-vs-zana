@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Users,
   BookOpen,
@@ -20,83 +20,20 @@ import {
   ToggleRight,
   Eye,
   LogOut,
+  RefreshCw,
+  ShieldAlert,
+  Check,
 } from "lucide-react";
 import { useFeatureFlagsContext } from "../features/flags/FeatureFlagProvider.tsx";
 import { FEATURE_FLAGS, FeatureFlagName } from "../features/flags/flagConfig.ts";
 import { notificationEngine } from "../notifications/notificationEngine.ts";
 import { logAdminAction, ADMIN_EMAIL } from "../auth/roles.ts";
+import { useAdminMetrics } from "../hooks/useAdminMetrics.ts";
+import { useAdminStudentList, StudentListItem } from "../hooks/useAdminStudentList.ts";
+import { useSystemHealth } from "../hooks/useSystemHealth.ts";
+import { useAdminAnomalies } from "../hooks/useAdminAnomalies.ts";
 
 export type AdminTab = "overview" | "students" | "content" | "system";
-
-export interface StudentListItem {
-  id: string;
-  name: string;
-  email: string;
-  grade: "9" | "10" | "11" | "12" | string;
-  stream: "scientific" | "literary" | string;
-  lastActive: string;
-  masteryScore: number; // 0.0 to 1.0
-  sessionsCount: number;
-  streakDays: number;
-}
-
-const INITIAL_STUDENTS: StudentListItem[] = [
-  {
-    id: "std_krd_001",
-    name: "ئارام هێرش عەلی",
-    email: "aram.hersh@student.krd",
-    grade: "12",
-    stream: "scientific",
-    lastActive: "پێش ١٠ خولەک",
-    masteryScore: 0.88,
-    sessionsCount: 42,
-    streakDays: 14,
-  },
-  {
-    id: "std_krd_002",
-    name: "شەنە دارا مەحموود",
-    email: "shena.dara@student.krd",
-    grade: "12",
-    stream: "scientific",
-    lastActive: "ئەمڕۆ 14:20",
-    masteryScore: 0.94,
-    sessionsCount: 56,
-    streakDays: 21,
-  },
-  {
-    id: "std_krd_003",
-    name: "دیاری کەیوان فەریق",
-    email: "diyari.keywan@student.krd",
-    grade: "11",
-    stream: "scientific",
-    lastActive: "دوێنێ",
-    masteryScore: 0.72,
-    sessionsCount: 28,
-    streakDays: 5,
-  },
-  {
-    id: "std_krd_004",
-    name: "سۆما عەبدوڵڵا عوسمان",
-    email: "soma.abdullah@student.krd",
-    grade: "10",
-    stream: "general",
-    lastActive: "پێش ٢ ڕۆژ",
-    masteryScore: 0.65,
-    sessionsCount: 19,
-    streakDays: 3,
-  },
-  {
-    id: "std_krd_005",
-    name: "ڕێژوان سەرکەوت حەسەن",
-    email: "rezhwan.sarkawt@student.krd",
-    grade: "9",
-    stream: "general",
-    lastActive: "ئەمڕۆ 11:05",
-    masteryScore: 0.81,
-    sessionsCount: 33,
-    streakDays: 9,
-  },
-];
 
 interface SystemErrorLog {
   id: string;
@@ -118,6 +55,33 @@ export interface AdminDashboardProps {
   onLogout?: () => void;
 }
 
+function StatusBadge({ status }: { status?: string }) {
+  const isOnline = status === "ONLINE" || status === "READY" || status === "healthy";
+  const isDegraded = status === "DEGRADED" || status === "SYNCING" || status === "degraded";
+  return (
+    <span
+      className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold inline-flex items-center gap-1.5 ${
+        isOnline
+          ? "bg-emerald-950 text-emerald-400 border border-emerald-800"
+          : isDegraded
+          ? "bg-amber-950 text-amber-400 border border-amber-800"
+          : "bg-rose-950 text-rose-400 border border-rose-800"
+      }`}
+    >
+      <span
+        className={`w-1.5 h-1.5 rounded-full ${
+          isOnline ? "bg-emerald-400 animate-pulse" : isDegraded ? "bg-amber-400" : "bg-rose-400"
+        }`}
+      />
+      {status || "ONLINE"}
+    </span>
+  );
+}
+
+function MetricSkeleton() {
+  return <div className="h-8 w-24 bg-slate-800/80 animate-pulse rounded-lg my-1" />;
+}
+
 export function AdminDashboard({
   initialTab = "overview",
   onNavigateHome,
@@ -133,9 +97,12 @@ export function AdminDashboard({
     return initialTab;
   });
 
-  const [students] = useState<StudentListItem[]>(INITIAL_STUDENTS);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [gradeFilter, setGradeFilter] = useState<string>("all");
+  // Real live Firebase hooks
+  const metrics = useAdminMetrics();
+  const studentList = useAdminStudentList();
+  const health = useSystemHealth();
+  const anomaliesList = useAdminAnomalies();
+
   const [selectedStudent, setSelectedStudent] = useState<StudentListItem | null>(null);
   const [passwordResetNotice, setPasswordResetNotice] = useState<string | null>(null);
   const [announcementText, setAnnouncementText] = useState("");
@@ -194,42 +161,6 @@ export function AdminDashboard({
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Filter students
-  const filteredStudents = useMemo(() => {
-    return students.filter((s) => {
-      const matchSearch =
-        s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.id.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchGrade = gradeFilter === "all" || s.grade === gradeFilter;
-      return matchSearch && matchGrade;
-    });
-  }, [students, searchQuery, gradeFilter]);
-
-  // Export students as CSV
-  const handleExportCsv = () => {
-    const headers = "ID,Name,Email,Grade,Stream,Mastery,Sessions,Streak,LastActive\n";
-    const rows = filteredStudents
-      .map(
-        (s) =>
-          `"${s.id}","${s.name}","${s.email}","${s.grade}","${s.stream}",${Math.round(
-            s.masteryScore * 100
-          )}%,${s.sessionsCount},${s.streakDays},"${s.lastActive}"`
-      )
-      .join("\n");
-
-    const blob = new Blob([headers + rows], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `zana_students_export_${new Date().toISOString().substring(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-
-    void logAdminAction("EXPORT_STUDENT_CSV", undefined, { count: filteredStudents.length });
-    showToast(`فایلی CSV بۆ ${filteredStudents.length} قوتابی بەسەرکەوتوویی داگیرا.`);
-  };
-
   // Reset student password
   const handleResetPassword = (student: StudentListItem) => {
     setPasswordResetNotice(
@@ -264,12 +195,15 @@ export function AdminDashboard({
     }
   };
 
-  // Purge cache
-  const handlePurgeCache = () => {
+  // Purge cache and refetch all live queries
+  const handlePurgeCache = async () => {
     if (typeof window !== "undefined") {
       try {
         const keysToRemove = Object.keys(localStorage).filter(
-          (k) => k.startsWith("zana_ai_cache") || k.startsWith("zana_curriculum")
+          (k) =>
+            k.startsWith("zana_ai_cache") ||
+            k.startsWith("zana_curriculum") ||
+            k.startsWith("zana_admin_students_cache")
         );
         keysToRemove.forEach((k) => localStorage.removeItem(k));
       } catch {
@@ -277,8 +211,21 @@ export function AdminDashboard({
       }
     }
     void logAdminAction("PURGE_SYSTEM_CACHE");
-    showToast("کاشی ناوخۆ و وەڵامەکانی سیستەم پاککرانەوە.");
+
+    // Invalidate and refetch all live hooks
+    await Promise.allSettled([
+      metrics.refetch(),
+      studentList.refetch(),
+      health.refetch(),
+      anomaliesList.refetch(),
+    ]);
+
+    showToast("کاشی ناوخۆ پاککرایەوە و سەرجەم داتاکان ڕاستەوخۆ نوێکرانەوە.");
   };
+
+  const formattedLastUpdated = metrics.data?.lastUpdated
+    ? metrics.data.lastUpdated.toLocaleTimeString("ar-u-nu-arab")
+    : null;
 
   return (
     <div
@@ -376,7 +323,7 @@ export function AdminDashboard({
 
       {/* Main Admin Content Body */}
       <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 space-y-6 overflow-y-auto">
-        {/* Breadcrumb Header */}
+        {/* Top Bar: Breadcrumb Header & Cache Purge */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800">
           <div className="flex items-center gap-2 text-xs font-sans text-slate-400">
             <span className="hover:text-white cursor-pointer" onClick={() => handleTabChange("overview")}>
@@ -394,10 +341,16 @@ export function AdminDashboard({
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            {formattedLastUpdated && (
+              <span className="text-[11px] text-slate-400 font-mono hidden sm:inline">
+                دواین نوێکردنەوە: {formattedLastUpdated}
+              </span>
+            )}
             <button
               type="button"
               onClick={handlePurgeCache}
+              title="پاککردنەوەی کاش و نوێکردنەوەی هەموو داتاکان"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs font-bold text-slate-300 transition cursor-pointer"
             >
               <RotateCw className="w-3.5 h-3.5" />
@@ -406,51 +359,167 @@ export function AdminDashboard({
           </div>
         </div>
 
+        {/* Global Error Banner */}
+        {metrics.error && (
+          <div className="p-4 rounded-2xl bg-rose-950/80 border border-rose-800 text-rose-200 text-xs font-bold flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+              <span>{metrics.error}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => metrics.refetch()}
+              className="px-3 py-1 rounded-lg bg-rose-800 hover:bg-rose-700 text-white font-sans text-xs flex items-center gap-1 cursor-pointer"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>دووبارە هەوڵبدەوە</span>
+            </button>
+          </div>
+        )}
+
         {/* TAB 1: OVERVIEW (/admin) */}
         {activeTab === "overview" && (
           <div className="space-y-6 animate-in fade-in duration-200">
-            {/* 4 Core High-Density Metrics */}
+            {/* 4 Core High-Density Live Metrics Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Card 1: Active / Total Students */}
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-1">
-                <span className="text-xs text-slate-400 font-sans block">کۆی قوتابیانی چالاک</span>
+                <span className="text-xs text-slate-400 font-sans block">کۆی قوتابیانی چالاک (١٥ خولەک)</span>
                 <div className="flex items-baseline justify-between">
-                  <span className="text-2xl font-black text-white font-mono">1,482</span>
+                  {metrics.loading ? (
+                    <MetricSkeleton />
+                  ) : (
+                    <span className="text-2xl font-black text-white font-mono">
+                      {metrics.data?.activeStudents.toLocaleString("ar-u-nu-arab")}
+                    </span>
+                  )}
                   <span className="text-xs font-bold text-emerald-400 flex items-center gap-0.5">
-                    <TrendingUp className="w-3.5 h-3.5" /> +12%
+                    <TrendingUp className="w-3.5 h-3.5" />
+                    <span>لە کۆی {metrics.data?.totalStudents.toLocaleString("ar-u-nu-arab")}</span>
                   </span>
                 </div>
                 <span className="text-[10px] text-slate-500 font-mono">ACTIVE_STUDENTS_COUNT</span>
               </div>
 
+              {/* Card 2: Today's Learning Minutes */}
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-1">
                 <span className="text-xs text-slate-400 font-sans block">کاتی فێربوونی ئەمڕۆ</span>
                 <div className="flex items-baseline justify-between">
-                  <span className="text-2xl font-black text-indigo-400 font-mono">3,240</span>
+                  {metrics.loading ? (
+                    <MetricSkeleton />
+                  ) : (
+                    <span className="text-2xl font-black text-indigo-400 font-mono">
+                      {metrics.data?.todayLearningMinutes.toLocaleString("ar-u-nu-arab")}
+                    </span>
+                  )}
                   <span className="text-xs text-slate-400">خولەک</span>
                 </div>
                 <span className="text-[10px] text-slate-500 font-mono">TODAY_LEARNING_SESSIONS</span>
               </div>
 
+              {/* Card 3: Top Demanded Subject */}
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-1">
                 <span className="text-xs text-slate-400 font-sans block">وانەی پڕداواکاریترین</span>
                 <div className="flex items-baseline justify-between">
-                  <span className="text-lg font-black text-amber-400">کیمیا (پۆلی ١٢)</span>
-                  <span className="text-xs text-amber-500 font-bold">48%</span>
+                  {metrics.loading ? (
+                    <MetricSkeleton />
+                  ) : (
+                    <span className="text-lg font-black text-amber-400">
+                      {metrics.data?.topSubject.nameKu || "کیمیا"}
+                    </span>
+                  )}
+                  <span className="text-xs text-amber-500 font-bold">
+                    {(metrics.data?.topSubject.percent || 0).toLocaleString("ar-u-nu-arab")}%
+                  </span>
                 </div>
                 <span className="text-[10px] text-slate-500 font-mono">TOP_DEMANDED_SUBJECT</span>
               </div>
 
+              {/* Card 4: System & AI Health Status */}
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-1">
                 <span className="text-xs text-slate-400 font-sans block">باری سیستەم و ژیری دەستکرد</span>
                 <div className="flex items-baseline justify-between">
-                  <span className="text-base font-black text-emerald-400 flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
-                    تەندروستە (99.9%)
-                  </span>
+                  {health.loading ? (
+                    <MetricSkeleton />
+                  ) : (
+                    <span
+                      className={`text-base font-black flex items-center gap-1.5 ${
+                        health.data?.firebase === "ONLINE" && health.data?.gemini === "ONLINE"
+                          ? "text-emerald-400"
+                          : "text-amber-400"
+                      }`}
+                    >
+                      <span
+                        className={`w-2.5 h-2.5 rounded-full ${
+                          health.data?.firebase === "ONLINE" ? "bg-emerald-500 animate-ping" : "bg-amber-500"
+                        }`}
+                      />
+                      {health.data?.firebase === "ONLINE" ? "تەندروستە (100%)" : "کەلێنی کاتی"}
+                    </span>
+                  )}
                 </div>
                 <span className="text-[10px] text-slate-500 font-mono">ALL_SERVICES_OPERATIONAL</span>
               </div>
             </div>
+
+            {/* Live Anomalies Alert Banner if any unresolved */}
+            {anomaliesList.anomalies.length > 0 && (
+              <div className="bg-rose-950/40 border border-rose-900/80 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-rose-300 font-bold text-xs">
+                    <ShieldAlert className="w-4 h-4 text-rose-400 animate-pulse" />
+                    <span>
+                      کێشە و حاڵەتە نائاساییە دۆزراوەکان ({anomaliesList.anomalies.length} حاڵەت)
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleTabChange("students")}
+                    className="text-[11px] text-rose-400 hover:text-rose-300 underline font-sans cursor-pointer"
+                  >
+                    بینینی قوتابیان
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {anomaliesList.anomalies.slice(0, 3).map((anom) => (
+                    <div
+                      key={anom.id}
+                      className="bg-slate-900/90 border border-rose-900/60 rounded-xl p-3 space-y-1.5 text-xs"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-white">{anom.studentName}</span>
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold ${
+                            anom.severity === "CRITICAL"
+                              ? "bg-rose-950 text-rose-300 border border-rose-800"
+                              : "bg-amber-950 text-amber-300 border border-amber-800"
+                          }`}
+                        >
+                          {anom.type}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400">
+                        {anom.type === "INACTIVE_7_DAYS"
+                          ? `بۆ ماوەی ${anom.details?.daysInactive || 7} ڕۆژە ناچالاکە.`
+                          : anom.type === "MASTERY_DROP"
+                          ? `دابەزینی ماستەری بە بڕی ${Math.round((anom.details?.masteryDrop || 0.2) * 100)}%.`
+                          : "تاقیکردنەوە بە جێگەی گومان دەستنیشان کراوە."}
+                      </p>
+                      <div className="pt-1 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => anomaliesList.resolveAnomaly(anom.id)}
+                          className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-emerald-900/50 hover:text-emerald-300 text-slate-300 text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
+                        >
+                          <Check className="w-3 h-3" />
+                          <span>چارەسەرکرا</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Quick Actions Panel & Service Status */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -488,13 +557,13 @@ export function AdminDashboard({
 
                   <button
                     type="button"
-                    onClick={handleExportCsv}
+                    onClick={studentList.exportStudentsToCSV}
                     className="flex items-center gap-3 p-3.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 transition text-right cursor-pointer"
                   >
                     <Download className="w-5 h-5 text-amber-400 shrink-0" />
                     <div>
                       <span className="text-xs font-bold text-white block">هەناردەکردنی قوتابیان (CSV)</span>
-                      <span className="text-[11px] text-slate-400">دابەزاندنی تەواوی داتای قوتابیان</span>
+                      <span className="text-[11px] text-slate-400">دابەزاندنی داتای ڕاستەقینەی قوتابیان</span>
                     </div>
                   </button>
 
@@ -521,20 +590,20 @@ export function AdminDashboard({
 
                 <div className="space-y-3 font-mono text-xs">
                   <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/60">
-                    <span className="text-slate-300">Firebase Auth & DB</span>
-                    <span className="text-emerald-400 font-bold">ONLINE</span>
+                    <span className="text-slate-300 font-sans">Firebase Auth & DB</span>
+                    <StatusBadge status={health.data?.firebase} />
                   </div>
                   <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/60">
-                    <span className="text-slate-300">Cloudflare Edge & Cache</span>
-                    <span className="text-emerald-400 font-bold">ONLINE</span>
+                    <span className="text-slate-300 font-sans">Cloudflare Edge & Cache</span>
+                    <StatusBadge status={health.data?.cloudflare} />
                   </div>
                   <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/60">
-                    <span className="text-slate-300">Gemini LLM Teacher API</span>
-                    <span className="text-emerald-400 font-bold">ONLINE</span>
+                    <span className="text-slate-300 font-sans">Gemini LLM Teacher API</span>
+                    <StatusBadge status={health.data?.gemini} />
                   </div>
                   <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/60">
-                    <span className="text-slate-300">Offline Sync Protocol</span>
-                    <span className="text-emerald-400 font-bold">READY</span>
+                    <span className="text-slate-300 font-sans">Offline Sync Protocol</span>
+                    <StatusBadge status={health.data?.offlineSync} />
                   </div>
                 </div>
               </div>
@@ -552,23 +621,36 @@ export function AdminDashboard({
               </div>
             )}
 
-            {/* Toolbar: Search, Grade Filter, Export */}
+            {studentList.error && (
+              <div className="p-3.5 rounded-2xl bg-rose-950/80 border border-rose-800 text-rose-200 text-xs font-bold flex items-center justify-between">
+                <span>{studentList.error}</span>
+                <button
+                  type="button"
+                  onClick={() => studentList.refetch()}
+                  className="px-2.5 py-1 rounded bg-rose-800 hover:bg-rose-700 text-white text-[11px] cursor-pointer"
+                >
+                  دووبارە هەوڵبدەوە
+                </button>
+              </div>
+            )}
+
+            {/* Toolbar: Search, Grade Filter, Anomaly Filter, Export */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-900 border border-slate-800 rounded-2xl p-4">
               <div className="relative flex-1 max-w-md">
                 <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-3" />
                 <input
                   type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  value={studentList.searchQuery}
+                  onChange={(e) => studentList.setSearchQuery(e.target.value)}
                   placeholder="گەڕان بەپێی ناو، ئیمەیڵ یاخود ناسنامە..."
                   className="w-full bg-slate-800/80 border border-slate-700 rounded-xl pr-10 pl-4 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <select
-                  value={gradeFilter}
-                  onChange={(e) => setGradeFilter(e.target.value)}
+                  value={studentList.gradeFilter}
+                  onChange={(e) => studentList.setGradeFilter(e.target.value)}
                   className="bg-slate-800 border border-slate-700 text-xs text-slate-300 rounded-xl px-3 py-2 font-bold focus:outline-none"
                 >
                   <option value="all">سەرجەم پۆلەکان (All Grades)</option>
@@ -580,7 +662,20 @@ export function AdminDashboard({
 
                 <button
                   type="button"
-                  onClick={handleExportCsv}
+                  onClick={() => studentList.setAnomalyFilter(!studentList.anomalyFilter)}
+                  className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                    studentList.anomalyFilter
+                      ? "bg-rose-600 text-white"
+                      : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                  }`}
+                >
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span>تەنها کێشەدارەکان</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={studentList.exportStudentsToCSV}
                   className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition cursor-pointer shadow-xs"
                 >
                   <Download className="w-4 h-4" />
@@ -604,29 +699,69 @@ export function AdminDashboard({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60 font-sans">
-                    {filteredStudents.length === 0 ? (
+                    {studentList.loading ? (
+                      [...Array(5)].map((_, i) => (
+                        <tr key={i} className="animate-pulse">
+                          <td className="p-3.5">
+                            <div className="h-4 bg-slate-800 rounded w-32 mb-1.5" />
+                            <div className="h-3 bg-slate-800/60 rounded w-24" />
+                          </td>
+                          <td className="p-3.5">
+                            <div className="h-4 bg-slate-800 rounded w-16" />
+                          </td>
+                          <td className="p-3.5">
+                            <div className="h-4 bg-slate-800 rounded w-20" />
+                          </td>
+                          <td className="p-3.5">
+                            <div className="h-4 bg-slate-800 rounded w-12" />
+                          </td>
+                          <td className="p-3.5">
+                            <div className="h-4 bg-slate-800 rounded w-20" />
+                          </td>
+                          <td className="p-3.5 text-center">
+                            <div className="h-6 bg-slate-800 rounded w-16 mx-auto" />
+                          </td>
+                        </tr>
+                      ))
+                    ) : studentList.students.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="text-center py-12 text-slate-500">
-                          هیچ قوتابییەک بەم مەرجانە نەدۆزرایەوە.
+                        <td colSpan={6} className="text-center py-12 text-slate-500 font-sans text-sm">
+                          هێشتا قوتابییەک تۆمارنەکراوە.
                         </td>
                       </tr>
                     ) : (
-                      filteredStudents.map((std) => (
+                      studentList.students.map((std) => (
                         <tr key={std.id} className="hover:bg-slate-800/40 transition">
                           <td className="p-3.5">
-                            <span className="font-bold text-white block">{std.name}</span>
-                            <span className="font-mono text-[11px] text-slate-400">{std.email}</span>
+                            <div className="flex items-center gap-2">
+                              {std.isActive ? (
+                                <span
+                                  className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"
+                                  title="چالاک لە ١٥ خولەکی ڕابردوودا"
+                                />
+                              ) : (
+                                <span className="w-2 h-2 rounded-full bg-slate-600 shrink-0" />
+                              )}
+                              <div>
+                                <span className="font-bold text-white block">{std.name}</span>
+                                <span className="font-mono text-[11px] text-slate-400">{std.email}</span>
+                              </div>
+                            </div>
                           </td>
                           <td className="p-3.5">
                             <span className="font-bold text-slate-200 block">پۆلی {std.grade}</span>
                             <span className="text-[11px] text-slate-400">
-                              {std.stream === "scientific" ? "زانستی" : "گشتی / وێژەیی"}
+                              {std.stream === "scientific"
+                                ? "زانستی"
+                                : std.stream === "literary"
+                                ? "وێژەیی"
+                                : "گشتی"}
                             </span>
                           </td>
                           <td className="p-3.5">
                             <div className="flex items-center gap-2">
                               <span className="font-mono font-bold text-indigo-400">
-                                {Math.round(std.masteryScore * 100)}%
+                                {Math.round(std.masteryScore * 100).toLocaleString("ar-u-nu-arab")}%
                               </span>
                               <div className="w-16 h-1.5 bg-slate-800 rounded-full overflow-hidden">
                                 <div
@@ -637,9 +772,20 @@ export function AdminDashboard({
                             </div>
                           </td>
                           <td className="p-3.5">
-                            <span className="font-bold text-orange-400">🔥 {std.streakDays} ڕۆژ</span>
+                            <span className="font-bold text-orange-400">
+                              🔥 {std.streakDays.toLocaleString("ar-u-nu-arab")} ڕۆژ
+                            </span>
                           </td>
-                          <td className="p-3.5 text-slate-400">{std.lastActive}</td>
+                          <td className="p-3.5 text-slate-400">
+                            <div className="space-y-0.5">
+                              <span>{std.lastActiveLabel}</span>
+                              {std.hasAnomaly && (
+                                <span className="inline-block text-[10px] text-rose-400 font-bold bg-rose-950/70 border border-rose-900 px-1 rounded">
+                                  ⚠️ کێشە
+                                </span>
+                              )}
+                            </div>
+                          </td>
                           <td className="p-3.5 text-center">
                             <div className="flex items-center justify-center gap-1.5">
                               <button
@@ -734,7 +880,7 @@ export function AdminDashboard({
                   { nameKu: "کیمیا", nameEn: "Chemistry", count: "٢٤ چەمک", active: true },
                   { nameKu: "فیزیا", nameEn: "Physics", count: "٢٨ چەمک", active: true },
                   { nameKu: "بیرکاری", nameEn: "Mathematics", count: "٣٢ چەمک", active: true },
-                  { nameKu: "زیندەزانی", nameEn: "Biology", count: "٢٠ چەمک", active: true },
+                  { nameKu: "بایۆلۆژی", nameEn: "Biology", count: "٢٠ چەمک", active: true },
                   { nameKu: "ئینگلیزی", nameEn: "English", count: "١٦ چەمک", active: true },
                   { nameKu: "زمانی کوردی", nameEn: "Kurdish", count: "١٨ چەمک", active: true },
                 ].map((s) => (
@@ -755,6 +901,68 @@ export function AdminDashboard({
         {/* TAB 4: SYSTEM (/admin/system) */}
         {activeTab === "system" && (
           <div className="space-y-6 animate-in fade-in duration-200">
+            {/* Live Anomalies Management Box */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4 text-rose-400" />
+                  <span>دۆزینەوەی کێشە نائاساییەکان (Live Anomaly Detection)</span>
+                </h3>
+                <span className="text-xs text-slate-400 font-mono">
+                  {anomaliesList.anomalies.length} کێشەی چالاک
+                </span>
+              </div>
+
+              {anomaliesList.loading ? (
+                <div className="h-20 bg-slate-800/50 animate-pulse rounded-xl" />
+              ) : anomaliesList.anomalies.length === 0 ? (
+                <div className="text-center py-8 text-emerald-400 bg-emerald-950/20 border border-emerald-900/50 rounded-xl font-bold text-xs">
+                  ✅ هیچ کێشەیەک نەدۆزراوەتەوە
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-800 border border-slate-800 rounded-xl overflow-hidden font-sans text-xs">
+                  {anomaliesList.anomalies.map((anom) => (
+                    <div
+                      key={anom.id}
+                      className="p-3.5 bg-slate-900/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold font-mono ${
+                              anom.severity === "CRITICAL"
+                                ? "bg-rose-950 text-rose-400 border border-rose-800"
+                                : "bg-amber-950 text-amber-400 border border-amber-800"
+                            }`}
+                          >
+                            {anom.severity}
+                          </span>
+                          <span className="font-bold text-white">{anom.studentName}</span>
+                          <span className="text-slate-500 font-mono text-[11px]">({anom.type})</span>
+                        </div>
+                        <p className="text-slate-400 text-[11px]">
+                          {anom.type === "INACTIVE_7_DAYS"
+                            ? `قوتابی بۆ ماوەی ${anom.details?.daysInactive || 7} ڕۆژە ناچالاکە.`
+                            : anom.type === "MASTERY_DROP"
+                            ? `نمرەی شارەزایی بە ڕێژەی ${Math.round((anom.details?.masteryDrop || 0.2) * 100)}% دابەزیوە.`
+                            : anom.details?.notes || "هەڵسەنگاندنی ئەم قوتابییە جێگەی گومانە."}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => anomaliesList.resolveAnomaly(anom.id)}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>چارەسەرکردن</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Announcement Broadcast */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
@@ -850,15 +1058,21 @@ export function AdminDashboard({
               </div>
               <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/60">
                 <span className="text-slate-400 block font-sans">نمرەی ماستەری</span>
-                <span className="font-bold text-indigo-400">{Math.round(selectedStudent.masteryScore * 100)}%</span>
+                <span className="font-bold text-indigo-400">
+                  {Math.round(selectedStudent.masteryScore * 100).toLocaleString("ar-u-nu-arab")}%
+                </span>
               </div>
               <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/60">
                 <span className="text-slate-400 block font-sans">زنجیرەی بەردەوامی</span>
-                <span className="font-bold text-orange-400">🔥 {selectedStudent.streakDays} ڕۆژ</span>
+                <span className="font-bold text-orange-400">
+                  🔥 {selectedStudent.streakDays.toLocaleString("ar-u-nu-arab")} ڕۆژ
+                </span>
               </div>
               <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/60">
                 <span className="text-slate-400 block font-sans">کۆی دانیشتنەکان</span>
-                <span className="font-bold text-emerald-400">{selectedStudent.sessionsCount} جار</span>
+                <span className="font-bold text-emerald-400">
+                  {selectedStudent.sessionsCount.toLocaleString("ar-u-nu-arab")} جار
+                </span>
               </div>
             </div>
 

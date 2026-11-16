@@ -149,5 +149,21 @@ service cloud.firestore {
         allow read, write: if isOwner(studentId) || isAdmin();
       }
     }
+
+    // ========================================================================
+    // 8. Admin Anomalies & Live Analytics Monitoring
+    // ========================================================================
+
+    match /anomalies/{anomalyId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /{path=**}/sessions/{sessionId} {
+      allow read: if isAdmin();
+    }
+
+    match /{path=**}/mastery/{masteryId} {
+      allow read: if isAdmin();
+    }
   }
 }

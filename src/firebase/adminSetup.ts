@@ -1,0 +1,239 @@
+/**
+ * ZANA Platform - Firestore System & Admin Initialization
+ *
+ * 1. Ensures system/health and system/featureFlags documents exist
+ * 2. Migrates existing users missing 'role' or 'lastActive'
+ * 3. Seeds/creates admin document in users/{adminUid}
+ */
+
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  collection,
+  getDocs,
+  Timestamp,
+  writeBatch,
+  Firestore,
+} from "firebase/firestore";
+import { getFirestoreDb, getFirebaseAuth } from "../services/firebase.ts";
+import { ADMIN_EMAIL } from "../auth/roles.ts";
+
+export interface SystemHealthData {
+  firebase: "ONLINE" | "DEGRADED" | "DOWN";
+  gemini: "ONLINE" | "DEGRADED" | "DOWN";
+  cloudflare: "ONLINE" | "DEGRADED" | "DOWN";
+  offlineSync: "READY" | "SYNCING" | "ERROR";
+  lastChecked: Timestamp | Date;
+  version: string;
+}
+
+export interface FeatureFlagsData {
+  aiTutor: boolean;
+  offlineMode: boolean;
+  realTimeSync: boolean;
+  kurdishAudio: boolean;
+  parentReports: boolean;
+  voiceInput: boolean;
+  [key: string]: boolean;
+}
+
+export const DEFAULT_SYSTEM_HEALTH: SystemHealthData = {
+  firebase: "ONLINE",
+  gemini: "ONLINE",
+  cloudflare: "ONLINE",
+  offlineSync: "READY",
+  lastChecked: Timestamp.now(),
+  version: "2.4.0",
+};
+
+export const DEFAULT_FEATURE_FLAGS: FeatureFlagsData = {
+  aiTutor: true,
+  offlineMode: true,
+  realTimeSync: true,
+  kurdishAudio: true,
+  parentReports: true,
+  voiceInput: true,
+};
+
+/**
+ * Ensures system/health and system/featureFlags documents exist in Firestore.
+ */
+export async function ensureSystemDocuments(dbOverride?: Firestore): Promise<{
+  healthCreated: boolean;
+  flagsCreated: boolean;
+}> {
+  const db = dbOverride || getFirestoreDb();
+  if (!db) {
+    return { healthCreated: false, flagsCreated: false };
+  }
+
+  let healthCreated = false;
+  let flagsCreated = false;
+
+  // 1. system/health
+  try {
+    const healthRef = doc(db, "system", "health");
+    const healthSnap = await getDoc(healthRef);
+    if (!healthSnap.exists()) {
+      await setDoc(healthRef, {
+        ...DEFAULT_SYSTEM_HEALTH,
+        lastChecked: Timestamp.now(),
+      });
+      healthCreated = true;
+    }
+  } catch (err) {
+    console.warn("Failed to ensure system/health document:", err);
+  }
+
+  // 2. system/featureFlags
+  try {
+    const flagsRef = doc(db, "system", "featureFlags");
+    const flagsSnap = await getDoc(flagsRef);
+    if (!flagsSnap.exists()) {
+      await setDoc(flagsRef, DEFAULT_FEATURE_FLAGS);
+      flagsCreated = true;
+    }
+  } catch (err) {
+    console.warn("Failed to ensure system/featureFlags document:", err);
+  }
+
+  return { healthCreated, flagsCreated };
+}
+
+export interface MigrationResult {
+  migratedCount: number;
+  totalUsersChecked: number;
+  errors: string[];
+}
+
+/**
+ * Scans users collection and assigns default role: 'student' and lastActive if missing.
+ */
+export async function migrateUsersMissingRole(dbOverride?: Firestore): Promise<MigrationResult> {
+  const db = dbOverride || getFirestoreDb();
+  const result: MigrationResult = {
+    migratedCount: 0,
+    totalUsersChecked: 0,
+    errors: [],
+  };
+
+  if (!db) {
+    result.errors.push("Firestore instance not available");
+    return result;
+  }
+
+  try {
+    const usersCol = collection(db, "users");
+    const usersSnap = await getDocs(usersCol);
+    result.totalUsersChecked = usersSnap.size;
+
+    const batch = writeBatch(db);
+    let batchOperations = 0;
+
+    for (const userDoc of usersSnap.docs) {
+      const data = userDoc.data();
+      const updates: Record<string, unknown> = {};
+
+      if (!data.role) {
+        // If email matches ADMIN_EMAIL, set admin, otherwise student
+        if (data.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+          updates.role = "admin";
+        } else {
+          updates.role = "student";
+        }
+      }
+
+      if (!data.lastActive) {
+        updates.lastActive = Timestamp.now();
+      }
+
+      if (Object.keys(updates).length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        batch.update(userDoc.ref, updates as Record<string, any>);
+        batchOperations++;
+        result.migratedCount++;
+
+        // Firestore batches can hold up to 500 operations
+        if (batchOperations >= 450) {
+          await batch.commit();
+          batchOperations = 0;
+        }
+      }
+    }
+
+    if (batchOperations > 0) {
+      await batch.commit();
+    }
+  } catch (err) {
+    result.errors.push(`Migration error: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  return result;
+}
+
+/**
+ * Creates or updates the admin document in users/{adminUid}.
+ */
+export async function createAdminDocument(
+  adminUid?: string,
+  adminEmail: string = ADMIN_EMAIL,
+  dbOverride?: Firestore
+): Promise<{ success: boolean; uid?: string; message: string }> {
+  const db = dbOverride || getFirestoreDb();
+  const auth = getFirebaseAuth();
+
+  if (!db) {
+    return { success: false, message: "Firestore is not available" };
+  }
+
+  const targetUid = adminUid || auth?.currentUser?.uid;
+  if (!targetUid) {
+    return { success: false, message: "No admin UID provided or user not authenticated" };
+  }
+
+  try {
+    const adminDocRef = doc(db, "users", targetUid);
+    const adminDocSnap = await getDoc(adminDocRef);
+
+    if (!adminDocSnap.exists()) {
+      await setDoc(adminDocRef, {
+        uid: targetUid,
+        email: adminEmail,
+        displayName: "سەرپەرشتیاری زانا (Admin)",
+        role: "admin",
+        createdAt: Timestamp.now(),
+        lastActive: Timestamp.now(),
+        isSuperAdmin: true,
+      });
+      return { success: true, uid: targetUid, message: "Admin document created successfully" };
+    } else {
+      // Ensure role is admin
+      const existingData = adminDocSnap.data();
+      if (existingData.role !== "admin") {
+        await updateDoc(adminDocRef, {
+          role: "admin",
+          lastActive: Timestamp.now(),
+        });
+      }
+      return { success: true, uid: targetUid, message: "Admin document verified and updated" };
+    }
+  } catch (err) {
+    return {
+      success: false,
+      message: `Failed to create/verify admin doc: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+}
+
+/**
+ * Full master setup routine for admin dashboard initialization.
+ */
+export async function initializeAdminSystem() {
+  const sysDocs = await ensureSystemDocuments();
+  return {
+    systemDocuments: sysDocs,
+    timestamp: new Date().toISOString(),
+  };
+}

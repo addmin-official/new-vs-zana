@@ -9,7 +9,7 @@ import {
   Bell,
   TrendingUp,
 } from "lucide-react";
-import { MOCK_PARENT_DATA } from "../components/analytics/mockAnalyticsService.ts";
+import { ParentPortalSummary } from "../components/analytics/analyticsTypes.ts";
 import { StudentProfile } from "../features/student/studentTypes.ts";
 
 export interface ParentPortalProps {
@@ -17,8 +17,82 @@ export interface ParentPortalProps {
   onBackToApp?: () => void;
 }
 
+const PARENT_PORTAL_DATA: ParentPortalSummary = {
+  childName: "ئاراس ئەحمەد",
+  grade: "12",
+  stream: "زانستی",
+  weeklyDaysStudied: 5,
+  weeklyMinutesSpent: 275,
+  streakDays: 7,
+  lastActive: "ئەمڕۆ کاتژمێر 16:30",
+  subjectsProgress: [
+    {
+      subject: "chemistry",
+      subjectKu: "کیمیا",
+      icon: "⚗️",
+      progressPercentage: 82,
+      color: "bg-indigo-600",
+    },
+    {
+      subject: "physics",
+      subjectKu: "فیزیا",
+      icon: "⚡",
+      progressPercentage: 74,
+      color: "bg-amber-500",
+    },
+    {
+      subject: "math",
+      subjectKu: "بیرکاری",
+      icon: "📐",
+      progressPercentage: 68,
+      color: "bg-emerald-500",
+    },
+    {
+      subject: "english",
+      subjectKu: "ئینگلیزی",
+      icon: "📖",
+      progressPercentage: 88,
+      color: "bg-purple-600",
+    },
+  ],
+  masteredThisWeek: [
+    {
+      id: "m-1",
+      titleKu: "هاوسەنگی ئایۆنی و پێوەری pH",
+      subjectKu: "کیمیا",
+      date: "دووشەممە",
+    },
+    {
+      id: "m-2",
+      titleKu: "یاسای دووەمی نیوتن لە تاقیگە",
+      subjectKu: "فیزیا",
+      date: "چوارشەممە",
+    },
+    {
+      id: "m-3",
+      titleKu: "ڕستەی نادیار (Passive Voice)",
+      subjectKu: "ئینگلیزی",
+      date: "پێنجشەممە",
+    },
+  ],
+  currentlyWorkingOn: [
+    {
+      id: "w-1",
+      titleKu: "گیراوەی بەفەر و کاریگەری ئایۆنی هاوبەش",
+      subjectKu: "کیمیا",
+      progress: 45,
+    },
+    {
+      id: "w-2",
+      titleKu: "داتاشراوی نەخشە توانییەکان",
+      subjectKu: "بیرکاری",
+      progress: 60,
+    },
+  ],
+};
+
 export function ParentPortal({ profile, onBackToApp }: ParentPortalProps) {
-  const [data] = useState(MOCK_PARENT_DATA);
+  const [data] = useState(PARENT_PORTAL_DATA);
 
   // Notification Preferences (UI only, no backend)
   const [emailSummaryEnabled, setEmailSummaryEnabled] = useState(true);

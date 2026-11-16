@@ -13,10 +13,7 @@ import {
 } from "lucide-react";
 import { MasteryGrid } from "../components/charts/MasteryGrid.tsx";
 import { ProgressRing } from "../components/charts/ProgressRing.tsx";
-import {
-  MOCK_TEACHER_CLASS,
-} from "../components/analytics/mockAnalyticsService.ts";
-import { TeacherAssignment } from "../components/analytics/analyticsTypes.ts";
+import { TeacherAssignment, TeacherClassOverview } from "../components/analytics/analyticsTypes.ts";
 
 export interface TeacherDashboardProps {
   onNavigateToSubjects?: () => void;
@@ -24,12 +21,117 @@ export interface TeacherDashboardProps {
   onBackToApp?: () => void;
 }
 
+const TEACHER_CLASS_DATA: TeacherClassOverview = {
+  className: "پۆلی ١٢ی زانستی - هۆڵی ئەلبیرۆنی",
+  grade: "12",
+  stream: "زانستی",
+  totalStudents: 8,
+  averageMastery: 0.71,
+  concepts: [
+    { id: "c_ph", titleKu: "پێوەری pH", subject: "کیمیا" },
+    { id: "c_buffer", titleKu: "گیراوەی بەفەر", subject: "کیمیا" },
+    { id: "c_faraday", titleKu: "یاسای فارادای", subject: "فیزیا" },
+    { id: "c_centripetal", titleKu: "چەقەهێز", subject: "فیزیا" },
+    { id: "c_derivative", titleKu: "داتاشراو", subject: "بیرکاری" },
+    { id: "c_integration", titleKu: "تەواوکاری", subject: "بیرکاری" },
+  ],
+  students: [
+    {
+      studentId: "s-1",
+      studentName: "دیاری بەختیار",
+      email: "diyari@example.com",
+      averageScore: 0.42,
+      scores: { c_ph: 0.55, c_buffer: 0.28, c_faraday: 0.32, c_centripetal: 0.45, c_derivative: 0.60, c_integration: 0.30 },
+      status: "struggling",
+    },
+    {
+      studentId: "s-2",
+      studentName: "سۆما عەلی",
+      email: "soma@example.com",
+      averageScore: 0.53,
+      scores: { c_ph: 0.65, c_buffer: 0.34, c_faraday: 0.42, c_centripetal: 0.58, c_derivative: 0.72, c_integration: 0.45 },
+      status: "struggling",
+    },
+    {
+      studentId: "s-3",
+      studentName: "ڕێبین جەمال",
+      email: "rebin@example.com",
+      averageScore: 0.66,
+      scores: { c_ph: 0.78, c_buffer: 0.45, c_faraday: 0.68, c_centripetal: 0.74, c_derivative: 0.75, c_integration: 0.56 },
+      status: "progressing",
+    },
+    {
+      studentId: "s-4",
+      studentName: "ئارام هێرش",
+      email: "aram@example.com",
+      averageScore: 0.74,
+      scores: { c_ph: 0.85, c_buffer: 0.60, c_faraday: 0.76, c_centripetal: 0.78, c_derivative: 0.80, c_integration: 0.65 },
+      status: "progressing",
+    },
+    {
+      studentId: "s-5",
+      studentName: "لاڤە ئاراس",
+      email: "lava@example.com",
+      averageScore: 0.81,
+      scores: { c_ph: 0.92, c_buffer: 0.72, c_faraday: 0.82, c_centripetal: 0.85, c_derivative: 0.88, c_integration: 0.69 },
+      status: "thriving",
+    },
+    {
+      studentId: "s-6",
+      studentName: "دڵشاد حسێن",
+      email: "dilshad@example.com",
+      averageScore: 0.85,
+      scores: { c_ph: 0.95, c_buffer: 0.76, c_faraday: 0.88, c_centripetal: 0.90, c_derivative: 0.92, c_integration: 0.71 },
+      status: "thriving",
+    },
+    {
+      studentId: "s-7",
+      studentName: "کاروان نەوزاد",
+      email: "karwan@example.com",
+      averageScore: 0.88,
+      scores: { c_ph: 0.96, c_buffer: 0.80, c_faraday: 0.92, c_centripetal: 0.92, c_derivative: 0.95, c_integration: 0.75 },
+      status: "thriving",
+    },
+    {
+      studentId: "s-8",
+      studentName: "بانە خەسرەو",
+      email: "bana@example.com",
+      averageScore: 0.92,
+      scores: { c_ph: 0.98, c_buffer: 0.88, c_faraday: 0.94, c_centripetal: 0.95, c_derivative: 0.96, c_integration: 0.82 },
+      status: "thriving",
+    },
+  ],
+  conceptGaps: [
+    {
+      conceptId: "c_buffer",
+      titleKu: "گیراوەی بەفەر",
+      subject: "کیمیا",
+      proficientPercentage: 25,
+      needsIntervention: true,
+    },
+    {
+      conceptId: "c_integration",
+      titleKu: "تەواوکاری بە بەشکردن",
+      subject: "بیرکاری",
+      proficientPercentage: 37,
+      needsIntervention: true,
+    },
+    {
+      conceptId: "c_faraday",
+      titleKu: "یاسای فارادای",
+      subject: "فیزیا",
+      proficientPercentage: 62,
+      needsIntervention: false,
+    },
+  ],
+};
+
 export function TeacherDashboard({
   onNavigateToSubjects: _onNavigateToSubjects,
   onNavigateToPractice: _onNavigateToPractice,
   onBackToApp,
 }: TeacherDashboardProps) {
-  const [classData] = useState(MOCK_TEACHER_CLASS);
+  const [classData] = useState(TEACHER_CLASS_DATA);
   const [assignments, setAssignments] = useState<TeacherAssignment[]>([
     {
       id: "asg-1",

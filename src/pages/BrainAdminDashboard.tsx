@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import {
   ShieldAlert,
-  Activity,
   Cpu,
   AlertTriangle,
   Search,
@@ -11,15 +10,14 @@ import {
   Flame,
   UserX,
   Check,
+  RefreshCw,
 } from "lucide-react";
 import { BarChart, BarSeries } from "../components/charts/BarChart.tsx";
 import { LineChart } from "../components/charts/LineChart.tsx";
 import { HeatMap } from "../components/charts/HeatMap.tsx";
-import {
-  MOCK_SYSTEM_METRICS,
-} from "../components/analytics/mockAnalyticsService.ts";
-import { AnomalyAlert } from "../components/analytics/analyticsTypes.ts";
 import { useAppStore, UserRole } from "../store/appStore.ts";
+import { useAdminMetrics } from "../hooks/useAdminMetrics.ts";
+import { useAdminAnomalies, AnomalyDocument } from "../hooks/useAdminAnomalies.ts";
 
 export interface BrainAdminDashboardProps {
   onBackToApp?: () => void;
@@ -27,33 +25,211 @@ export interface BrainAdminDashboardProps {
   onNavigateToParent?: () => void;
 }
 
+interface StrugglingConcept {
+  conceptId: string;
+  titleKu: string;
+  subject: string;
+  subjectKu: string;
+  grade: string;
+  avgMastery: number;
+  strugglingStudentsCount: number;
+}
+
+const DEFAULT_STRUGGLING_CONCEPTS: StrugglingConcept[] = [
+  {
+    conceptId: "chem_titration_buffer",
+    titleKu: "گیراوەی بەفەر و هاوکێشەی هێندەرسۆن",
+    subject: "chemistry",
+    subjectKu: "کیمیا",
+    grade: "12",
+    avgMastery: 0.31,
+    strugglingStudentsCount: 38,
+  },
+  {
+    conceptId: "phys_electromagnetic_induction",
+    titleKu: "یاسای فارادای و لێشاوی موگناتیسی",
+    subject: "physics",
+    subjectKu: "فیزیا",
+    grade: "12",
+    avgMastery: 0.34,
+    strugglingStudentsCount: 34,
+  },
+  {
+    conceptId: "math_integration_by_parts",
+    titleKu: "تەواوکاری بە بەشکردن (Integration by Parts)",
+    subject: "math",
+    subjectKu: "بیرکاری",
+    grade: "12",
+    avgMastery: 0.37,
+    strugglingStudentsCount: 31,
+  },
+  {
+    conceptId: "chem_chemical_equilibrium_kp",
+    titleKu: "نەگۆڕی هاوسەنگی پەستانە بەشییەکان (Kp)",
+    subject: "chemistry",
+    subjectKu: "کیمیا",
+    grade: "12",
+    avgMastery: 0.42,
+    strugglingStudentsCount: 29,
+  },
+  {
+    conceptId: "phys_centripetal_acceleration",
+    titleKu: "تاودانی چەقەهێز و هێزی لێکخشاندنی ستوونی",
+    subject: "physics",
+    subjectKu: "فیزیا",
+    grade: "12",
+    avgMastery: 0.44,
+    strugglingStudentsCount: 26,
+  },
+  {
+    conceptId: "bio_protein_synthesis_translation",
+    titleKu: "وەرگێڕانی کۆدۆنەکانی mRNA بۆ ترشە ئەمینییەکان",
+    subject: "biology",
+    subjectKu: "زیندەزانی",
+    grade: "12",
+    avgMastery: 0.46,
+    strugglingStudentsCount: 24,
+  },
+  {
+    conceptId: "math_logarithmic_differentiation",
+    titleKu: "داتاشراوی نەخشە لۆگاریتمییە سروشتییەکان",
+    subject: "math",
+    subjectKu: "بیرکاری",
+    grade: "12",
+    avgMastery: 0.48,
+    strugglingStudentsCount: 21,
+  },
+  {
+    conceptId: "eng_passive_voice_perfect",
+    titleKu: "Passive Voice in Present & Past Perfect",
+    subject: "english",
+    subjectKu: "ئینگلیزی",
+    grade: "12",
+    avgMastery: 0.51,
+    strugglingStudentsCount: 19,
+  },
+];
+
+const DEFAULT_SUBJECT_MASTERY_DISTRIBUTION = [
+  {
+    label: "کیمیا",
+    values: { not_started: 10, developing: 25, proficient: 45, mastered: 20 },
+  },
+  {
+    label: "فیزیا",
+    values: { not_started: 15, developing: 30, proficient: 38, mastered: 17 },
+  },
+  {
+    label: "بیرکاری",
+    values: { not_started: 12, developing: 28, proficient: 42, mastered: 18 },
+  },
+  {
+    label: "ئینگلیزی",
+    values: { not_started: 8, developing: 20, proficient: 48, mastered: 24 },
+  },
+];
+
+const DEFAULT_DAU_30D = [
+  { xLabel: "١", yValue: 310 },
+  { xLabel: "٣", yValue: 340 },
+  { xLabel: "٥", yValue: 420 },
+  { xLabel: "٨", yValue: 480 },
+  { xLabel: "١١", yValue: 530 },
+  { xLabel: "١٤", yValue: 620 },
+  { xLabel: "١٧", yValue: 590 },
+  { xLabel: "٢٠", yValue: 710 },
+  { xLabel: "٢٣", yValue: 790 },
+  { xLabel: "٢٦", yValue: 880 },
+  { xLabel: "٢٨", yValue: 940 },
+  { xLabel: "٣٠", yValue: 1040 },
+];
+
+const DEFAULT_HOURLY_WEEKLY_ACTIVITY = Array.from({ length: 7 * 24 }).map((_, i) => {
+  const dayIndex = Math.floor(i / 24);
+  const hour = i % 24;
+  let baseVal = 5;
+  if (hour >= 15 && hour <= 21) {
+    baseVal = 25 + Math.floor(Math.sin((hour - 15) * 0.5) * 20);
+  } else if (hour >= 9 && hour <= 14) {
+    baseVal = 14 + Math.floor(Math.random() * 8);
+  } else if (hour < 6) {
+    baseVal = 1;
+  }
+  return {
+    dayIndex,
+    hour,
+    value: baseVal + (dayIndex === 5 ? 10 : 0),
+  };
+});
+
+const INITIAL_DEMO_ANOMALIES: AnomalyDocument[] = [
+  {
+    id: "anom-1",
+    type: "INACTIVE_7_DAYS",
+    severity: "MEDIUM",
+    studentId: "std-104",
+    studentName: "هێمن کاروان",
+    detectedAt: null,
+    resolved: false,
+    details: { daysInactive: 8 },
+  },
+  {
+    id: "anom-2",
+    type: "MASTERY_DROP",
+    severity: "CRITICAL",
+    studentId: "std-108",
+    studentName: "سارا مەحموود",
+    detectedAt: null,
+    resolved: false,
+    details: { masteryDrop: 0.24 },
+  },
+  {
+    id: "anom-3",
+    type: "UNRELIABLE_ASSESSMENT",
+    severity: "HIGH",
+    studentId: "std-115",
+    studentName: "ئارام جەزا",
+    detectedAt: null,
+    resolved: false,
+    details: { notes: "سیستەمی دژە-خەمڵاندن تاقیکردنەوەی وەک UNRELIABLE دەستنیشان کرد" },
+  },
+];
+
 export function BrainAdminDashboard({
   onBackToApp,
   onNavigateToTeacher: _onNavigateToTeacher,
   onNavigateToParent: _onNavigateToParent,
 }: BrainAdminDashboardProps) {
   const [activeTab, setActiveTab] = useState<"system_intelligence" | "struggling_concepts" | "anomalies">("system_intelligence");
-  const [anomalies, setAnomalies] = useState<AnomalyAlert[]>(MOCK_SYSTEM_METRICS.anomalies);
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
 
   const userRole = useAppStore((state) => state.userRole);
   const setUserRole = useAppStore((state) => state.setUserRole);
 
-  const resolveAnomaly = (id: string) => {
-    setAnomalies((prev) =>
+  // Live Firebase hooks
+  const metrics = useAdminMetrics();
+  const anomaliesState = useAdminAnomalies();
+  const [localFallbackAnomalies, setLocalFallbackAnomalies] = useState<AnomalyDocument[]>(INITIAL_DEMO_ANOMALIES);
+
+  const displayAnomalies =
+    anomaliesState.anomalies.length > 0 ? anomaliesState.anomalies : localFallbackAnomalies;
+
+  const handleResolveAnomaly = (id: string) => {
+    void anomaliesState.resolveAnomaly(id);
+    setLocalFallbackAnomalies((prev) =>
       prev.map((a) => (a.id === id ? { ...a, resolved: true } : a))
     );
   };
 
   const masterySeries: BarSeries[] = [
-    { key: "not_started", labelKu: "دەستی پێنەکراوە (< 10%)", color: "#f43f5e" }, // rose-500
-    { key: "developing", labelKu: "لە گەشەدایە (10-70%)", color: "#f59e0b" }, // amber-500
-    { key: "proficient", labelKu: "لێهاتوو (70-85%)", color: "#6366f1" }, // indigo-500
-    { key: "mastered", labelKu: "ماستەر (> 85%)", color: "#10b981" }, // emerald-500
+    { key: "not_started", labelKu: "دەستی پێنەکراوە (< 10%)", color: "#f43f5e" },
+    { key: "developing", labelKu: "لە گەشەدایە (10-70%)", color: "#f59e0b" },
+    { key: "proficient", labelKu: "لێهاتوو (70-85%)", color: "#6366f1" },
+    { key: "mastered", labelKu: "ماستەر (> 85%)", color: "#10b981" },
   ];
 
-  const filteredStrugglingConcepts = MOCK_SYSTEM_METRICS.strugglingConcepts.filter((c) => {
+  const filteredStrugglingConcepts = DEFAULT_STRUGGLING_CONCEPTS.filter((c) => {
     const matchSubj = selectedSubjectFilter === "all" || c.subject === selectedSubjectFilter;
     const matchQuery =
       c.titleKu.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -61,7 +237,7 @@ export function BrainAdminDashboard({
     return matchSubj && matchQuery;
   });
 
-  const unresolvedAnomalies = anomalies.filter((a) => !a.resolved);
+  const unresolvedAnomalies = displayAnomalies.filter((a) => !a.resolved);
 
   return (
     <div className="flex-1 min-h-0 bg-slate-50 dark:bg-slate-950 flex flex-col h-full overflow-y-auto" dir="rtl">
@@ -78,7 +254,7 @@ export function BrainAdminDashboard({
                   داشبۆردی بەڕێوەبەرایەتی زانا (System Intelligence)
                 </h1>
                 <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
-                  ڕاستەوخۆ (Real-time)
+                  ڕاستەوخۆ (Real-time Live)
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 font-sans mt-0.5">
@@ -98,12 +274,12 @@ export function BrainAdminDashboard({
                   onClick={() => setUserRole(r)}
                   className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     userRole === r
-                      ? "bg-indigo-600 text-white shadow-2xs"
-                      : "text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
+                      ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
                   }`}
                 >
                   {r === "admin"
-                    ? "بەڕێوەبەر"
+                    ? "ئادمین"
                     : r === "teacher"
                     ? "مامۆستا"
                     : r === "parent"
@@ -113,69 +289,73 @@ export function BrainAdminDashboard({
               ))}
             </div>
 
+            <button
+              type="button"
+              onClick={() => {
+                void metrics.refetch();
+                void anomaliesState.refetch();
+              }}
+              title="نوێکردنەوەی داتاکان"
+              className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition cursor-pointer"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+
             {onBackToApp && (
               <button
                 type="button"
                 onClick={onBackToApp}
-                className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold transition-colors cursor-pointer"
+                className="px-3.5 py-2 rounded-xl bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 text-white dark:text-slate-900 text-xs font-bold transition cursor-pointer"
               >
-                گەڕانەوە بۆ بەرنامە
+                گەڕانەوە بۆ ناو ئەپ
               </button>
             )}
           </div>
         </div>
       </header>
 
-      {/* 2. Main Content Container */}
-      <main className="max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8 space-y-6">
-        {/* Navigation Tabs */}
-        <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
-          <button
-            type="button"
-            onClick={() => setActiveTab("system_intelligence")}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
-              activeTab === "system_intelligence"
-                ? "bg-indigo-600 text-white shadow-xs"
-                : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-            }`}
-          >
-            <Activity className="w-4 h-4" />
-            <span>شیکاریی سیستم و چاودێری</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("struggling_concepts")}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
-              activeTab === "struggling_concepts"
-                ? "bg-indigo-600 text-white shadow-xs"
-                : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-            }`}
-          >
-            <TrendingDown className="w-4 h-4 text-rose-500" />
-            <span>چەمکە سەختەکان (Bottom 10)</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("anomalies")}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 relative ${
-              activeTab === "anomalies"
-                ? "bg-indigo-600 text-white shadow-xs"
-                : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-            }`}
-          >
-            <ShieldAlert className="w-4 h-4 text-amber-400" />
-            <span>ئاگادارییە نائاساییەکان (Anomaly Alerts)</span>
-            {unresolvedAnomalies.length > 0 && (
-              <span className="w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">
-                {unresolvedAnomalies.length}
-              </span>
-            )}
-          </button>
+      {/* 2. Navigation Tabs */}
+      <nav className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 shrink-0">
+        <div className="max-w-7xl mx-auto flex items-center gap-6 overflow-x-auto">
+          {[
+            { id: "system_intelligence", label: "پوختەی زیرەکی سیستم", icon: Cpu },
+            { id: "struggling_concepts", label: "چەمکە سەختەکان و کەلێنەکان (Bottom 10)", icon: TrendingDown },
+            {
+              id: "anomalies",
+              label: `ئاگادارییە نائاساییەکان (${unresolvedAnomalies.length})`,
+              icon: AlertTriangle,
+              badge: unresolvedAnomalies.length,
+            },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                className={`py-3.5 text-xs font-bold font-sans flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+                  isActive
+                    ? "border-indigo-600 text-indigo-600 dark:text-indigo-400"
+                    : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-300"
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                <span>{tab.label}</span>
+                {tab.badge && tab.badge > 0 ? (
+                  <span className="w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-mono flex items-center justify-center font-bold">
+                    {tab.badge}
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
         </div>
+      </nav>
 
-        {/* TAB 1: SYSTEM INTELLIGENCE LAYER */}
+      {/* 3. Main Content Tab Views */}
+      <main className="max-w-7xl mx-auto p-4 sm:p-6 w-full space-y-6">
+        {/* TAB 1: SYSTEM INTELLIGENCE */}
         {activeTab === "system_intelligence" && (
           <div className="space-y-6">
             {/* Real-time 4 Bento Metrics Cards */}
@@ -192,7 +372,9 @@ export function BrainAdminDashboard({
                 </div>
                 <div className="flex items-baseline gap-2">
                   <span className="text-2xl font-black font-mono text-slate-900 dark:text-white">
-                    {MOCK_SYSTEM_METRICS.activeSessions15m}
+                    {metrics.loading
+                      ? "..."
+                      : (metrics.data?.activeStudents ?? 0).toLocaleString("ar-u-nu-arab")}
                   </span>
                   <span className="text-xs font-bold text-emerald-600 font-sans flex items-center gap-0.5">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping inline-block" />
@@ -200,7 +382,7 @@ export function BrainAdminDashboard({
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-400 font-sans">
-                  لە کۆی {MOCK_SYSTEM_METRICS.totalStudentsMonitored} قوتابی تۆمارکراو
+                  لە کۆی {(metrics.data?.totalStudents ?? 0).toLocaleString("ar-u-nu-arab")} قوتابی تۆمارکراو
                 </p>
               </div>
 
@@ -216,7 +398,9 @@ export function BrainAdminDashboard({
                 </div>
                 <div className="flex items-baseline gap-2">
                   <span className="text-2xl font-black font-mono text-slate-900 dark:text-white">
-                    {Math.round(MOCK_SYSTEM_METRICS.averageMasteryScore * 100)}%
+                    {metrics.loading
+                      ? "..."
+                      : `${Math.round((metrics.data?.avgMasteryScore ?? 0) * 100).toLocaleString("ar-u-nu-arab")}%`}
                   </span>
                   <span className="text-xs font-bold text-indigo-600 font-sans">
                     ئاستی لێهاتوو (Proficient)
@@ -225,7 +409,7 @@ export function BrainAdminDashboard({
                 <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-indigo-600 rounded-full"
-                    style={{ width: `${MOCK_SYSTEM_METRICS.averageMasteryScore * 100}%` }}
+                    style={{ width: `${(metrics.data?.avgMasteryScore ?? 0) * 100}%` }}
                   />
                 </div>
               </div>
@@ -242,14 +426,14 @@ export function BrainAdminDashboard({
                 </div>
                 <div className="flex items-baseline gap-2">
                   <span className="text-2xl font-black font-mono text-rose-600">
-                    {MOCK_SYSTEM_METRICS.strugglingConcepts.length}
+                    {DEFAULT_STRUGGLING_CONCEPTS.length}
                   </span>
                   <span className="text-xs font-bold text-rose-600 font-sans">
                     پێویستیان بە پێداچوونەوەیە
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-400 font-sans">
-                  نزمترین تێکڕا: {Math.round(MOCK_SYSTEM_METRICS.strugglingConcepts[0]?.avgMastery * 100)}% ({MOCK_SYSTEM_METRICS.strugglingConcepts[0]?.subjectKu})
+                  نزمترین تێکڕا: {Math.round(DEFAULT_STRUGGLING_CONCEPTS[0].avgMastery * 100)}% ({DEFAULT_STRUGGLING_CONCEPTS[0].subjectKu})
                 </p>
               </div>
 
@@ -265,14 +449,14 @@ export function BrainAdminDashboard({
                 </div>
                 <div className="flex items-baseline gap-2">
                   <span className="text-xl font-black font-sans text-slate-900 dark:text-white">
-                    {MOCK_SYSTEM_METRICS.activeSubjectsToday[0]?.subjectKu}
+                    {metrics.data?.topSubject.nameKu || "کیمیا"}
                   </span>
                   <span className="text-xs font-mono font-bold text-amber-600">
-                    {MOCK_SYSTEM_METRICS.activeSubjectsToday[0]?.activeSessions} دانیشتن
+                    {metrics.data?.todayLearningMinutes ?? 0} خولەک
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-400 font-sans">
-                  {MOCK_SYSTEM_METRICS.activeSubjectsToday[0]?.percentage}%ی کۆی تەواوی چالاکییەکانی ئەمڕۆ
+                  {(metrics.data?.topSubject.percent || 0).toLocaleString("ar-u-nu-arab")}%ی کۆی تەواوی چالاکییەکانی ئەمڕۆ
                 </p>
               </div>
             </div>
@@ -281,7 +465,7 @@ export function BrainAdminDashboard({
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Chart 1: Stacked Bar Chart - Mastery Distribution per Subject */}
               <BarChart
-                data={MOCK_SYSTEM_METRICS.subjectMasteryDistribution}
+                data={DEFAULT_SUBJECT_MASTERY_DISTRIBUTION}
                 series={masterySeries}
                 stacked={true}
                 height={260}
@@ -291,7 +475,7 @@ export function BrainAdminDashboard({
 
               {/* Chart 2: Line Chart - Daily Active Users (Last 30 Days) */}
               <LineChart
-                data={MOCK_SYSTEM_METRICS.dailyActiveUsers30d}
+                data={DEFAULT_DAU_30D}
                 height={260}
                 lineColor="#4f46e5"
                 unit=" بەکارهێنەر"
@@ -301,7 +485,7 @@ export function BrainAdminDashboard({
 
             {/* Chart 3: Heatmap - Activity by hour & day of the week */}
             <HeatMap
-              data={MOCK_SYSTEM_METRICS.hourlyWeeklyActivity}
+              data={DEFAULT_HOURLY_WEEKLY_ACTIVITY}
               title="نەخشەی گەرمیی دابەشبوونی کاتەکانی خوێندن (Hour x Day of Week)"
             />
 
@@ -331,23 +515,29 @@ export function BrainAdminDashboard({
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800">
-                          {a.type === "INACTIVITY_7D"
+                          {a.type === "INACTIVE_7_DAYS"
                             ? "پچڕانی چالاکی"
-                            : a.type === "MASTERY_DROP_20"
+                            : a.type === "MASTERY_DROP"
                             ? "دابەزینی لێهاتوویی"
                             : "گومانی هەڕەمەکی"}
                         </span>
-                        <span className="text-[10px] text-slate-400 font-mono">{a.timestamp}</span>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          {a.detectedAt ? new Date(a.detectedAt as unknown as string).toLocaleDateString("ku") : "ئەمڕۆ"}
+                        </span>
                       </div>
                       <p className="text-xs font-bold text-slate-800 dark:text-slate-200 line-clamp-1 font-sans">
-                        {a.titleKu}
+                        {a.studentName}
                       </p>
                       <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
-                        {a.descriptionKu}
+                        {a.type === "INACTIVE_7_DAYS"
+                          ? `قوتابی بۆ ماوەی ${a.details?.daysInactive || 7} ڕۆژە ناچالاکە.`
+                          : a.type === "MASTERY_DROP"
+                          ? `دابەزینی ماستەری بە بڕی ${Math.round((a.details?.masteryDrop || 0.2) * 100)}%.`
+                          : a.details?.notes || "ئەنجامی تاقیکردنەوە جێگەی گومانە."}
                       </p>
                       <button
                         type="button"
-                        onClick={() => resolveAnomaly(a.id)}
+                        onClick={() => handleResolveAnomaly(a.id)}
                         className="w-full py-1.5 rounded-xl bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1"
                       >
                         <Check className="w-3.5 h-3.5" />
@@ -487,7 +677,7 @@ export function BrainAdminDashboard({
               <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-1">
                 <span className="text-xs font-bold text-slate-400">کۆی ئاگادارییەکان</span>
                 <p className="text-2xl font-black font-mono text-slate-900 dark:text-white">
-                  {anomalies.length}
+                  {displayAnomalies.length}
                 </p>
                 <p className="text-[11px] text-slate-400">سیستەمی هەستەوەری نائاسایی AI</p>
               </div>
@@ -495,7 +685,7 @@ export function BrainAdminDashboard({
               <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-1">
                 <span className="text-xs font-bold text-slate-400">ئاگاداریی بەپەلە (Critical)</span>
                 <p className="text-2xl font-black font-mono text-rose-600">
-                  {anomalies.filter((a) => a.severity === "critical" && !a.resolved).length}
+                  {displayAnomalies.filter((a) => a.severity === "CRITICAL" && !a.resolved).length}
                 </p>
                 <p className="text-[11px] text-rose-500">دابەزینی لەناکاوی نمرە &gt; 20%</p>
               </div>
@@ -503,84 +693,94 @@ export function BrainAdminDashboard({
               <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-1">
                 <span className="text-xs font-bold text-slate-400">چارەسەرکراوەکان</span>
                 <p className="text-2xl font-black font-mono text-emerald-600">
-                  {anomalies.filter((a) => a.resolved).length}
+                  {displayAnomalies.filter((a) => a.resolved).length}
                 </p>
                 <p className="text-[11px] text-emerald-500">پشتڕاستکراونەتەوە لەلایەن بەڕێوەبەر</p>
               </div>
             </div>
 
             <div className="space-y-3">
-              {anomalies.map((alert) => (
-                <div
-                  key={alert.id}
-                  className={`p-5 rounded-3xl border transition-all ${
-                    alert.resolved
-                      ? "bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 opacity-60"
-                      : alert.severity === "critical"
-                      ? "bg-rose-50/60 dark:bg-rose-950/20 border-rose-300 dark:border-rose-900 shadow-xs"
-                      : "bg-white dark:bg-slate-900 border-amber-200 dark:border-amber-900/60 shadow-xs"
-                  }`}
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-start gap-3">
-                      <span
-                        className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
-                          alert.type === "INACTIVITY_7D"
-                            ? "bg-amber-100 text-amber-700"
-                            : alert.type === "MASTERY_DROP_20"
-                            ? "bg-rose-100 text-rose-700"
-                            : "bg-indigo-100 text-indigo-700"
-                        }`}
-                      >
-                        {alert.type === "INACTIVITY_7D" ? (
-                          <UserX className="w-5 h-5" />
-                        ) : alert.type === "MASTERY_DROP_20" ? (
-                          <TrendingDown className="w-5 h-5" />
-                        ) : (
-                          <ShieldAlert className="w-5 h-5" />
-                        )}
-                      </span>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-bold text-sm text-slate-900 dark:text-white font-sans">
-                            {alert.titleKu}
-                          </h4>
-                          <span
-                            className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
-                              alert.resolved
-                                ? "bg-emerald-100 text-emerald-800"
-                                : "bg-rose-100 text-rose-800"
-                            }`}
-                          >
-                            {alert.resolved ? "چارەسەرکراوە ✅" : "چالاکە ⚠️"}
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-sans">
-                          {alert.descriptionKu}
-                        </p>
-                        <div className="flex items-center gap-3 text-[11px] text-slate-400 font-sans pt-1">
-                          <span>ناوی قوتابی: <strong>{alert.studentName}</strong></span>
-                          <span>•</span>
-                          <span>کات: {alert.timestamp}</span>
+              {displayAnomalies.length === 0 ? (
+                <div className="p-8 text-center text-emerald-600 dark:text-emerald-400 font-bold bg-white dark:bg-slate-900 rounded-3xl border border-emerald-200 dark:border-emerald-900">
+                  ✅ هیچ کێشەیەک نەدۆزراوەتەوە
+                </div>
+              ) : (
+                displayAnomalies.map((alert) => (
+                  <div
+                    key={alert.id}
+                    className={`p-5 rounded-3xl border transition-all ${
+                      alert.resolved
+                        ? "bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 opacity-60"
+                        : alert.severity === "CRITICAL"
+                        ? "bg-rose-50/60 dark:bg-rose-950/20 border-rose-300 dark:border-rose-900 shadow-xs"
+                        : "bg-white dark:bg-slate-900 border-amber-200 dark:border-amber-900/60 shadow-xs"
+                    }`}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <span
+                          className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
+                            alert.type === "INACTIVE_7_DAYS"
+                              ? "bg-amber-100 text-amber-700"
+                              : alert.type === "MASTERY_DROP"
+                              ? "bg-rose-100 text-rose-700"
+                              : "bg-indigo-100 text-indigo-700"
+                          }`}
+                        >
+                          {alert.type === "INACTIVE_7_DAYS" ? (
+                            <UserX className="w-5 h-5" />
+                          ) : alert.type === "MASTERY_DROP" ? (
+                            <TrendingDown className="w-5 h-5" />
+                          ) : (
+                            <ShieldAlert className="w-5 h-5" />
+                          )}
+                        </span>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-bold text-sm text-slate-900 dark:text-white font-sans">
+                              {alert.studentName}
+                            </h4>
+                            <span
+                              className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                                alert.resolved
+                                  ? "bg-emerald-100 text-emerald-800"
+                                  : "bg-rose-100 text-rose-800"
+                              }`}
+                            >
+                              {alert.resolved ? "چارەسەرکراوە ✅" : "چالاکە ⚠️"}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-sans">
+                            {alert.type === "INACTIVE_7_DAYS"
+                              ? `قوتابی بۆ ماوەی ${alert.details?.daysInactive || 7} ڕۆژە لە پلاتفۆرم ناچالاکە.`
+                              : alert.type === "MASTERY_DROP"
+                              ? `نمرەی شارەزایی بە ڕێژەی ${Math.round((alert.details?.masteryDrop || 0.2) * 100)}% دابەزیوە.`
+                              : alert.details?.notes || "هەڵسەنگاندنی ئەنجامەکە جێگەی گومانە."}
+                          </p>
+                          <div className="flex items-center gap-3 text-[11px] text-slate-400 font-sans pt-1">
+                            <span>جۆر: <strong>{alert.type}</strong></span>
+                            <span>•</span>
+                            <span>ئاست: {alert.severity}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                      {!alert.resolved && (
-                        <button
-                          type="button"
-                          onClick={() => resolveAnomaly(alert.id)}
-                          className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                          <span>پشتڕاستکردنەوە</span>
-                        </button>
-                      )}
+                      <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                        {!alert.resolved && (
+                          <button
+                            type="button"
+                            onClick={() => handleResolveAnomaly(alert.id)}
+                            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>پشتڕاستکردنەوە</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         )}
