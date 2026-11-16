@@ -1,20 +1,8 @@
 import React from "react";
-import {
-  FlaskConical,
-  Atom,
-  Calculator,
-  Dna,
-  BookOpen,
-  Languages,
-  Scroll,
-  Landmark,
-  Globe2,
-  TrendingUp,
-  Activity,
-  ArrowLeft,
-} from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { SubjectKey } from "../features/student/studentTypes.ts";
 import { formatNumber } from "../i18n/i18n.ts";
+import { SubjectIcon, getSubjectVisualTheme } from "./SubjectIcon.tsx";
 
 export interface SubjectCardProps {
   id: string;
@@ -29,35 +17,12 @@ export interface SubjectCardProps {
   className?: string;
 }
 
-export function getSubjectCustomIcon(subjectKey: string, className = "w-7 h-7") {
-  const norm = subjectKey.toLowerCase();
-  switch (norm) {
-    case "chemistry":
-      return <FlaskConical className={`${className} text-teal-600 dark:text-teal-400`} />;
-    case "physics":
-      return <Atom className={`${className} text-indigo-600 dark:text-indigo-400`} />;
-    case "math":
-    case "mathematics":
-      return <Calculator className={`${className} text-blue-600 dark:text-blue-400`} />;
-    case "biology":
-      return <Dna className={`${className} text-emerald-600 dark:text-emerald-400`} />;
-    case "english":
-      return <Languages className={`${className} text-amber-600 dark:text-amber-400`} />;
-    case "kurdish":
-      return <BookOpen className={`${className} text-orange-600 dark:text-orange-400`} />;
-    case "arabic":
-      return <Scroll className={`${className} text-emerald-700 dark:text-emerald-400`} />;
-    case "history":
-      return <Landmark className={`${className} text-rose-600 dark:text-rose-400`} />;
-    case "geography":
-      return <Globe2 className={`${className} text-cyan-600 dark:text-cyan-400`} />;
-    case "economy":
-      return <TrendingUp className={`${className} text-violet-600 dark:text-violet-400`} />;
-    case "sports":
-      return <Activity className={`${className} text-sky-600 dark:text-sky-400`} />;
-    default:
-      return <BookOpen className={`${className} text-indigo-600 dark:text-indigo-400`} />;
+export function getSubjectCustomIcon(subjectKey: string, sizeOrClassName: number | string = 28) {
+  if (typeof sizeOrClassName === "string" && !/^\d+$/.test(sizeOrClassName)) {
+    return <SubjectIcon subject={subjectKey} size={28} className={sizeOrClassName} />;
   }
+  const sizeNum = typeof sizeOrClassName === "string" ? parseInt(sizeOrClassName, 10) : sizeOrClassName;
+  return <SubjectIcon subject={subjectKey} size={sizeNum || 28} />;
 }
 
 export function SubjectCard({
@@ -71,6 +36,7 @@ export function SubjectCard({
 }: SubjectCardProps) {
   const isStarted = masteryPercentage > 0;
   const clampedProgress = Math.min(100, Math.max(0, Math.round(masteryPercentage)));
+  const theme = getSubjectVisualTheme(subjectKey);
 
   const cardLabel = `وانەی ${title}${chaptersCount ? `، ${formatNumber(chaptersCount)} بەش` : ""}، ئاستی زاڵبوون %${clampedProgress}`;
 
@@ -90,10 +56,10 @@ export function SubjectCard({
       dir="rtl"
     >
       <div>
-        {/* Header Icon + Chapter Count */}
+        {/* Header Icon in Soft Colored Circle + Chapter Count */}
         <div className="flex items-center justify-between mb-4">
-          <div className="w-14 h-14 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-100 dark:border-slate-700/80 flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform duration-200 pointer-events-none">
-            {getSubjectCustomIcon(subjectKey, "w-7 h-7")}
+          <div className={`w-14 h-14 rounded-full ${theme.bgLight} border ${theme.borderLight} flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform duration-200 pointer-events-none`}>
+            <SubjectIcon subject={subjectKey} size={40} />
           </div>
 
           {chaptersCount !== undefined && chaptersCount > 0 && (
