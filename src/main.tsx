@@ -5,6 +5,7 @@ import { ThemeProvider } from "./context/ThemeContext.tsx";
 import { LanguageProvider } from "./components/LanguageProvider.tsx";
 import { registerServiceWorker } from "./serviceWorker.ts";
 import "./styles/globals.css";
+import "./index.css";
 
 // Initialize PWA service worker lifecycle
 registerServiceWorker();
