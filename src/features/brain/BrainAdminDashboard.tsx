@@ -30,6 +30,10 @@ import {
  User,
  Mail,
  Copy,
+ Phone,
+ FileText,
+ ExternalLink,
+ Clock,
 } from "lucide-react";
 import { InternalBrainService } from "../../core/brain/InternalBrainService";
 import {
@@ -43,7 +47,10 @@ import {
   getAdminSubscriptions,
   activateUserSubscription,
   resetUserTrial,
+  getAdminPaymentReceipts,
+  reviewPaymentReceipt,
   type SubscriptionRecord,
+  type PaymentReceiptRecord,
 } from "../../services/adminApi.ts";
 import { useIsAdmin } from "../../hooks/useIsAdmin.ts";
 import {
@@ -150,6 +157,13 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
  const [manualPlan, setManualPlan] = useState<"monthly" | "yearly">("monthly");
  const [copiedId, setCopiedId] = useState<string | null>(null);
 
+ // Payment Receipts state (FastPay + WhatsApp + Manual Activation)
+ const [receipts, setReceipts] = useState<PaymentReceiptRecord[]>([]);
+ const [isLoadingReceipts, setIsLoadingReceipts] = useState(false);
+ const [receiptFilter, setReceiptFilter] = useState<"all" | "pending" | "approved" | "rejected">("pending");
+ const [receiptActionMsg, setReceiptActionMsg] = useState<string | null>(null);
+ const [copiedReceiptCode, setCopiedReceiptCode] = useState<string | null>(null);
+
  const loadSubscriptions = async () => {
   setIsLoadingSubs(true);
   setSubActionMessage(null);
@@ -195,10 +209,42 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
   }
  };
 
- // Load subscriptions when tab switches to subscriptions
+ const loadReceipts = async () => {
+  setIsLoadingReceipts(true);
+  try {
+   const data = await getAdminPaymentReceipts("all");
+   if (data && data.receipts) {
+    setReceipts(data.receipts);
+   }
+  } catch (err: unknown) {
+   console.warn("[BrainAdminDashboard] Failed to load receipts:", err);
+  } finally {
+   setIsLoadingReceipts(false);
+  }
+ };
+
+ const handleReviewReceipt = async (receiptId: string, action: "approve" | "reject") => {
+  try {
+   let reason: string | undefined = undefined;
+   if (action === "reject") {
+    const input = prompt("هۆکاری ڕەتکردنەوە بنووسە (یان بە بەتاڵی جێی بهێڵە):");
+    if (input === null) return;
+    reason = input.trim() || undefined;
+   }
+   const res = await reviewPaymentReceipt(receiptId, action, reason);
+   setReceiptActionMsg(res.message);
+   await Promise.all([loadReceipts(), loadSubscriptions()]);
+  } catch (err: unknown) {
+   const msg = err instanceof Error ? err.message : String(err);
+   alert(`هەڵە لە پێداچوونەوە: ${msg}`);
+  }
+ };
+
+ // Load subscriptions & receipts when tab switches to subscriptions
  useEffect(() => {
   if (activeSubTab === "subscriptions") {
    void loadSubscriptions();
+   void loadReceipts();
   }
  }, [activeSubTab]);
 
@@ -1769,12 +1815,209 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
    </div>
   </div>
 
-  {/* Quick 1-Click Activation Panel */}
-  <div className="bg-slate-900 border border-blue-900/50 rounded-2xl p-5 space-y-4">
-   <div className="flex items-center gap-2">
-   <UserCheck className="w-5 h-5 text-blue-400" />
-   <h3 className="font-bold text-sm text-white">کاراکردنی خێرا بە یەک کلیک (Manual 1-Click Activation)</h3>
+   {/* FastPay Receipts & Manual Review Section */}
+   <div className="bg-slate-900 border border-amber-900/40 rounded-2xl p-5 space-y-4">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+     <div className="flex items-center gap-2.5">
+      <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center">
+       <FileText className="w-4 h-4" />
+      </div>
+      <div>
+       <h3 className="font-bold text-sm text-white flex items-center gap-2">
+        <span>داواکاری و پسوولە نوێیەکانی فاستپەی (FastPay Verification Queue)</span>
+        {receipts.filter((r) => r.status === "pending").length > 0 && (
+         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 animate-pulse">
+          {receipts.filter((r) => r.status === "pending").length} چاوەڕوانە
+         </span>
+        )}
+       </h3>
+       <p className="text-xs text-slate-400 mt-0.5">
+        پەسەندکردن و ئەکتیڤکردنی دەستبەجێی قوتابیان دوای پێداچوونەوەی کۆدی مامەڵەی فاستپەی
+       </p>
+      </div>
+     </div>
+
+     {/* Filter buttons */}
+     <div className="flex items-center gap-1.5">
+      {[
+       { id: "pending", label: "چاوەڕوان (Pending)" },
+       { id: "approved", label: "پەسەندکراو (Active)" },
+       { id: "rejected", label: "ڕەتکراوە" },
+       { id: "all", label: "هەمووان" },
+      ].map((f) => (
+       <button
+        key={f.id}
+        type="button"
+        onClick={() => setReceiptFilter(f.id as typeof receiptFilter)}
+        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+         receiptFilter === f.id
+          ? "bg-amber-600 text-white shadow-sm"
+          : "bg-slate-800 text-slate-400 hover:text-slate-200"
+        }`}
+       >
+        {f.label}
+       </button>
+      ))}
+     </div>
+    </div>
+
+    {receiptActionMsg && (
+     <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center justify-between">
+      <span>✓ {receiptActionMsg}</span>
+      <button type="button" onClick={() => setReceiptActionMsg(null)} className="text-slate-400 hover:text-white">✕</button>
+     </div>
+    )}
+
+    {/* Receipts List */}
+    {(() => {
+     const filteredReceipts = receipts.filter((r) => {
+      if (receiptFilter === "all") return true;
+      return r.status === receiptFilter;
+     });
+
+     if (filteredReceipts.length === 0) {
+      return (
+       <div className="text-center py-6 text-xs text-slate-500 bg-slate-950/40 rounded-xl border border-slate-800">
+        هیچ پسوولەیەکی تۆمارکراو بەم فلتەرە نەدۆزرایەوە.
+       </div>
+      );
+     }
+
+     return (
+      <div className="space-y-2.5">
+       {filteredReceipts.map((rcpt) => {
+        const studentTitle = rcpt.resolved_name || rcpt.student_name || "قوتابی تۆمارکراو";
+        const studentMail = rcpt.resolved_email || rcpt.student_email;
+        const cleanPhone = (rcpt.student_phone || "").replace(/[^0-9]/g, "");
+
+        return (
+         <div
+          key={rcpt.id}
+          className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 hover:border-slate-700 transition flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs"
+         >
+          {/* Student Info */}
+          <div className="space-y-1 min-w-[200px]">
+           <div className="font-bold text-white flex items-center gap-1.5">
+            <User className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+            <span>{studentTitle}</span>
+            <span className="text-[10px] text-slate-500 font-mono">
+             ({new Date(rcpt.submitted_at).toLocaleDateString("en-GB")}{" "}
+             {new Date(rcpt.submitted_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})
+            </span>
+           </div>
+           {studentMail && (
+            <div className="text-[11px] text-slate-400 font-mono" dir="ltr">
+             {studentMail}
+            </div>
+           )}
+           <div className="flex items-center gap-1 font-mono text-[11px] text-slate-400">
+            <span>ID: {rcpt.user_id.length > 14 ? `${rcpt.user_id.substring(0, 12)}...` : rcpt.user_id}</span>
+            <button
+             type="button"
+             onClick={() => {
+              void navigator.clipboard.writeText(rcpt.user_id);
+              setCopiedId(rcpt.user_id);
+              setTimeout(() => setCopiedId(null), 2000);
+             }}
+             className="text-slate-500 hover:text-slate-300 cursor-pointer"
+             title="کۆپیکردنی User ID"
+            >
+             {copiedId === rcpt.user_id ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+            </button>
+           </div>
+          </div>
+
+          {/* Plan & Amount */}
+          <div className="flex items-center gap-2">
+           <span className="px-2.5 py-1 rounded-lg bg-blue-950/60 border border-blue-800 text-blue-300 font-bold text-[11px]">
+            {rcpt.plan_id === "yearly" ? "پلانی ساڵانە" : "پلانی مانگانە"}
+           </span>
+           <span className="font-mono font-bold text-white">
+            {rcpt.amount}
+           </span>
+          </div>
+
+          {/* FastPay Receipt Code */}
+          <div className="flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-700">
+           <span className="text-[11px] text-slate-400">ژمارەی پسوولە:</span>
+           <span className="font-mono font-extrabold text-amber-400 text-xs">
+            {rcpt.receipt_code}
+           </span>
+           <button
+            type="button"
+            onClick={() => {
+             void navigator.clipboard.writeText(rcpt.receipt_code);
+             setCopiedReceiptCode(rcpt.receipt_code);
+             setTimeout(() => setCopiedReceiptCode(null), 2000);
+            }}
+            className="text-slate-400 hover:text-white cursor-pointer"
+            title="کۆپیکردنی کۆدی پسوولە"
+           >
+            {copiedReceiptCode === rcpt.receipt_code ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+           </button>
+          </div>
+
+          {/* Phone & WhatsApp Quick Connect */}
+          {cleanPhone ? (
+           <a
+            href={`https://wa.me/${cleanPhone}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/60 border border-emerald-800/80 text-emerald-300 text-[11px] font-bold hover:bg-emerald-900/60 transition"
+           >
+            <Phone className="w-3 h-3" />
+            <span dir="ltr">{rcpt.student_phone}</span>
+            <ExternalLink className="w-3 h-3 text-emerald-400" />
+           </a>
+          ) : (
+           <span className="text-[11px] text-slate-500 italic">بێ ژمارەی مۆبایل</span>
+          )}
+
+          {/* Status Badge & Action Buttons */}
+          <div className="flex items-center gap-2 shrink-0">
+           {rcpt.status === "pending" ? (
+            <>
+             <button
+              type="button"
+              onClick={() => handleReviewReceipt(rcpt.id, "approve")}
+              className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition flex items-center gap-1 cursor-pointer shadow-sm shadow-emerald-600/30"
+             >
+              <Check className="w-3.5 h-3.5" />
+              <span>ئەکتیڤکردن (Active)</span>
+             </button>
+             <button
+              type="button"
+              onClick={() => handleReviewReceipt(rcpt.id, "reject")}
+              className="px-2.5 py-1.5 rounded-xl bg-rose-950/60 hover:bg-rose-900 border border-rose-800 text-rose-300 font-bold text-xs transition cursor-pointer"
+             >
+              ڕەتکردنەوە
+             </button>
+            </>
+           ) : rcpt.status === "approved" ? (
+            <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+             <CheckCircle2 className="w-3.5 h-3.5" />
+             <span>پەسەندکراوە</span>
+            </span>
+           ) : (
+            <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">
+             ڕەتکراوەتەوە
+            </span>
+           )}
+          </div>
+         </div>
+        );
+       })}
+      </div>
+     );
+    })()}
    </div>
+
+   {/* Quick 1-Click Activation Panel */}
+   <div className="bg-slate-900 border border-blue-900/50 rounded-2xl p-5 space-y-4">
+    <div className="flex items-center gap-2">
+    <UserCheck className="w-5 h-5 text-blue-400" />
+    <h3 className="font-bold text-sm text-white">کاراکردنی خێرا بە یەک کلیک (Manual 1-Click Activation)</h3>
+    </div>
    <p className="text-xs text-slate-400 leading-relaxed">
    کاتێک قوتابی لە واتسئەپ وێنەی پسوولەی فاستپەی و User ID دەنێرێت، لێرە ناسنامەکەی دابنێ و کلیک لەسەر کاراکردن بکە:
    </p>

@@ -14,10 +14,13 @@ import {
   LogOut,
   LogIn,
   Lock,
+  CreditCard,
 } from "lucide-react";
 import { useAppStore } from "../store/appStore.ts";
 import { useSoundEffects } from "../hooks/useSoundEffects.ts";
 import { Modal } from "../components/Modal.tsx";
+import { SubscriptionModal } from "../components/SubscriptionModal.tsx";
+import { getSubscriptionStatus, type StudentSubscriptionStatus } from "../services/subscriptionService.ts";
 import { logoutUser, getCurrentUser, resetPassword } from "../services/authService.ts";
 import { deleteStudentProfile } from "../features/student/studentStorage.ts";
 import { StudentProfile } from "../features/student/studentTypes.ts";
@@ -164,7 +167,16 @@ export function ProfileAndSettings({
   // Modals
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showSubModal, setShowSubModal] = useState(false);
+  const [subStatus, setSubStatus] = useState<StudentSubscriptionStatus | null>(null);
   const [saveToast, setSaveToast] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    const studentId = studentProfile?.id || user.id;
+    if (studentId) {
+      getSubscriptionStatus(studentId).then(setSubStatus).catch(() => {});
+    }
+  }, [studentProfile?.id, user.id, showSubModal]);
 
   const handleSaveProfile = () => {
     const updatedName = name.trim() || studentProfile?.name || user.name;
@@ -391,6 +403,60 @@ export function ProfileAndSettings({
                 <span className={`font-bold ${studentProfile?.authoritative ? "text-indigo-700" : "text-slate-600"}`}>
                   {studentProfile?.authoritative ? "پۆلی فەرمی" : "فێرخوازی سەربەخۆ"}
                 </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Subscription & FastPay Status Card */}
+          <div className="pt-3 border-t border-slate-100">
+            <div className="bg-gradient-to-r from-blue-50/80 to-indigo-50/80 border border-blue-200/80 rounded-2xl p-4 text-right space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-sm">
+                    <CreditCard className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-sans font-black text-sm text-slate-900">
+                      دۆخی بەشداریکردن (ZANA Subscription)
+                    </h3>
+                    <span className="text-[11px] text-slate-500 font-sans block">
+                      پشکنینی بەشداریکردن و فاستپەی
+                    </span>
+                  </div>
+                </div>
+
+                {subStatus?.status === "active" ? (
+                  <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                    کارا (Active) ✓
+                  </span>
+                ) : subStatus?.status === "expired" ? (
+                  <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-300">
+                    بەسەرچوو (Expired) ✕
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-300">
+                    تاقیکردنەوە ({subStatus?.days_remaining ?? 3} ڕۆژ ماوە)
+                  </span>
+                )}
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1 border-t border-blue-100">
+                <p className="text-xs text-slate-600 font-sans leading-relaxed">
+                  {subStatus?.status === "active"
+                    ? `بەشداریکردنت تا ${new Date(subStatus.trial_ends_at).toLocaleDateString("en-GB")} کارایە.`
+                    : "بۆ دەستگەیشتنی تەواو و بەردەوام، دەتوانیت لە ڕێگەی فاستپەی و واتسئەپ بەشداری بکەیت."}
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => setShowSubModal(true)}
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold font-sans shadow-md shadow-blue-500/20 transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>
+                    {subStatus?.status === "active" ? "نوێکردنەوە / گۆڕینی پلان" : "بەشداریکردن بە فاستپەی"}
+                  </span>
+                </button>
               </div>
             </div>
           </div>
@@ -1030,6 +1096,15 @@ export function ProfileAndSettings({
           </div>
         </div>
       </Modal>
+
+      {/* Subscription & FastPay Modal */}
+      <SubscriptionModal
+        isOpen={showSubModal}
+        onClose={() => setShowSubModal(false)}
+        userId={studentProfile?.id || user.id}
+        userName={studentProfile?.name || user.name}
+        userEmail={user.email || ""}
+      />
     </div>
   );
 }

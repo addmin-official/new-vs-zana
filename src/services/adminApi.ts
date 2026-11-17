@@ -142,4 +142,47 @@ export async function resetUserTrial(
   return res.json();
 }
 
+export interface PaymentReceiptRecord {
+  id: string;
+  user_id: string;
+  student_name?: string | null;
+  student_email?: string | null;
+  student_phone?: string | null;
+  plan_id: "monthly" | "yearly";
+  amount: string;
+  receipt_code: string;
+  status: "pending" | "approved" | "rejected";
+  notes?: string | null;
+  submitted_at: number;
+  reviewed_at?: number | null;
+  reviewed_by?: string | null;
+  resolved_name?: string | null;
+  resolved_email?: string | null;
+}
+
+export async function getAdminPaymentReceipts(
+  status?: "pending" | "approved" | "rejected" | "all"
+): Promise<{ ok: boolean; receipts: PaymentReceiptRecord[] }> {
+  const query = status && status !== "all" ? `?status=${status}` : "";
+  const res = await adminFetch(`/api/admin/payment-receipts${query}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function reviewPaymentReceipt(
+  receiptId: string,
+  action: "approve" | "reject",
+  rejectionReason?: string
+): Promise<{ ok: boolean; message: string }> {
+  const res = await adminFetch("/api/admin/payment-receipts/action", {
+    method: "POST",
+    body: JSON.stringify({ receiptId, action, rejectionReason }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 

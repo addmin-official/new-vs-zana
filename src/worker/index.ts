@@ -2394,6 +2394,151 @@ export default {
         }
       }
 
+      // GET /api/admin/payment-receipts
+      if (pathname === "/api/admin/payment-receipts" && request.method === "GET") {
+        if (!env.DB) {
+          return new Response(JSON.stringify({ error: "DB binding not configured" }), {
+            status: 500,
+            headers: responseHeaders,
+          });
+        }
+        try {
+          const statusFilter = url.searchParams.get("status")?.trim();
+          let query = `
+            SELECT r.id, r.user_id, r.student_name, r.student_email, r.student_phone,
+                   r.plan_id, r.amount, r.receipt_code, r.status, r.notes,
+                   r.submitted_at, r.reviewed_at, r.reviewed_by,
+                   COALESCE(u.name, st.name, r.student_name, '') as resolved_name,
+                   COALESCE(u.email, st.email, r.student_email, '') as resolved_email
+            FROM payment_receipts r
+            LEFT JOIN users u ON r.user_id = u.id
+            LEFT JOIN students st ON r.user_id = st.id
+          `;
+          let res;
+          if (statusFilter && ["pending", "approved", "rejected"].includes(statusFilter)) {
+            query += " WHERE r.status = ? ORDER BY r.submitted_at DESC LIMIT 200";
+            res = await env.DB.prepare(query).bind(statusFilter).all<unknown>();
+          } else {
+            query += " ORDER BY r.submitted_at DESC LIMIT 200";
+            res = await env.DB.prepare(query).bind().all<unknown>();
+          }
+          return new Response(JSON.stringify({ ok: true, receipts: res?.results || [] }), {
+            status: 200,
+            headers: responseHeaders,
+          });
+        } catch (dbErr: unknown) {
+          return new Response(
+            JSON.stringify({ error: "DATABASE_ERROR", detail: (dbErr as Error)?.message || String(dbErr) }),
+            { status: 500, headers: responseHeaders }
+          );
+        }
+      }
+
+      // POST /api/admin/payment-receipts/action
+      if (pathname === "/api/admin/payment-receipts/action" && request.method === "POST") {
+        if (!env.DB) {
+          return new Response(JSON.stringify({ error: "DB binding not configured" }), {
+            status: 500,
+            headers: responseHeaders,
+          });
+        }
+        try {
+          const body = (await request.json().catch(() => ({}))) as {
+            receiptId?: string;
+            action?: "approve" | "reject";
+            rejectionReason?: string;
+          };
+          const receiptId = body.receiptId?.trim();
+          const action = body.action;
+
+          if (!receiptId || !action || !["approve", "reject"].includes(action)) {
+            return new Response(
+              JSON.stringify({ error: "receiptId and valid action ('approve' or 'reject') required" }),
+              { status: 400, headers: responseHeaders }
+            );
+          }
+
+          const receipt = await env.DB.prepare(
+            "SELECT id, user_id, plan_id, status FROM payment_receipts WHERE id = ?"
+          ).bind(receiptId).first<{ id: string; user_id: string; plan_id: string; status: string }>();
+
+          if (!receipt) {
+            return new Response(JSON.stringify({ error: "Receipt not found" }), {
+              status: 404,
+              headers: responseHeaders,
+            });
+          }
+
+          const now = Date.now();
+          const adminEmail = verifiedAdmin?.email || "addmin.official.idg@gmail.com";
+
+          if (action === "approve") {
+            const planId = receipt.plan_id === "yearly" ? "yearly" : "monthly";
+            const durationMs = planId === "yearly" ? 365 * 24 * 60 * 60 * 1000 : 30 * 24 * 60 * 60 * 1000;
+            const endsAt = now + durationMs;
+
+            // 1. Update receipt status
+            await env.DB.prepare(
+              "UPDATE payment_receipts SET status = 'approved', reviewed_at = ?, reviewed_by = ? WHERE id = ?"
+            ).bind(now, adminEmail, receiptId).run();
+
+            // 2. Activate subscription in D1
+            await env.DB.prepare(
+              `INSERT INTO subscriptions (user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at)
+               VALUES (?, 'active', ?, ?, ?, ?)
+               ON CONFLICT(user_id) DO UPDATE SET
+                 status = 'active',
+                 plan_id = excluded.plan_id,
+                 trial_ends_at = excluded.trial_ends_at,
+                 updated_at = excluded.updated_at`
+            ).bind(receipt.user_id, now, endsAt, planId, now).run();
+
+            // 3. Notify student in notifications table if table exists
+            try {
+              const notifId = `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+              const planTitleKu = planId === "yearly" ? "ساڵانە" : "مانگانە";
+              await env.DB.prepare(
+                `INSERT INTO notifications (id, student_id, type, title, message, is_read, created_at)
+                 VALUES (?, ?, 'subscription', 'بەشداریکردنت کارا کرا! 🎉', ?, 0, datetime('now'))`
+              ).bind(
+                notifId,
+                receipt.user_id,
+                `هەژمارەکەت لە زانا بۆ پلانی (${planTitleKu}) بە سەرکەوتوویی ئەکتیڤ کرا. پیرۆزە!`
+              ).run();
+            } catch {
+              // notification insert non-fatal
+            }
+
+            return new Response(
+              JSON.stringify({
+                ok: true,
+                message: `پسوولەی (${receiptId}) پەسەندکرا و هەژماری (${receipt.user_id}) بۆ ماوەی (${planId === "yearly" ? "ساڵانە" : "مانگانە"}) کرا بە Active.`,
+              }),
+              { status: 200, headers: responseHeaders }
+            );
+          } else {
+            // Reject action
+            const reason = body.rejectionReason?.trim() || "کۆدی پسوولەکە یان بڕی نێردراو لەگەڵ تۆماری فاستپەی یەکناگرێتەوە.";
+            await env.DB.prepare(
+              "UPDATE payment_receipts SET status = 'rejected', notes = ?, reviewed_at = ?, reviewed_by = ? WHERE id = ?"
+            ).bind(reason, now, adminEmail, receiptId).run();
+
+            return new Response(
+              JSON.stringify({
+                ok: true,
+                message: `پسوولەی (${receiptId}) ڕەتکرایەوە.`,
+              }),
+              { status: 200, headers: responseHeaders }
+            );
+          }
+        } catch (dbErr: unknown) {
+          return new Response(
+            JSON.stringify({ error: "DATABASE_ERROR", detail: (dbErr as Error)?.message || String(dbErr) }),
+            { status: 500, headers: responseHeaders }
+          );
+        }
+      }
+
       // POST /api/trial/start (and /api/students/register)
       if ((pathname === "/api/trial/start" || pathname === "/api/students/register") && request.method === "POST") {
         if (!env.DB) {
@@ -2492,6 +2637,163 @@ export default {
           );
         } catch (dbErr: unknown) {
           console.error("[trial/start error]", dbErr);
+          return new Response(
+            JSON.stringify({ error: "DATABASE_ERROR", detail: (dbErr as Error)?.message || String(dbErr) }),
+            { status: 500, headers: responseHeaders }
+          );
+        }
+      }
+
+      // GET /api/subscription/status
+      if (pathname === "/api/subscription/status" && request.method === "GET") {
+        const userId = url.searchParams.get("userId")?.trim();
+        if (!userId) {
+          return new Response(JSON.stringify({ error: "userId is required" }), {
+            status: 400,
+            headers: responseHeaders,
+          });
+        }
+        if (!env.DB) {
+          return new Response(
+            JSON.stringify({ ok: true, status: "trial", trial_ends_at: Date.now() + 3 * 86400000, days_remaining: 3 }),
+            { headers: responseHeaders }
+          );
+        }
+        try {
+          const subResult = await checkSubscription(env, userId);
+          const row = await env.DB.prepare(
+            "SELECT status, trial_started_at, trial_ends_at, plan_id, updated_at FROM subscriptions WHERE user_id = ?"
+          ).bind(userId).first<{
+            status: string;
+            trial_started_at: number;
+            trial_ends_at: number;
+            plan_id: string | null;
+            updated_at: number;
+          }>();
+
+          const now = Date.now();
+          const endsAt = row?.trial_ends_at || (now + 3 * 86400000);
+          const daysRemaining = Math.max(0, Math.ceil((endsAt - now) / (24 * 60 * 60 * 1000)));
+
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              status: subResult.status,
+              trial_started_at: row?.trial_started_at || now,
+              trial_ends_at: endsAt,
+              plan_id: row?.plan_id || null,
+              days_remaining: daysRemaining,
+            }),
+            { status: 200, headers: responseHeaders }
+          );
+        } catch (dbErr: unknown) {
+          return new Response(
+            JSON.stringify({ error: "DATABASE_ERROR", detail: (dbErr as Error)?.message || String(dbErr) }),
+            { status: 500, headers: responseHeaders }
+          );
+        }
+      }
+
+      // POST /api/subscription/submit-receipt
+      if (pathname === "/api/subscription/submit-receipt" && request.method === "POST") {
+        if (!env.DB) {
+          return new Response(JSON.stringify({ error: "DB binding not configured" }), {
+            status: 500,
+            headers: responseHeaders,
+          });
+        }
+        try {
+          const body = (await request.json().catch(() => ({}))) as {
+            userId?: string;
+            studentName?: string;
+            studentEmail?: string;
+            studentPhone?: string;
+            planId?: string;
+            receiptCode?: string;
+            notes?: string;
+          };
+
+          const userId = body.userId?.trim();
+          const receiptCode = body.receiptCode?.trim();
+          const planId = body.planId === "yearly" ? "yearly" : "monthly";
+          const amount = planId === "yearly" ? "٩٥,٠٠٠ دینار" : "١٥,٠٠٠ دینار";
+          const studentName = body.studentName?.trim() || "";
+          const studentEmail = body.studentEmail?.trim() || "";
+          const studentPhone = body.studentPhone?.trim() || "";
+          const notes = body.notes?.trim() || "";
+
+          if (!userId) {
+            return new Response(
+              JSON.stringify({ error: "ناسنامەی بەکارهێنەر پێویستە (userId is required)" }),
+              { status: 400, headers: responseHeaders }
+            );
+          }
+          if (!receiptCode || receiptCode.length < 3) {
+            return new Response(
+              JSON.stringify({ error: "تکایە ژمارەی پسوولە یان کۆدی مامەڵەی فاستپەی بنووسە" }),
+              { status: 400, headers: responseHeaders }
+            );
+          }
+
+          const receiptId = `rcpt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+          const now = Date.now();
+
+          await env.DB.prepare(
+            `INSERT INTO payment_receipts (id, user_id, student_name, student_email, student_phone, plan_id, amount, receipt_code, status, notes, submitted_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`
+          ).bind(
+            receiptId,
+            userId,
+            studentName,
+            studentEmail,
+            studentPhone,
+            planId,
+            amount,
+            receiptCode,
+            notes,
+            now
+          ).run();
+
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              receiptId,
+              message: "پسوولەکەت بە سەرکەوتوویی تۆمارکرا. تیمی زانا دوای وردبینیکردنی فاستپەی دەستبەجێ هەژمارەکەت ئەکتیڤ دەکەن.",
+            }),
+            { status: 201, headers: responseHeaders }
+          );
+        } catch (dbErr: unknown) {
+          return new Response(
+            JSON.stringify({ error: "DATABASE_ERROR", detail: (dbErr as Error)?.message || String(dbErr) }),
+            { status: 500, headers: responseHeaders }
+          );
+        }
+      }
+
+      // GET /api/subscription/my-receipts
+      if (pathname === "/api/subscription/my-receipts" && request.method === "GET") {
+        if (!env.DB) {
+          return new Response(JSON.stringify({ error: "DB binding not configured" }), {
+            status: 500,
+            headers: responseHeaders,
+          });
+        }
+        const userId = url.searchParams.get("userId")?.trim();
+        if (!userId) {
+          return new Response(JSON.stringify({ error: "userId is required" }), {
+            status: 400,
+            headers: responseHeaders,
+          });
+        }
+        try {
+          const res = await env.DB.prepare(
+            "SELECT id, user_id, student_name, student_phone, plan_id, amount, receipt_code, status, notes, submitted_at, reviewed_at FROM payment_receipts WHERE user_id = ? ORDER BY submitted_at DESC LIMIT 10"
+          ).bind(userId).all<unknown>();
+          return new Response(JSON.stringify({ ok: true, receipts: res?.results || [] }), {
+            status: 200,
+            headers: responseHeaders,
+          });
+        } catch (dbErr: unknown) {
           return new Response(
             JSON.stringify({ error: "DATABASE_ERROR", detail: (dbErr as Error)?.message || String(dbErr) }),
             { status: 500, headers: responseHeaders }
