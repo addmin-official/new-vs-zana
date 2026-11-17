@@ -170,6 +170,18 @@ export function useAdminMetrics() {
         // Offline / empty fallback
       }
 
+      // Fallback: read from system/metrics aggregate document
+      if (todayLearningMinutes === 0) {
+        try {
+          const metricsDoc = await getDoc(doc(db, "system", "metrics"));
+          if (metricsDoc.exists()) {
+            todayLearningMinutes = metricsDoc.data().totalLearningMinutesToday || 0;
+          }
+        } catch {
+          /* silent */
+        }
+      }
+
       // Calculate Top Subject
       let topSubject = { name: "chemistry", nameKu: "کیمیا", percent: 0 };
       const totalSessionCount = Object.values(subjectCounts).reduce(

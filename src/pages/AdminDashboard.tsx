@@ -85,6 +85,13 @@ export function AdminDashboard({
     return initialTab;
   });
 
+  // Bootstrap Firestore on first admin load
+  useEffect(() => {
+    import("../firebase/adminSetup.ts").then(({ bootstrapAdminFirestore }) => {
+      bootstrapAdminFirestore().catch(console.warn);
+    });
+  }, []);
+
   // Real live Firebase hooks
   const metrics = useAdminMetrics();
   const studentList = useAdminStudentList();

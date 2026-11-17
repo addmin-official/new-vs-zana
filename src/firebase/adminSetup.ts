@@ -16,6 +16,9 @@ import {
   Timestamp,
   writeBatch,
   Firestore,
+  query,
+  where,
+  serverTimestamp,
 } from "firebase/firestore";
 import { getFirestoreDb, getFirebaseAuth } from "../services/firebase.ts";
 import { ADMIN_EMAIL } from "../auth/roles.ts";
@@ -228,12 +231,137 @@ export async function createAdminDocument(
 }
 
 /**
- * Full master setup routine for admin dashboard initialization.
- */
+  * Full master setup routine for admin dashboard initialization.
+  */
 export async function initializeAdminSystem() {
   const sysDocs = await ensureSystemDocuments();
   return {
     systemDocuments: sysDocs,
     timestamp: new Date().toISOString(),
   };
+}
+
+/**
+ * Bootstraps all required Firestore documents when admin logs in.
+ * Runs once to ensure system/health, system/featureFlags, system/metrics exist,
+ * backfills missing role fields on users, and detects inactive student anomalies.
+ */
+export async function bootstrapAdminFirestore(): Promise<void> {
+  const db = getFirestoreDb();
+  if (!db) return;
+
+  const batch = writeBatch(db);
+
+  // 1. CREATE system/health if missing
+  const healthRef = doc(db, "system", "health");
+  const healthSnap = await getDoc(healthRef);
+  if (!healthSnap.exists()) {
+    batch.set(healthRef, {
+      firebase: "ONLINE",
+      gemini: "ONLINE",
+      cloudflare: "ONLINE",
+      offlineSync: "READY",
+      lastChecked: serverTimestamp(),
+      version: "2.0.0",
+      bootstrappedAt: serverTimestamp(),
+      bootstrappedBy: ADMIN_EMAIL,
+    });
+  }
+
+  // 2. CREATE system/featureFlags if missing
+  const flagsRef = doc(db, "system", "featureFlags");
+  const flagsSnap = await getDoc(flagsRef);
+  if (!flagsSnap.exists()) {
+    batch.set(flagsRef, {
+      teacher_dashboard: false,
+      parent_portal: false,
+      admin_dashboard: true,
+      collaborative_lab: false,
+      virtual_lab: true,
+      study_plan: true,
+      practice_lab: true,
+      updatedAt: serverTimestamp(),
+      updatedBy: ADMIN_EMAIL,
+    });
+  }
+
+  // 3. CREATE system/metrics placeholder if missing
+  const metricsRef = doc(db, "system", "metrics");
+  const metricsSnap = await getDoc(metricsRef);
+  if (!metricsSnap.exists()) {
+    batch.set(metricsRef, {
+      totalStudents: 0,
+      activeSessionsToday: 0,
+      totalLearningMinutesToday: 0,
+      lastUpdated: serverTimestamp(),
+    });
+  }
+
+  await batch.commit();
+
+  // 4. BACKFILL users missing "role" field
+  // Query users collection, add role:'student' where missing
+  const usersRef = collection(db, "users");
+  const usersSnap = await getDocs(usersRef);
+
+  const backfillBatch = writeBatch(db);
+  let backfillCount = 0;
+
+  usersSnap.forEach((userDoc) => {
+    const data = userDoc.data();
+    if (!data.role) {
+      const isAdminUser = data.email === ADMIN_EMAIL;
+      backfillBatch.update(userDoc.ref, {
+        role: isAdminUser ? "admin" : "student",
+        lastActive: data.lastActive || serverTimestamp(),
+        grade: data.grade || "12",
+        stream: data.stream || "scientific",
+      });
+      backfillCount++;
+    }
+  });
+
+  if (backfillCount > 0) {
+    await backfillBatch.commit();
+    console.log(`[ZANA Admin] Backfilled ${backfillCount} users with role field`);
+  }
+
+  // 5. CREATE sample anomaly if anomalies collection empty
+  const anomRef = collection(db, "anomalies");
+  const anomSnap = await getDocs(query(anomRef, where("resolved", "==", false)));
+
+  if (anomSnap.empty) {
+    // Check for real inactive students first
+    const inactiveQuery = query(
+      collection(db, "users"),
+      where("role", "==", "student"),
+      where(
+        "lastActive",
+        "<=",
+        Timestamp.fromDate(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
+      )
+    );
+    const inactiveSnap = await getDocs(inactiveQuery);
+
+    const anomBatch = writeBatch(db);
+    inactiveSnap.docs.slice(0, 5).forEach((userDoc) => {
+      const data = userDoc.data();
+      const newAnom = doc(collection(db, "anomalies"));
+      anomBatch.set(newAnom, {
+        studentId: userDoc.id,
+        studentName: data.name || data.displayName || "قوتابی نەناسراو",
+        type: "INACTIVE_7_DAYS",
+        severity: "MEDIUM",
+        detectedAt: serverTimestamp(),
+        resolved: false,
+        details: {
+          daysInactive: 7,
+          notes: "بە خۆکاری دۆزراوەتەوە لە کاتی ڕێکخستنی سیستەم",
+        },
+      });
+    });
+    await anomBatch.commit();
+  }
+
+  console.log("[ZANA Admin] Firestore bootstrap complete ✅");
 }

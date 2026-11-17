@@ -92,11 +92,11 @@ service cloud.firestore {
     
     // ========================================================================
     // 3. System Configuration & Feature Flags
-    // Read: All / Write: Admin only
     // ========================================================================
     
-    match /system/{document=**} {
-      allow read: if true;
+    // SYSTEM METRICS — read admin only
+    match /system/{document} {
+      allow read: if isAdmin();
       allow write: if isAdmin();
     }
     
@@ -154,8 +154,12 @@ service cloud.firestore {
     // 8. Admin Anomalies & Live Analytics Monitoring
     // ========================================================================
 
+    // ANOMALIES — read admin, write admin, create system functions
     match /anomalies/{anomalyId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if false;
     }
 
     match /{path=**}/sessions/{sessionId} {

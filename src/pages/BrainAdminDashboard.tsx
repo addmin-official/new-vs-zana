@@ -19,6 +19,7 @@ import { HeatMap } from "../components/charts/HeatMap.tsx";
 import { useAppStore, UserRole } from "../store/appStore.ts";
 import { useAdminMetrics } from "../hooks/useAdminMetrics.ts";
 import { useAdminAnomalies, AnomalyDocument } from "../hooks/useAdminAnomalies.ts";
+import { useSystemHealth } from "../hooks/useSystemHealth.ts";
 
 export interface BrainAdminDashboardProps {
   onBackToApp?: () => void;
@@ -52,6 +53,7 @@ export function BrainAdminDashboard({
   // Live Firebase hooks
   const metrics = useAdminMetrics();
   const anomaliesState = useAdminAnomalies();
+  const healthData = useSystemHealth();
 
   const displayAnomalies = anomaliesState.anomalies;
 
