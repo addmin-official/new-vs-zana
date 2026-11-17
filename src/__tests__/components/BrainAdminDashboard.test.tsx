@@ -4,6 +4,35 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { BrainAdminDashboard } from "../../pages/BrainAdminDashboard.tsx";
 import { useAppStore } from "../../store/appStore.ts";
 
+vi.mock("../../hooks/useAdminAnomalies.ts", () => {
+  return {
+    useAdminAnomalies: () => {
+      const [anomalies, setAnomalies] = React.useState([
+        {
+          id: "anom_1",
+          studentId: "s1",
+          studentName: "سارا ئەحمەد",
+          type: "INACTIVE_7_DAYS",
+          severity: "HIGH",
+          detectedAt: null,
+          resolved: false,
+          details: { daysInactive: 9 },
+        },
+      ]);
+      return {
+        anomalies,
+        loading: false,
+        error: null,
+        resolveAnomaly: vi.fn(async (id: string) => {
+          setAnomalies((prev) =>
+            prev.map((a) => (a.id === id ? { ...a, resolved: true } : a))
+          );
+        }),
+      };
+    },
+  };
+});
+
 describe("BrainAdminDashboard Component Tests", () => {
   beforeEach(() => {
     vi.clearAllMocks();

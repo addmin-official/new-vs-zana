@@ -9,6 +9,8 @@ import { NotificationCenter } from "./NotificationCenter.tsx";
 import { AchievementToast } from "./AchievementToast.tsx";
 import { notificationService } from "../services/notificationService.ts";
 import { useTranslation } from "../hooks/useTranslation.ts";
+import { SoundToggle } from "./SoundToggle.tsx";
+import { ThemeToggle } from "./ThemeToggle.tsx";
 
 export interface AppShellProps {
   children: ReactNode;
@@ -189,16 +191,23 @@ export function AppShell({
             className="w-72 h-full bg-white dark:bg-slate-900 shadow-2xl p-4 flex flex-col border-l border-slate-200 dark:border-slate-800 animate-in slide-in-from-right duration-200 overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 mb-2">
-              <span className="font-sans font-bold text-base text-slate-900 dark:text-white">{t("common.appName")}</span>
-              <button
-                type="button"
-                onClick={() => setMobileMenuOpen(false)}
-                className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 p-2 rounded-xl min-touch flex items-center justify-center cursor-pointer focus-visible:ring-3 focus-visible:ring-indigo-500"
-                aria-label="داخستنی مێنۆ"
-              >
-                ✕
-              </button>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-2">
+              <div className="flex items-center gap-2">
+                <span className="font-sans font-black text-xl text-indigo-600 dark:text-indigo-400">زانا</span>
+                <span className="font-sans font-bold text-sm text-slate-800 dark:text-slate-200">{t("common.appName")}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <SoundToggle className="!w-8 !h-8 !rounded-lg" />
+                <ThemeToggle showMenu={false} className="!w-8 !h-8 !rounded-lg" />
+                <button
+                  type="button"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 p-1.5 rounded-lg min-touch flex items-center justify-center cursor-pointer focus-visible:ring-2 focus-visible:ring-indigo-500 mr-1"
+                  aria-label="داخستنی مێنۆ"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
             <Sidebar
               activeTab={activeTab}
@@ -227,8 +236,11 @@ export function AppShell({
         <main
           id="main-content"
           tabIndex={-1}
-          className={`flex-1 min-h-0 flex flex-col min-w-0 pb-24 md:pb-8 overflow-y-auto overscroll-y-contain focus:outline-none ${className}`}
-          style={{ WebkitOverflowScrolling: "touch" }}
+          className={`flex-1 min-h-0 flex flex-col min-w-0 md:pb-8 overflow-y-auto overscroll-y-contain focus:outline-none ${className}`}
+          style={{
+            WebkitOverflowScrolling: "touch",
+            paddingBottom: "calc(5.25rem + env(safe-area-inset-bottom, 0px))",
+          }}
         >
           {children}
         </main>
