@@ -1101,9 +1101,9 @@ export function ProfileAndSettings({
       <SubscriptionModal
         isOpen={showSubModal}
         onClose={() => setShowSubModal(false)}
-        userId={studentProfile?.id || user.id}
-        userName={studentProfile?.name || user.name}
-        userEmail={user.email || ""}
+        userId={(user as unknown as { uid?: string })?.uid || user?.id || studentProfile?.id || ""}
+        userName={studentProfile?.name || user?.name || (user as unknown as { displayName?: string })?.displayName || ""}
+        userEmail={user?.email || ""}
       />
     </div>
   );

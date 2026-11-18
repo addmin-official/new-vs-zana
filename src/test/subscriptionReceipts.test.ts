@@ -185,6 +185,11 @@ function createMockD1Database() {
           const filtered = store.payment_receipts.filter((item) => item.user_id === userId);
           return { results: filtered as T[] };
         }
+        if (sql.includes("FROM payment_receipts") && sql.includes("WHERE r.status = ?")) {
+          const [statusFilter] = boundParams;
+          const filtered = store.payment_receipts.filter((item) => item.status === statusFilter);
+          return { results: filtered as T[] };
+        }
         if (sql.includes("FROM payment_receipts")) {
           return { results: store.payment_receipts as T[] };
         }
@@ -703,5 +708,59 @@ describe("ZANA Subscription & FastPay Manual Activation System - Comprehensive 2
     assert.strictEqual(normalizeKurdishPhoneForWhatsApp("7501234567"), "9647501234567");
     assert.strictEqual(normalizeKurdishPhoneForWhatsApp("9647501234567"), "9647501234567");
     assert.strictEqual(normalizeKurdishPhoneForWhatsApp(""), "");
+  });
+
+  // 21. Regression Test: guest_student fallback resolution
+  test("Vector 21: Authenticated student submitting with userId='guest_student' or omitted is safely resolved to token UID", async () => {
+    const studentUid = "student-token-resolved-uid";
+    const req = new Request("https://example.com/api/subscription/submit-receipt", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${studentUid}`,
+      },
+      body: JSON.stringify({
+        userId: "guest_student", // Fallback placeholder from UI modal
+        studentName: "خوێندکاری تاقیکردنەوە",
+        studentEmail: "guest-test@zana.krd",
+        studentPhone: "0750 555 1234",
+        planId: "yearly",
+        receiptCode: "FP-REGRESSION-21",
+      }),
+    });
+
+    const res = await worker.fetch(req, env as never);
+    assert.strictEqual(res.status, 201);
+    const data = await res.json();
+    assert.strictEqual(data.ok, true);
+    assert.strictEqual(data.status, "pending");
+    assert.ok(data.receiptId);
+
+    // Verify stored in D1 under verified token UID, NOT 'guest_student'
+    const stored = mockDb.store.payment_receipts.find((r) => r.receipt_code === "FP-REGRESSION-21");
+    assert.ok(stored);
+    assert.strictEqual(stored.user_id, studentUid);
+    assert.strictEqual(stored.status, "pending");
+  });
+
+  // 22. Regression Test: Newly submitted student receipt is immediately visible in Admin API & Dashboard
+  test("Vector 22: Newly submitted student receipt appears in Admin API payment-receipts queue with pending status", async () => {
+    const req = new Request("https://example.com/api/admin/payment-receipts?status=pending", {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${secret}`,
+      },
+    });
+
+    const res = await worker.fetch(req, env as never);
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.strictEqual(data.ok, true);
+    assert.ok(Array.isArray(data.receipts));
+
+    const found = data.receipts.find((r: { receipt_code: string }) => r.receipt_code === "FP-REGRESSION-21");
+    assert.ok(found, "Newly submitted receipt must be visible in admin pending queue");
+    assert.strictEqual(found.status, "pending");
+    assert.strictEqual(found.plan_id, "yearly");
   });
 });

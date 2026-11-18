@@ -34,6 +34,7 @@ import {
  FileText,
  ExternalLink,
  Clock,
+ AlertCircle,
 } from "lucide-react";
 import { InternalBrainService } from "../../core/brain/InternalBrainService";
 import {
@@ -209,17 +210,25 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
   }
  };
 
- const loadReceipts = async () => {
-  setIsLoadingReceipts(true);
+ const [receiptsError, setReceiptsError] = useState<string | null>(null);
+
+ const loadReceipts = async (silent = false) => {
+  if (!silent) setIsLoadingReceipts(true);
+  setReceiptsError(null);
   try {
    const data = await getAdminPaymentReceipts("all");
-   if (data && data.receipts) {
-    setReceipts(data.receipts);
+   if (data && Array.isArray(data.receipts)) {
+    const sorted = [...data.receipts].sort((a, b) => Number(b.submitted_at) - Number(a.submitted_at));
+    setReceipts(sorted);
+   } else {
+    setReceipts([]);
    }
   } catch (err: unknown) {
-   console.warn("[BrainAdminDashboard] Failed to load receipts:", err);
+   const msg = err instanceof Error ? err.message : "هەڵە لە بارکردنی پسوولەکان لە سێرڤەر";
+   console.error("[BrainAdminDashboard] Failed to load receipts:", err);
+   setReceiptsError(msg);
   } finally {
-   setIsLoadingReceipts(false);
+   if (!silent) setIsLoadingReceipts(false);
   }
  };
 
@@ -233,18 +242,25 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
    }
    const res = await reviewPaymentReceipt(receiptId, action, reason);
    setReceiptActionMsg(res.message);
-   await Promise.all([loadReceipts(), loadSubscriptions()]);
+   await Promise.all([loadReceipts(true), loadSubscriptions()]);
   } catch (err: unknown) {
    const msg = err instanceof Error ? err.message : String(err);
    alert(`هەڵە لە پێداچوونەوە: ${msg}`);
   }
  };
 
- // Load subscriptions & receipts when tab switches to subscriptions
+ // Load subscriptions & receipts with auto-polling every 8 seconds
  useEffect(() => {
   if (activeSubTab === "subscriptions") {
    void loadSubscriptions();
    void loadReceipts();
+
+   const pollTimer = setInterval(() => {
+    void loadReceipts(true);
+    void loadSubscriptions();
+   }, 8000);
+
+   return () => clearInterval(pollTimer);
   }
  }, [activeSubTab]);
 
@@ -1837,29 +1853,58 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
       </div>
      </div>
 
-     {/* Filter buttons */}
-     <div className="flex items-center gap-1.5">
+     {/* Filter and Refresh buttons */}
+     <div className="flex flex-wrap items-center gap-1.5">
+      <button
+       type="button"
+       onClick={() => void loadReceipts()}
+       disabled={isLoadingReceipts}
+       className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center gap-1 text-xs font-bold cursor-pointer"
+       title="نوێکردنەوەی خێرای پسوولەکان"
+      >
+       <RefreshCw className={`w-3.5 h-3.5 ${isLoadingReceipts ? "animate-spin text-amber-400" : ""}`} />
+       <span className="hidden sm:inline">نوێکردنەوە</span>
+      </button>
       {[
-       { id: "pending", label: "چاوەڕوان (Pending)" },
-       { id: "approved", label: "پەسەندکراو (Active)" },
-       { id: "rejected", label: "ڕەتکراوە" },
-       { id: "all", label: "هەمووان" },
+       { id: "pending", label: "چاوەڕوان (Pending)", count: receipts.filter((r) => r.status === "pending").length },
+       { id: "approved", label: "پەسەندکراو", count: receipts.filter((r) => r.status === "approved").length },
+       { id: "rejected", label: "ڕەتکراوە", count: receipts.filter((r) => r.status === "rejected").length },
+       { id: "all", label: "هەمووان", count: receipts.length },
       ].map((f) => (
        <button
         key={f.id}
         type="button"
         onClick={() => setReceiptFilter(f.id as typeof receiptFilter)}
-        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
          receiptFilter === f.id
           ? "bg-amber-600 text-white shadow-sm"
           : "bg-slate-800 text-slate-400 hover:text-slate-200"
         }`}
        >
-        {f.label}
+        <span>{f.label}</span>
+        <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${receiptFilter === f.id ? "bg-black/30 text-white" : "bg-slate-700 text-slate-300"}`}>
+         {f.count}
+        </span>
        </button>
       ))}
      </div>
     </div>
+
+    {receiptsError && (
+     <div className="p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-bold flex items-center justify-between">
+      <div className="flex items-center gap-2">
+       <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+       <span>هەڵە لە وەرگرتنی پسوولەکان لە سێرڤەر: {receiptsError}</span>
+      </div>
+      <button
+       type="button"
+       onClick={() => void loadReceipts()}
+       className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-bold transition cursor-pointer"
+      >
+       دووبارە تاقیبکەرەوە
+      </button>
+     </div>
+    )}
 
     {receiptActionMsg && (
      <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center justify-between">
@@ -1870,6 +1915,15 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
 
     {/* Receipts List */}
     {(() => {
+     if (isLoadingReceipts && receipts.length === 0) {
+      return (
+       <div className="text-center py-8 text-xs text-amber-400 bg-slate-950/40 rounded-xl border border-slate-800 flex items-center justify-center gap-2">
+        <RefreshCw className="w-4 h-4 animate-spin" />
+        <span>داواکارییەکانی فاستپەی باردەکرێن لە بنکەدراوەی D1...</span>
+       </div>
+      );
+     }
+
      const filteredReceipts = receipts.filter((r) => {
       if (receiptFilter === "all") return true;
       return r.status === receiptFilter;
@@ -1877,8 +1931,21 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
 
      if (filteredReceipts.length === 0) {
       return (
-       <div className="text-center py-6 text-xs text-slate-500 bg-slate-950/40 rounded-xl border border-slate-800">
-        هیچ پسوولەیەکی تۆمارکراو بەم فلتەرە نەدۆزرایەوە.
+       <div className="text-center py-8 text-xs text-slate-500 bg-slate-950/40 rounded-xl border border-slate-800 space-y-2">
+        <p>
+         {receiptFilter === "pending"
+          ? "هیچ پسوولەیەکی چاوەڕوانکراوی نوێ (Pending) نییە لەم ساتەدا."
+          : `هیچ پسوولەیەکی تۆمارکراو بە فلتەری (${receiptFilter}) نەدۆزرایەوە.`}
+        </p>
+        {receiptFilter !== "all" && receipts.length > 0 && (
+         <button
+          type="button"
+          onClick={() => setReceiptFilter("all")}
+          className="text-amber-400 hover:underline font-bold text-xs cursor-pointer block mx-auto"
+         >
+          پیشاندانی هەموو پسوولە تۆمارکراوەکان ({receipts.length})
+         </button>
+        )}
        </div>
       );
      }

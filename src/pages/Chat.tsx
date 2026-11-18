@@ -2071,8 +2071,8 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
       <SubscriptionModal
         isOpen={isTrialExpired}
         onClose={() => setIsTrialExpired(false)}
-        userId={user?.id || profile?.id || ""}
-        userName={user?.name || profile?.name || ""}
+        userId={(user as unknown as { uid?: string })?.uid || user?.id || profile?.id || ""}
+        userName={user?.name || (user as unknown as { displayName?: string })?.displayName || profile?.name || ""}
         userEmail={user?.email || ""}
       />
     </div>

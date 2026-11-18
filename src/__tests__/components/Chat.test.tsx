@@ -7,6 +7,7 @@ import { useAppStore } from "../../store/appStore.ts";
 // Mock Firebase calls
 vi.mock("../../services/firebase.ts", () => ({
   getFirestoreDb: vi.fn(() => ({})),
+  getFirebaseAuth: vi.fn(() => null),
 }));
 
 vi.mock("firebase/firestore", () => ({

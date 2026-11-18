@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 
 import { SUPPORT_CONFIG } from "../config/supportConfig.ts";
+import { getFirebaseAuth } from "../services/firebase.ts";
 import {
   submitPaymentReceipt,
   getMyReceipts,
@@ -49,6 +50,12 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   monthlyPrice = SUPPORT_CONFIG.monthlyPrice,
   yearlyPrice = SUPPORT_CONFIG.yearlyPrice,
 }) => {
+  const auth = getFirebaseAuth();
+  const currentAuthUser = auth?.currentUser;
+  const effectiveUserId = (userId && userId !== "guest_student") ? userId : (currentAuthUser?.uid || "");
+  const effectiveUserName = userName || currentAuthUser?.displayName || "";
+  const effectiveUserEmail = userEmail || currentAuthUser?.email || "";
+
   const [selectedPlan, setSelectedPlan] = useState<"monthly" | "yearly">("monthly");
   const [receiptCode, setReceiptCode] = useState("");
   const [studentPhone, setStudentPhone] = useState("");
@@ -61,14 +68,15 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
 
   // Load existing receipts when opened
   useEffect(() => {
-    if (isOpen && userId) {
-      getMyReceipts(userId)
+    const targetId = effectiveUserId || userId;
+    if (isOpen && targetId) {
+      getMyReceipts(targetId)
         .then((data) => {
           if (data && data.receipts) setMyReceipts(data.receipts);
         })
         .catch(() => {});
     }
-  }, [isOpen, userId]);
+  }, [isOpen, effectiveUserId, userId]);
 
   if (!isOpen) return null;
 
@@ -80,17 +88,18 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   };
 
   const handleCopyUserId = () => {
-    if (!userId) return;
-    void navigator.clipboard.writeText(userId);
+    const targetId = effectiveUserId || userId;
+    if (!targetId) return;
+    void navigator.clipboard.writeText(targetId);
     setCopiedUserId(true);
     setTimeout(() => setCopiedUserId(false), 2500);
   };
 
   const openWhatsApp = () => {
     const planName = selectedPlan === "monthly" ? "مانگانە" : "ساڵانە";
-    const studentInfo = userName ? `\nناوی قوتابی: ${userName}` : "";
-    const emailInfo = userEmail ? `\nئیمەیڵ: ${userEmail}` : "";
-    const idInfo = userId ? `\nناسنامەی هەژمار (User ID): ${userId}` : "";
+    const studentInfo = effectiveUserName ? `\nناوی قوتابی: ${effectiveUserName}` : "";
+    const emailInfo = effectiveUserEmail ? `\nئیمەیڵ: ${effectiveUserEmail}` : "";
+    const idInfo = (effectiveUserId || userId) ? `\nناسنامەی هەژمار (User ID): ${effectiveUserId || userId}` : "";
     const phoneInfo = studentPhone ? `\nژمارەی پەیوەندی: ${studentPhone}` : "";
     const codeInfo = receiptCode ? `\nکۆدی پسوولەی فاستپەی: ${receiptCode}` : "";
     const message = `سڵاو تیمی زانا، دەمەوێت بەشداری لە زانا پرۆ بکەم بە پلانی ${planName}.${studentInfo}${emailInfo}${idInfo}${phoneInfo}${codeInfo}\n\n(وێنەی پسوولەی فاستپەیش لێرە هاوپێچ دەکەم)`;
@@ -118,9 +127,9 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
 
     try {
       const res = await submitPaymentReceipt({
-        userId: userId || "guest_student",
-        studentName: userName,
-        studentEmail: userEmail,
+        userId: effectiveUserId || undefined,
+        studentName: effectiveUserName || undefined,
+        studentEmail: effectiveUserEmail || undefined,
         studentPhone: studentPhone.trim() || undefined,
         planId: selectedPlan,
         receiptCode: receiptCode.trim(),
@@ -130,8 +139,9 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
       setReceiptCode("");
 
       // Refresh receipts list
-      if (userId) {
-        const updated = await getMyReceipts(userId);
+      const targetId = effectiveUserId || userId;
+      if (targetId) {
+        const updated = await getMyReceipts(targetId);
         if (updated && updated.receipts) {
           setMyReceipts(updated.receipts);
         }

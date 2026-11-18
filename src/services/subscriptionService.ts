@@ -104,12 +104,24 @@ export async function getSubscriptionStatus(userId?: string): Promise<StudentSub
  */
 export async function submitPaymentReceipt(
   payload: SubmitReceiptPayload
-): Promise<{ ok: boolean; receiptId?: string; message: string }> {
+): Promise<{ ok: boolean; receiptId?: string; status?: string; message: string }> {
   const headers = await getAuthHeaders();
+  const auth = getFirebaseAuth();
+  const currentUid = auth?.currentUser?.uid;
+  const currentEmail = auth?.currentUser?.email;
+  const currentName = auth?.currentUser?.displayName;
+
+  const normalizedPayload: SubmitReceiptPayload = {
+    ...payload,
+    userId: currentUid || (payload.userId && payload.userId !== "guest_student" ? payload.userId : currentUid),
+    studentEmail: payload.studentEmail || currentEmail || undefined,
+    studentName: payload.studentName || currentName || undefined,
+  };
+
   const res = await fetch("/api/subscription/submit-receipt", {
     method: "POST",
     headers,
-    body: JSON.stringify(payload),
+    body: JSON.stringify(normalizedPayload),
   });
 
   const data = await res.json().catch(() => ({}));

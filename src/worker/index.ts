@@ -2418,7 +2418,7 @@ export default {
                    COALESCE(u.email, st.email, r.student_email, '') as resolved_email
             FROM payment_receipts r
             LEFT JOIN users u ON r.user_id = u.id
-            LEFT JOIN students st ON r.user_id = st.id
+            LEFT JOIN students st ON (r.user_id = st.id OR r.user_id = st.firebase_uid)
           `;
           let res;
           if (statusFilter && ["pending", "approved", "rejected"].includes(statusFilter)) {
@@ -2426,7 +2426,7 @@ export default {
             res = await env.DB.prepare(query).bind(statusFilter).all<unknown>();
           } else {
             query += " ORDER BY r.submitted_at DESC LIMIT 200";
-            res = await env.DB.prepare(query).bind().all<unknown>();
+            res = await env.DB.prepare(query).all<unknown>();
           }
           return new Response(JSON.stringify({ ok: true, receipts: res?.results || [] }), {
             status: 200,
@@ -2812,8 +2812,14 @@ export default {
             notes?: string;
           };
 
-          // 🚨 FORGED USER ID GUARD: Student cannot submit receipts on behalf of another user
-          if (body.userId && body.userId !== verifiedUserId) {
+          // 🚨 FORGED USER ID GUARD: Student cannot submit receipts on behalf of another user.
+          // Fallbacks like "guest_student" or empty string from frontend are safely overridden by verifiedUserId.
+          if (
+            body.userId &&
+            body.userId !== "guest_student" &&
+            body.userId !== "" &&
+            body.userId !== verifiedUserId
+          ) {
             return new Response(
               JSON.stringify({
                 error: "FORBIDDEN_USER_MISMATCH",
@@ -2913,6 +2919,7 @@ export default {
             JSON.stringify({
               ok: true,
               receiptId,
+              status: "pending",
               message: "پسوولەکەت بە سەرکەوتوویی تۆمارکرا. تیمی زانا دوای وردبینیکردنی فاستپەی دەستبەجێ هەژمارەکەت ئەکتیڤ دەکەن.",
             }),
             { status: 201, headers: responseHeaders }
