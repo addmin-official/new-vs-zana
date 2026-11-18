@@ -3,6 +3,8 @@
  * خزمەتگوزاری بەشداریکردن، وەرگرتنی دۆخی هەژمار و تۆمارکردنی پسوولەی فاستپەی
  */
 
+import { getFirebaseAuth } from "./firebase.ts";
+
 export interface StudentSubscriptionStatus {
   ok: boolean;
   status: "trial" | "active" | "expired";
@@ -13,7 +15,7 @@ export interface StudentSubscriptionStatus {
 }
 
 export interface SubmitReceiptPayload {
-  userId: string;
+  userId?: string;
   studentName?: string;
   studentEmail?: string;
   studentPhone?: string;
@@ -37,22 +39,49 @@ export interface MyReceiptRecord {
 }
 
 /**
+ * Normalizes an Iraqi Kurdish phone number to the international format required by WhatsApp (9647XXXXXXXXX).
+ */
+export function normalizeKurdishPhoneForWhatsApp(phone: string): string {
+  if (!phone) return "";
+  const digits = phone.replace(/[^0-9]/g, "");
+  if (digits.startsWith("07") && digits.length === 11) {
+    return "964" + digits.substring(1);
+  }
+  if (digits.startsWith("7") && digits.length === 10) {
+    return "964" + digits;
+  }
+  if (digits.startsWith("964")) {
+    return digits;
+  }
+  return digits;
+}
+
+async function getAuthHeaders(extraHeaders: Record<string, string> = {}): Promise<Headers> {
+  const headers = new Headers(extraHeaders);
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  const auth = getFirebaseAuth();
+  const user = auth?.currentUser;
+  if (user) {
+    try {
+      const token = await user.getIdToken();
+      headers.set("Authorization", `Bearer ${token}`);
+    } catch (err) {
+      console.warn("[subscriptionService] Failed to retrieve token:", err);
+    }
+  }
+  return headers;
+}
+
+/**
  * Fetch live subscription status for a given student User ID from D1
  */
-export async function getSubscriptionStatus(userId: string): Promise<StudentSubscriptionStatus> {
-  if (!userId) {
-    return {
-      ok: false,
-      status: "trial",
-      trial_started_at: Date.now(),
-      trial_ends_at: Date.now() + 3 * 86400000,
-      plan_id: null,
-      days_remaining: 3,
-    };
-  }
-
+export async function getSubscriptionStatus(userId?: string): Promise<StudentSubscriptionStatus> {
   try {
-    const res = await fetch(`/api/subscription/status?userId=${encodeURIComponent(userId)}`);
+    const headers = await getAuthHeaders();
+    const query = userId ? `?userId=${encodeURIComponent(userId)}` : "";
+    const res = await fetch(`/api/subscription/status${query}`, { headers });
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}`);
     }
@@ -76,17 +105,16 @@ export async function getSubscriptionStatus(userId: string): Promise<StudentSubs
 export async function submitPaymentReceipt(
   payload: SubmitReceiptPayload
 ): Promise<{ ok: boolean; receiptId?: string; message: string }> {
+  const headers = await getAuthHeaders();
   const res = await fetch("/api/subscription/submit-receipt", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers,
     body: JSON.stringify(payload),
   });
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data.error || "هەڵەیەک لە تۆمارکردنی پسوولەدا ڕوویدا");
+    throw new Error(data.detail || data.error || "هەڵەیەک لە تۆمارکردنی پسوولەدا ڕوویدا");
   }
   return data;
 }
@@ -94,10 +122,11 @@ export async function submitPaymentReceipt(
 /**
  * Fetch student's submitted receipts to check live verification status
  */
-export async function getMyReceipts(userId: string): Promise<{ ok: boolean; receipts: MyReceiptRecord[] }> {
-  if (!userId) return { ok: true, receipts: [] };
+export async function getMyReceipts(userId?: string): Promise<{ ok: boolean; receipts: MyReceiptRecord[] }> {
   try {
-    const res = await fetch(`/api/subscription/my-receipts?userId=${encodeURIComponent(userId)}`);
+    const headers = await getAuthHeaders();
+    const query = userId ? `?userId=${encodeURIComponent(userId)}` : "";
+    const res = await fetch(`/api/subscription/my-receipts${query}`, { headers });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch (err) {

@@ -496,6 +496,12 @@ export async function checkSubscription(
     }
 
     if (sub.status === "active") {
+      if (now > sub.trial_ends_at) {
+        await env.DB.prepare(
+          "UPDATE subscriptions SET status = 'expired', updated_at = ? WHERE user_id = ?"
+        ).bind(now, userId).run();
+        return { status: "expired" };
+      }
       return { status: "active" };
     }
 
@@ -2459,8 +2465,8 @@ export default {
           }
 
           const receipt = await env.DB.prepare(
-            "SELECT id, user_id, plan_id, status FROM payment_receipts WHERE id = ?"
-          ).bind(receiptId).first<{ id: string; user_id: string; plan_id: string; status: string }>();
+            "SELECT id, user_id, student_email, plan_id, status FROM payment_receipts WHERE id = ?"
+          ).bind(receiptId).first<{ id: string; user_id: string; student_email?: string; plan_id: string; status: string }>();
 
           if (!receipt) {
             return new Response(JSON.stringify({ error: "Receipt not found" }), {
@@ -2469,21 +2475,55 @@ export default {
             });
           }
 
+          // 🚨 STATE TRANSITION GUARD: Only pending receipts can be approved or rejected
+          if (receipt.status !== "pending") {
+            return new Response(
+              JSON.stringify({
+                error: "INVALID_STATE_TRANSITION",
+                detail: `ئەم پسوولەیە پێشتر بڕیاری لەسەر دراوە (دۆخی هەنووکەیی: ${receipt.status}). تەنها پسوولەی چاوەڕوانکراو دەکرێت بڕیاری لەسەر بدرێت.`,
+              }),
+              { status: 409, headers: responseHeaders }
+            );
+          }
+
           const now = Date.now();
           const adminEmail = verifiedAdmin?.email || "addmin.official.idg@gmail.com";
+
+          // 🚨 SELF-APPROVAL GUARD: Admin cannot approve their own payment receipt
+          if (
+            (verifiedAdmin?.uid && receipt.user_id === verifiedAdmin.uid) ||
+            (receipt.student_email && receipt.student_email.toLowerCase() === adminEmail.toLowerCase())
+          ) {
+            return new Response(
+              JSON.stringify({
+                error: "FORBIDDEN_SELF_APPROVAL",
+                detail: "ئادمین ناتوانێت پسوولەی پارەدانی هەژماری تایبەتی خۆی پەسەند بکات.",
+              }),
+              { status: 403, headers: responseHeaders }
+            );
+          }
 
           if (action === "approve") {
             const planId = receipt.plan_id === "yearly" ? "yearly" : "monthly";
             const durationMs = planId === "yearly" ? 365 * 24 * 60 * 60 * 1000 : 30 * 24 * 60 * 60 * 1000;
-            const endsAt = now + durationMs;
 
-            // 1. Update receipt status
-            await env.DB.prepare(
-              "UPDATE payment_receipts SET status = 'approved', reviewed_at = ?, reviewed_by = ? WHERE id = ?"
-            ).bind(now, adminEmail, receiptId).run();
+            // 🚨 PRESERVE EXISTING ACTIVE SUBSCRIPTION: Do not reset or shorten active subscriptions
+            const existingSub = await env.DB.prepare(
+              "SELECT status, trial_ends_at FROM subscriptions WHERE user_id = ?"
+            ).bind(receipt.user_id).first<{ status: string; trial_ends_at: number }>();
 
-            // 2. Activate subscription in D1
-            await env.DB.prepare(
+            const currentEndsAt =
+              existingSub && existingSub.status === "active" && existingSub.trial_ends_at > now
+                ? existingSub.trial_ends_at
+                : now;
+            const endsAt = currentEndsAt + durationMs;
+
+            // 🚨 ATOMIC BATCH EXECUTION: Update receipt, upsert subscription, and create notification together
+            const updateReceiptStmt = env.DB.prepare(
+              "UPDATE payment_receipts SET status = 'approved', reviewed_at = ?, reviewed_by = ? WHERE id = ? AND status = 'pending'"
+            ).bind(now, adminEmail, receiptId);
+
+            const upsertSubStmt = env.DB.prepare(
               `INSERT INTO subscriptions (user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at)
                VALUES (?, 'active', ?, ?, ?, ?)
                ON CONFLICT(user_id) DO UPDATE SET
@@ -2491,37 +2531,71 @@ export default {
                  plan_id = excluded.plan_id,
                  trial_ends_at = excluded.trial_ends_at,
                  updated_at = excluded.updated_at`
-            ).bind(receipt.user_id, now, endsAt, planId, now).run();
+            ).bind(receipt.user_id, now, endsAt, planId, now);
 
-            // 3. Notify student in notifications table if table exists
-            try {
-              const notifId = `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-              const planTitleKu = planId === "yearly" ? "ساڵانە" : "مانگانە";
-              await env.DB.prepare(
-                `INSERT INTO notifications (id, student_id, type, title, message, is_read, created_at)
-                 VALUES (?, ?, 'subscription', 'بەشداریکردنت کارا کرا! 🎉', ?, 0, datetime('now'))`
-              ).bind(
-                notifId,
-                receipt.user_id,
-                `هەژمارەکەت لە زانا بۆ پلانی (${planTitleKu}) بە سەرکەوتوویی ئەکتیڤ کرا. پیرۆزە!`
-              ).run();
-            } catch {
-              // notification insert non-fatal
+            const notifId = `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+            const planTitleKu = planId === "yearly" ? "ساڵانە" : "مانگانە";
+            const notifStmt = env.DB.prepare(
+              `INSERT INTO notifications (id, student_id, type, title, message, is_read, created_at)
+               VALUES (?, ?, 'subscription', 'بەشداریکردنت کارا کرا! 🎉', ?, 0, datetime('now'))`
+            ).bind(
+              notifId,
+              receipt.user_id,
+              `هەژمارەکەت لە زانا بۆ پلانی (${planTitleKu}) بە سەرکەوتوویی تا ${new Date(endsAt).toLocaleDateString("en-GB")} ئەکتیڤ کرا. پیرۆزە!`
+            );
+
+            // Execute atomic batch if supported, or sequentially
+            if (typeof env.DB.batch === "function") {
+              const batchResults = await env.DB.batch([updateReceiptStmt, upsertSubStmt, notifStmt]);
+              const receiptMeta = (batchResults[0] as { meta?: { changes?: number } } | undefined)?.meta;
+              if (receiptMeta && typeof receiptMeta.changes === "number" && receiptMeta.changes === 0) {
+                return new Response(
+                  JSON.stringify({
+                    error: "CONCURRENT_ACTION_CONFLICT",
+                    detail: "ئەم پسوولەیە لەلایەن کردارێکی هاوکاتی ترەوە بڕیاری لەسەر دراوە.",
+                  }),
+                  { status: 409, headers: responseHeaders }
+                );
+              }
+            } else {
+              const updateRes = await updateReceiptStmt.run();
+              if (updateRes?.meta && typeof updateRes.meta.changes === "number" && updateRes.meta.changes === 0) {
+                return new Response(
+                  JSON.stringify({
+                    error: "CONCURRENT_ACTION_CONFLICT",
+                    detail: "ئەم پسوولەیە لەلایەن کردارێکی هاوکاتی ترەوە بڕیاری لەسەر دراوە.",
+                  }),
+                  { status: 409, headers: responseHeaders }
+                );
+              }
+              await upsertSubStmt.run();
+              await notifStmt.run();
             }
 
             return new Response(
               JSON.stringify({
                 ok: true,
-                message: `پسوولەی (${receiptId}) پەسەندکرا و هەژماری (${receipt.user_id}) بۆ ماوەی (${planId === "yearly" ? "ساڵانە" : "مانگانە"}) کرا بە Active.`,
+                message: `پسوولەی (${receiptId}) پەسەندکرا و هەژماری (${receipt.user_id}) بۆ ماوەی (${planId === "yearly" ? "ساڵانە" : "مانگانە"}) تا ${new Date(endsAt).toLocaleDateString("en-GB")} کرا بە Active.`,
               }),
               { status: 200, headers: responseHeaders }
             );
           } else {
-            // Reject action
-            const reason = body.rejectionReason?.trim() || "کۆدی پسوولەکە یان بڕی نێردراو لەگەڵ تۆماری فاستپەی یەکناگرێتەوە.";
-            await env.DB.prepare(
-              "UPDATE payment_receipts SET status = 'rejected', notes = ?, reviewed_at = ?, reviewed_by = ? WHERE id = ?"
+            // Reject action: conditional atomic update
+            const reason = (body.rejectionReason?.trim() || "کۆدی پسوولەکە یان بڕی نێردراو لەگەڵ تۆماری فاستپەی یەکناگرێتەوە.").slice(0, 500);
+            const rejectResult = await env.DB.prepare(
+              "UPDATE payment_receipts SET status = 'rejected', notes = ?, reviewed_at = ?, reviewed_by = ? WHERE id = ? AND status = 'pending'"
             ).bind(reason, now, adminEmail, receiptId).run();
+
+            const meta = rejectResult?.meta;
+            if (meta && typeof meta.changes === "number" && meta.changes === 0) {
+              return new Response(
+                JSON.stringify({
+                  error: "CONCURRENT_ACTION_CONFLICT",
+                  detail: "ئەم پسوولەیە پێشتر لەلایەن کرداریێکی هاوکاتەوە بڕیاری لەسەر دراوە.",
+                }),
+                { status: 409, headers: responseHeaders }
+              );
+            }
 
             return new Response(
               JSON.stringify({
@@ -2646,7 +2720,25 @@ export default {
 
       // GET /api/subscription/status
       if (pathname === "/api/subscription/status" && request.method === "GET") {
-        const userId = url.searchParams.get("userId")?.trim();
+        let userId = url.searchParams.get("userId")?.trim();
+        const authHeader = request.headers.get("Authorization");
+        if (authHeader && authHeader.startsWith("Bearer ")) {
+          const authResult = await verifyAuthWorker(request, env, responseHeaders);
+          if (authResult instanceof Response) return authResult;
+          if (userId && userId !== authResult.user.uid && authResult.user.email !== "addmin.official.idg@gmail.com") {
+            return new Response(
+              JSON.stringify({
+                error: "FORBIDDEN",
+                detail: "ڕێگەپێدراو نیت بۆ بینینی دۆخی بەشداریکردنی بەکارهێنەری تر.",
+              }),
+              { status: 403, headers: responseHeaders }
+            );
+          }
+          if (!userId) {
+            userId = authResult.user.uid;
+          }
+        }
+
         if (!userId) {
           return new Response(JSON.stringify({ error: "userId is required" }), {
             status: 400,
@@ -2702,6 +2794,13 @@ export default {
             headers: responseHeaders,
           });
         }
+
+        // 🚨 AUTH GUARD: Student must be authenticated
+        const authResult = await verifyAuthWorker(request, env, responseHeaders);
+        if (authResult instanceof Response) return authResult;
+        const verifiedUserId = authResult.user.uid;
+        const verifiedEmail = authResult.user.email || "";
+
         try {
           const body = (await request.json().catch(() => ({}))) as {
             userId?: string;
@@ -2713,37 +2812,93 @@ export default {
             notes?: string;
           };
 
-          const userId = body.userId?.trim();
-          const receiptCode = body.receiptCode?.trim();
-          const planId = body.planId === "yearly" ? "yearly" : "monthly";
-          const amount = planId === "yearly" ? "٩٥,٠٠٠ دینار" : "١٥,٠٠٠ دینار";
-          const studentName = body.studentName?.trim() || "";
-          const studentEmail = body.studentEmail?.trim() || "";
-          const studentPhone = body.studentPhone?.trim() || "";
-          const notes = body.notes?.trim() || "";
+          // 🚨 FORGED USER ID GUARD: Student cannot submit receipts on behalf of another user
+          if (body.userId && body.userId !== verifiedUserId) {
+            return new Response(
+              JSON.stringify({
+                error: "FORBIDDEN_USER_MISMATCH",
+                detail: "ناتوانیت لە جیاتی کەسێکی تر پسوولە تۆمار بکەیت.",
+              }),
+              { status: 403, headers: responseHeaders }
+            );
+          }
 
-          if (!userId) {
+          // 🚨 PLAN WHITELIST VALIDATION: Only monthly and yearly are allowed
+          const rawPlanId = body.planId?.trim();
+          if (!rawPlanId || !["monthly", "yearly"].includes(rawPlanId)) {
             return new Response(
-              JSON.stringify({ error: "ناسنامەی بەکارهێنەر پێویستە (userId is required)" }),
+              JSON.stringify({
+                error: "INVALID_PLAN",
+                detail: "پلانی هەڵبژێردراو نادروستە. تەنها پلانی مانگانە (monthly) یان ساڵانە (yearly) ڕێگەپێدراوە.",
+              }),
               { status: 400, headers: responseHeaders }
             );
           }
-          if (!receiptCode || receiptCode.length < 3) {
+          const planId = rawPlanId as "monthly" | "yearly";
+
+          // Server-enforced pricing (cannot be tampered with by client)
+          const amount = planId === "yearly" ? "٩٥,٠٠٠ دینار" : "١٥,٠٠٠ دینار";
+
+          // 🚨 RECEIPT CODE VALIDATION & SANITIZATION: Alphanumeric 4-64 characters
+          const rawCode = (body.receiptCode || "").trim();
+          if (!rawCode || !/^[A-Za-z0-9\-_]{4,64}$/.test(rawCode)) {
             return new Response(
-              JSON.stringify({ error: "تکایە ژمارەی پسوولە یان کۆدی مامەڵەی فاستپەی بنووسە" }),
+              JSON.stringify({
+                error: "INVALID_RECEIPT_CODE",
+                detail: "کۆدی پسوولەی فاستپەی نادروستە. پێویستە لە نێوان ٤ بۆ ٦٤ پیت و ژمارە بێت بەبێ هێمای نائاسایی.",
+              }),
               { status: 400, headers: responseHeaders }
             );
           }
+          const receiptCode = rawCode.toUpperCase();
+
+          // 🚨 DUPLICATE RECEIPT CODE GUARD: Prevent replay attacks
+          const existingReceipt = await env.DB.prepare(
+            "SELECT id, status FROM payment_receipts WHERE receipt_code = ? AND status IN ('pending', 'approved')"
+          ).bind(receiptCode).first<{ id: string; status: string }>();
+
+          if (existingReceipt) {
+            return new Response(
+              JSON.stringify({
+                error: "DUPLICATE_RECEIPT_CODE",
+                detail: "ئەم کۆدی پسوولەیە پێشتر تۆمارکراوە یان لەژێر وردبینیدایە.",
+              }),
+              { status: 409, headers: responseHeaders }
+            );
+          }
+
+          const now = Date.now();
+
+          // 🚨 RATE LIMIT: Max 5 submissions per hour per student
+          const oneHourAgo = now - 3600000;
+          const rateCheck = await env.DB.prepare(
+            "SELECT count(*) as count FROM payment_receipts WHERE user_id = ? AND submitted_at > ?"
+          ).bind(verifiedUserId, oneHourAgo).first<{ count: number }>();
+
+          if (rateCheck && Number(rateCheck.count) >= 5) {
+            return new Response(
+              JSON.stringify({
+                error: "RATE_LIMIT_EXCEEDED",
+                detail: "ڕێژەی ناردنی پسوولە تێپەڕیوە. تکایە چاوەڕوان بە پێش ئەوەی پسوولەی نوێ بنێریت (تەنها ٥ پسوولە لە کاتژمێرێکدا).",
+              }),
+              { status: 429, headers: responseHeaders }
+            );
+          }
+
+          // Sanitize metadata fields
+          const studentName = (body.studentName || "").trim().slice(0, 100);
+          const studentEmail = (body.studentEmail || verifiedEmail).trim().slice(0, 120);
+          const studentPhone = (body.studentPhone || "").trim().slice(0, 30);
+          const notes = (body.notes || "").trim().slice(0, 500);
 
           const receiptId = `rcpt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-          const now = Date.now();
 
           await env.DB.prepare(
             `INSERT INTO payment_receipts (id, user_id, student_name, student_email, student_phone, plan_id, amount, receipt_code, status, notes, submitted_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`
           ).bind(
             receiptId,
-            userId,
+            verifiedUserId,
             studentName,
             studentEmail,
             studentPhone,
@@ -2778,17 +2933,29 @@ export default {
             headers: responseHeaders,
           });
         }
-        const userId = url.searchParams.get("userId")?.trim();
-        if (!userId) {
-          return new Response(JSON.stringify({ error: "userId is required" }), {
-            status: 400,
-            headers: responseHeaders,
-          });
+
+        // 🚨 AUTH GUARD: Ensure caller is authenticated
+        const authResult = await verifyAuthWorker(request, env, responseHeaders);
+        if (authResult instanceof Response) return authResult;
+        const verifiedUserId = authResult.user.uid;
+
+        // If specific userId requested, prevent snooping other users' receipts
+        const reqUserId = url.searchParams.get("userId")?.trim();
+        if (reqUserId && reqUserId !== verifiedUserId && authResult.user.email !== "addmin.official.idg@gmail.com") {
+          return new Response(
+            JSON.stringify({
+              error: "FORBIDDEN",
+              detail: "ڕێگەپێدراو نیت بۆ بینینی پسوولەکانی بەکارهێنەری تر.",
+            }),
+            { status: 403, headers: responseHeaders }
+          );
         }
+        const targetUserId = reqUserId || verifiedUserId;
+
         try {
           const res = await env.DB.prepare(
-            "SELECT id, user_id, student_name, student_phone, plan_id, amount, receipt_code, status, notes, submitted_at, reviewed_at FROM payment_receipts WHERE user_id = ? ORDER BY submitted_at DESC LIMIT 10"
-          ).bind(userId).all<unknown>();
+            "SELECT id, user_id, student_name, student_phone, plan_id, amount, receipt_code, status, notes, submitted_at, reviewed_at FROM payment_receipts WHERE user_id = ? ORDER BY submitted_at DESC LIMIT 20"
+          ).bind(targetUserId).all<unknown>();
           return new Response(JSON.stringify({ ok: true, receipts: res?.results || [] }), {
             status: 200,
             headers: responseHeaders,

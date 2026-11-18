@@ -7,7 +7,7 @@ import type { AdminPreferenceMemory, AuditLogEntry, ExecutionPlan } from '../typ
 
 export interface D1PreparedStatement {
   bind(...params: unknown[]): D1PreparedStatement;
-  run<T = unknown>(): Promise<{ success: boolean; error?: string; results?: T[] }>;
+  run<T = unknown>(): Promise<{ success: boolean; error?: string; results?: T[]; meta?: { changes?: number; [k: string]: unknown } }>;
   all<T = unknown>(): Promise<{ results: T[] }>;
   first<T = unknown>(colName?: string): Promise<T | null>;
 }
