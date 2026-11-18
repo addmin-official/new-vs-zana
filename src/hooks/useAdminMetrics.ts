@@ -96,7 +96,7 @@ export function useAdminMetrics() {
       startOfToday.setHours(0, 0, 0, 0);
       const startOfTodayTimestamp = Timestamp.fromDate(startOfToday);
 
-      // 1. Total Students: query collection('users') where role == 'student'
+      // 1. Total Students: query collection('users') and collection('students')
       let totalStudents = 0;
       try {
         const studentsQuery = query(
@@ -107,10 +107,27 @@ export function useAdminMetrics() {
         totalStudents = countSnap.data().count;
       } catch {
         // Fallback to docs count if aggregation index not ready
-        const fallbackSnap = await getDocs(
-          query(collection(db, "users"), where("role", "==", "student"))
-        );
-        totalStudents = fallbackSnap.size;
+        try {
+          const fallbackSnap = await getDocs(
+            query(collection(db, "users"), where("role", "==", "student"))
+          );
+          totalStudents = fallbackSnap.size;
+        } catch {
+          totalStudents = 0;
+        }
+      }
+
+      // Also include documents in 'students' collection
+      try {
+        const studentsColCount = await getCountFromServer(collection(db, "students"));
+        totalStudents = Math.max(totalStudents, studentsColCount.data().count);
+      } catch {
+        try {
+          const studentsColSnap = await getDocs(collection(db, "students"));
+          totalStudents = Math.max(totalStudents, studentsColSnap.size);
+        } catch {
+          // Non-blocking
+        }
       }
 
       // 2. New Students Today

@@ -11,6 +11,7 @@ import { useTheme } from "../context/ThemeContext.tsx";
 import { useSoundEffects } from "../hooks/useSoundEffects.ts";
 import { StudentStreakAndBadges } from "../components/StudentStreakAndBadges.tsx";
 import { logoutUser } from "../services/authService.ts";
+import { DataPrivacySection } from "../features/student/DataPrivacySection.tsx";
 
 interface ProfileScreenProps {
   profile: StudentProfile;
@@ -424,6 +425,9 @@ export function ProfileScreen({ profile, onUpdateProfile, onResetAll }: ProfileS
           </div>
         </div>
       </ZanaCard>
+
+      {/* Data Usage & Privacy Transparency Section */}
+      <DataPrivacySection profile={profile} masteryProfile={masteryProfile || null} />
 
       {/* Account & Session Management */}
       <ZanaCard>

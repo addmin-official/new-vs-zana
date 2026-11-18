@@ -11,7 +11,7 @@
 import React, { useState, useEffect } from "react";
 import { onIdTokenChanged, User } from "firebase/auth";
 import { getFirebaseAuth } from "../services/firebase.ts";
-import { isAdmin, getMyRole } from "./roles.ts";
+import { isAdmin, getMyRole, ADMIN_EMAIL } from "./roles.ts";
 
 export interface RouteGuardProps {
   children: React.ReactNode;
@@ -37,9 +37,24 @@ export function AdminRoute({
       return;
     }
 
-    const unsub = onIdTokenChanged(auth, async (user: User | null) => {
-      if (!user) {
+    const initAuth = async () => {
+      if (typeof auth.authStateReady === "function") {
+        await auth.authStateReady();
+      }
+      if (!isMounted) return;
+      if (auth.currentUser) {
+        const adminStatus = await isAdmin(auth.currentUser);
+        if (isMounted) setIsAuthorized(adminStatus);
+      } else {
         if (isMounted) setIsAuthorized(false);
+      }
+    };
+    void initAuth();
+
+    const unsub = onIdTokenChanged(auth, async (user: User | null) => {
+      if (!isMounted) return;
+      if (!user) {
+        setIsAuthorized(false);
         return;
       }
 
@@ -60,9 +75,15 @@ export function AdminRoute({
   useEffect(() => {
     if (isAuthorized === false && typeof window !== "undefined") {
       const auth = getFirebaseAuth();
-      import("./roles.ts").then(({ logFailedAdminAccess }) => {
-        void logFailedAdminAccess(auth?.currentUser?.email, window.location.pathname);
-      }).catch(() => {});
+      const currentEmail = auth?.currentUser?.email?.toLowerCase();
+      const isActualAdmin = currentEmail === ADMIN_EMAIL.toLowerCase();
+      const attemptedPath = window.location.pathname;
+
+      if (!isActualAdmin) {
+        import("./roles.ts").then(({ logFailedAdminAccess }) => {
+          void logFailedAdminAccess(auth?.currentUser?.email, attemptedPath);
+        }).catch(() => {});
+      }
 
       window.history.replaceState(null, "", fallbackRedirect);
       window.dispatchEvent(new PopStateEvent("popstate"));

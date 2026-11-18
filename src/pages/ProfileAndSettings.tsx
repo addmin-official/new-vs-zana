@@ -15,7 +15,29 @@ import {
   LogIn,
   Lock,
   CreditCard,
+  HardDrive,
+  Trash2,
+  RotateCcw,
+  Sliders,
+  Download,
+  FileText,
+  ShieldCheck,
+  RefreshCw,
+  Database,
 } from "lucide-react";
+import {
+  calculateLocalCacheMetrics,
+  clearLocalCache,
+  getPersonalizationSettings,
+  savePersonalizationSettings,
+  resetPersonalizationSettings,
+  exportStudentData,
+  type CacheMetrics,
+  type PersonalizationSettings,
+  type TutorStyle,
+  type LearningPace,
+  type DifficultyLevel,
+} from "../services/dataUsageService.ts";
 import { useAppStore } from "../store/appStore.ts";
 import { useSoundEffects } from "../hooks/useSoundEffects.ts";
 import { Modal } from "../components/Modal.tsx";
@@ -171,12 +193,85 @@ export function ProfileAndSettings({
   const [subStatus, setSubStatus] = useState<StudentSubscriptionStatus | null>(null);
   const [saveToast, setSaveToast] = useState<string | null>(null);
 
+  // Data Usage & Privacy state
+  const [cacheMetrics, setCacheMetrics] = useState<CacheMetrics>(() => calculateLocalCacheMetrics());
+  const [isClearingCache, setIsClearingCache] = useState(false);
+  const [showClearCacheModal, setShowClearCacheModal] = useState(false);
+  const [personalization, setPersonalization] = useState<PersonalizationSettings>(() =>
+    getPersonalizationSettings(studentProfile?.id || user.id)
+  );
+  const [isSavingPersonalization, setIsSavingPersonalization] = useState(false);
+  const [showResetPersonalizationModal, setShowResetPersonalizationModal] = useState(false);
+
   React.useEffect(() => {
     const studentId = studentProfile?.id || user.id;
     if (studentId) {
       getSubscriptionStatus(studentId).then(setSubStatus).catch(() => {});
     }
   }, [studentProfile?.id, user.id, showSubModal]);
+
+  React.useEffect(() => {
+    const studentId = studentProfile?.id || user.id;
+    setPersonalization(getPersonalizationSettings(studentId));
+    setCacheMetrics(calculateLocalCacheMetrics());
+  }, [studentProfile?.id, user.id, activeTab]);
+
+  const handleClearCache = async () => {
+    setIsClearingCache(true);
+    try {
+      const result = await clearLocalCache({
+        clearAiResponses: true,
+        clearCurriculumCache: true,
+        clearChatHistory: false,
+      });
+      setCacheMetrics(calculateLocalCacheMetrics());
+      setShowClearCacheModal(false);
+      playSuccess();
+      setSaveToast(`کاشی لۆکاڵ بە سەرکەوتوویی سڕایەوە (${result.clearedKb} KB ئازاد کرا) ✅`);
+      setTimeout(() => setSaveToast(null), 3500);
+    } catch {
+      setSaveToast("هەڵەیەک ڕوویدا لە کاتی سڕینەوەی کاش");
+      setTimeout(() => setSaveToast(null), 3500);
+    } finally {
+      setIsClearingCache(false);
+    }
+  };
+
+  const handleSavePersonalization = () => {
+    setIsSavingPersonalization(true);
+    try {
+      const studentId = studentProfile?.id || user.id;
+      savePersonalizationSettings(personalization, studentId);
+      playSuccess();
+      setSaveToast("ڕێکخستنەکانی کەسیاندن بە سەرکەوتوویی پاشەکەوت کران ✅");
+      setTimeout(() => {
+        setIsSavingPersonalization(false);
+        setSaveToast(null);
+      }, 3000);
+    } catch {
+      setSaveToast("هەڵەیەک ڕوویدا لە پاشەکەوتکردنی کەسیاندندا");
+      setIsSavingPersonalization(false);
+      setTimeout(() => setSaveToast(null), 3500);
+    }
+  };
+
+  const handleResetPersonalization = () => {
+    const studentId = studentProfile?.id || user.id;
+    const reset = resetPersonalizationSettings(studentId);
+    setPersonalization(reset);
+    setShowResetPersonalizationModal(false);
+    playSuccess();
+    setSaveToast("یادگەی کەسیاندن و پێشنیارەکان بە سەرکەوتوویی ڕێکخرانەوە 🔄");
+    setTimeout(() => setSaveToast(null), 3500);
+  };
+
+  const handleExportData = () => {
+    const studentId = studentProfile?.id || user.id;
+    exportStudentData(studentId, studentProfile || user);
+    playSuccess();
+    setSaveToast("کۆپی داتاکانت ئامادەکرا و داگیرا 📥");
+    setTimeout(() => setSaveToast(null), 3500);
+  };
 
   const handleSaveProfile = () => {
     const updatedName = name.trim() || studentProfile?.name || user.name;
@@ -252,7 +347,7 @@ export function ProfileAndSettings({
             { id: "profile", label: "پرۆفایل" },
             { id: "preferences", label: "هەڵبژاردەکان" },
             { id: "account", label: "هەژمار" },
-            { id: "privacy", label: "تایبەتمەندی" },
+            { id: "privacy", label: "داتا و تایبەتمەندی" },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -952,16 +1047,332 @@ export function ProfileAndSettings({
         </div>
       )}
 
-      {/* TAB 4: PRIVACY & DATA */}
+      {/* TAB 4: DATA USAGE & PRIVACY (بەکارهێنانی داتا و تایبەتمەندی) */}
       {activeTab === "privacy" && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
-          <div className="space-y-1 border-b border-slate-100 pb-3">
-            <h2 className="font-sans font-bold text-base text-slate-900">تایبەتمەندی و بەڕێوەبردنی داتا</h2>
-            <p className="font-sans text-xs text-slate-500">کۆنتڕۆڵی بەشکردنی داتا و پاراستنی زانیارییە ئەکادیمییەکان</p>
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-8">
+          {/* Section Header */}
+          <div className="space-y-1 border-b border-slate-100 pb-4">
+            <div className="flex items-center gap-2">
+              <span className="p-2 bg-indigo-50 text-indigo-600 rounded-xl border border-indigo-100">
+                <Database className="w-5 h-5" />
+              </span>
+              <div>
+                <h2 className="font-sans font-black text-lg text-slate-900">
+                  بەکارهێنانی داتا و تایبەتمەندی (Data Usage & Privacy)
+                </h2>
+                <p className="font-sans text-xs text-slate-500">
+                  بەڕێوەبردنی کاش و کۆگای ئامێرەکە، شێوازی کەسیاندنی زانا، و کۆنتڕۆڵی پاراستنی زانیارییەکان
+                </p>
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-3">
-            <label className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-sans cursor-pointer">
+          {/* CARD 1: LOCAL CACHE & STORAGE MANAGEMENT */}
+          <div className="p-5 bg-gradient-to-br from-slate-50 to-indigo-50/30 rounded-2xl border border-slate-200/80 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/60 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-indigo-600 text-white shadow-xs">
+                  <HardDrive className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-sans font-bold text-sm text-slate-900">
+                    کۆگای ناوخۆیی و کاشی ئامێرەکە (Local Cache Storage)
+                  </h3>
+                  <p className="text-[11px] text-slate-500 font-sans">
+                    داتا کاتییەکان کە لە وێبگەڕەکەت پاشەکەوت کراون بۆ خێراترکردنی وەڵامەکان
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <span className="text-xs font-mono font-bold text-indigo-700 bg-white px-3 py-1.5 rounded-xl border border-indigo-200 shadow-2xs">
+                  {cacheMetrics.formattedSize}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCacheMetrics(calculateLocalCacheMetrics())}
+                  title="نوێکردنەوەی ئاماری کاش"
+                  className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Cache Breakdown Chips */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs font-sans">
+              <div className="p-3 bg-white rounded-xl border border-slate-200/80 flex items-center justify-between">
+                <span className="text-slate-600">کاشی وانە و پرۆگرام (SWR)</span>
+                <span className="font-bold text-emerald-600 font-mono text-[11px]">پاشەکەوتکراو</span>
+              </div>
+              <div className="p-3 bg-white rounded-xl border border-slate-200/80 flex items-center justify-between">
+                <span className="text-slate-600">وەڵامەکانی زانا و ئۆفلاین</span>
+                <span className="font-bold text-indigo-600 font-mono text-[11px]">ئامادەکراو</span>
+              </div>
+              <div className="p-3 bg-white rounded-xl border border-slate-200/80 flex items-center justify-between">
+                <span className="text-slate-600">ڕەشنووسی تاقیکردنەوەکان</span>
+                <span className="font-bold text-amber-600 font-mono text-[11px]">لۆکاڵ</span>
+              </div>
+            </div>
+
+            {/* Clear Cache Action */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+              <p className="text-[11px] text-slate-500 font-sans leading-relaxed">
+                💡 سڕینەوەی کاش تەنها زانیارییە کاتییەکان پاک دەکاتەوە و شوێن لە ئامێرەکەت ئازاد دەکات بەبێ ئەوەی کار لە نمرە یان هەژمارەکەت بکات.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowClearCacheModal(true)}
+                disabled={isClearingCache}
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-indigo-700 bg-white border border-indigo-300 hover:bg-indigo-50 transition-all cursor-pointer shadow-xs shrink-0 disabled:opacity-50"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-indigo-600" />
+                <span>سڕینەوەی کاشی ناوخۆیی (Clear Cache)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* CARD 2: PERSONALIZATION DATA MANAGEMENT */}
+          <div className="p-5 bg-white rounded-2xl border border-slate-200 space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-purple-600 text-white shadow-xs">
+                  <Brain className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-sans font-bold text-sm text-slate-900">
+                    بەڕێوەبردنی داتای کەسیاندن و شێوازی فێربوون (Personalization Data)
+                  </h3>
+                  <p className="text-[11px] text-slate-500 font-sans">
+                    ڕێکخستنی شێوازی قسەکردن و ڕوونکردنەوەکانی مامۆستا زانا بەپێی ئارەزووی خۆت
+                  </p>
+                </div>
+              </div>
+
+              <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-200 self-start sm:self-auto">
+                کەسیاندنی زیرەک ✨
+              </span>
+            </div>
+
+            {/* 1. Tutor Pedagogy Style */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-800 font-sans flex items-center gap-1.5">
+                <Sliders className="w-3.5 h-3.5 text-purple-600" />
+                <span>شێوازی فێرکاریی مامۆستا زانا:</span>
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                {[
+                  {
+                    id: "socratic" as TutorStyle,
+                    title: "شێوازی سوقراتی",
+                    desc: "هاندانی بیرکردنەوە بە پرسیاری زنجیرەیی 🧠",
+                  },
+                  {
+                    id: "comprehensive" as TutorStyle,
+                    title: "ڕوونکردنەوەی تەواو",
+                    desc: "شیکردنەوەی بنەڕەتی بە نموونەی ڕوون 📖",
+                  },
+                  {
+                    id: "balanced" as TutorStyle,
+                    title: "هاوسەنگ و گفتوگۆیی",
+                    desc: "تێکەڵەیەک لە گفتوگۆ، شیکار و ڕێنمایی ⚖️",
+                  },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setPersonalization((prev) => ({ ...prev, tutorStyle: item.id }))}
+                    className={`p-3 rounded-xl border text-right transition-all cursor-pointer ${
+                      personalization.tutorStyle === item.id
+                        ? "bg-purple-50/80 border-purple-500 ring-2 ring-purple-500/20 shadow-xs"
+                        : "bg-slate-50/60 border-slate-200 hover:bg-slate-100/80 text-slate-700"
+                    }`}
+                  >
+                    <span className="font-sans font-bold text-xs text-slate-900 block">{item.title}</span>
+                    <span className="font-sans text-[11px] text-slate-500 block mt-0.5">{item.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 2. Learning Pace */}
+            <div className="space-y-2 pt-2">
+              <label className="text-xs font-bold text-slate-800 font-sans flex items-center gap-1.5">
+                <span>خێرایی و قووڵیی پێشکەوتن:</span>
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                {[
+                  {
+                    id: "standard" as LearningPace,
+                    title: "ئاسایی (Standard)",
+                    desc: "هاوتا لەگەڵ پلانی هەفتانەی پڕۆگرام",
+                  },
+                  {
+                    id: "gradual" as LearningPace,
+                    title: "هەنگاو بە هەنگاو (Gradual)",
+                    desc: "شیکردنەوەی وردتر و کاتی زیاتر بۆ تێگەیشتن",
+                  },
+                  {
+                    id: "intensive" as LearningPace,
+                    title: "چڕ و خێرا (Intensive)",
+                    desc: "سەرنج لەسەر پرسیارە گرنگ و وزارییەکان",
+                  },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setPersonalization((prev) => ({ ...prev, learningPace: item.id }))}
+                    className={`p-3 rounded-xl border text-right transition-all cursor-pointer ${
+                      personalization.learningPace === item.id
+                        ? "bg-indigo-50/80 border-indigo-500 ring-2 ring-indigo-500/20 shadow-xs"
+                        : "bg-slate-50/60 border-slate-200 hover:bg-slate-100/80 text-slate-700"
+                    }`}
+                  >
+                    <span className="font-sans font-bold text-xs text-slate-900 block">{item.title}</span>
+                    <span className="font-sans text-[11px] text-slate-500 block mt-0.5">{item.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 3. Adaptive Difficulty Calibration */}
+            <div className="space-y-2 pt-2">
+              <label className="text-xs font-bold text-slate-800 font-sans flex items-center gap-1.5">
+                <span>ئاستی قورسی پرسیارە پێشنیارکراوەکان:</span>
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                {[
+                  {
+                    id: "adaptive" as DifficultyLevel,
+                    title: "خۆگونجێنەر (Adaptive) 🎯",
+                    desc: "بەپێی مێژووی نمرە و ئاستی وەڵامەکانت دەگۆڕێت",
+                  },
+                  {
+                    id: "foundational" as DifficultyLevel,
+                    title: "پتەوکردنی بنەماکان (Foundational) 🟢",
+                    desc: "پرسیارە ئاسان و ڕوونکەرەوە سەرەتایییەکان",
+                  },
+                  {
+                    id: "challenging" as DifficultyLevel,
+                    title: "ئاستبەرز و وزاری (Challenging) 🟣",
+                    desc: "تەرکیز لەسەر تاقیکردنەوە ئاڵۆز و بەهێزەکان",
+                  },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setPersonalization((prev) => ({ ...prev, difficultyLevel: item.id }))}
+                    className={`p-3 rounded-xl border text-right transition-all cursor-pointer ${
+                      personalization.difficultyLevel === item.id
+                        ? "bg-amber-50/80 border-amber-500 ring-2 ring-amber-500/20 shadow-xs"
+                        : "bg-slate-50/60 border-slate-200 hover:bg-slate-100/80 text-slate-700"
+                    }`}
+                  >
+                    <span className="font-sans font-bold text-xs text-slate-900 block">{item.title}</span>
+                    <span className="font-sans text-[11px] text-slate-500 block mt-0.5">{item.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Personalization Feature Toggles */}
+            <div className="space-y-2.5 pt-2 border-t border-slate-100">
+              <label className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-slate-50/70 text-xs font-sans cursor-pointer">
+                <div>
+                  <span className="font-bold text-slate-900 block">پێشنیارکردنی خودکاری وانەکان بەپێی چەمکە لاوازەکان</span>
+                  <span className="text-[11px] text-slate-500">زانا تەرکیز دەخاتە سەر ئەو وانانەی تێیاندا هەڵەت کردووە</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={personalization.allowAdaptiveRecommendations}
+                  onChange={(e) =>
+                    setPersonalization((prev) => ({
+                      ...prev,
+                      allowAdaptiveRecommendations: e.target.checked,
+                    }))
+                  }
+                  className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500"
+                />
+              </label>
+
+              <label className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-slate-50/70 text-xs font-sans cursor-pointer">
+                <div>
+                  <span className="font-bold text-slate-900 block">هەڵگرتنی یادگەی فێربوون و ڕوونکردنەوەکان</span>
+                  <span className="text-[11px] text-slate-500">یادکردنەوەی شێوازی تێگەیشتنت لە پرسیارەکانی داهاتوودا</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={personalization.allowAiExplanationMemory}
+                  onChange={(e) =>
+                    setPersonalization((prev) => ({
+                      ...prev,
+                      allowAiExplanationMemory: e.target.checked,
+                    }))
+                  }
+                  className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500"
+                />
+              </label>
+            </div>
+
+            {/* Action Buttons for Personalization */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowResetPersonalizationModal(true)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                <span>ڕێکخستنەوەی یادگەی کەسیاندن</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSavePersonalization}
+                disabled={isSavingPersonalization}
+                className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>پاشەکەوتکردنی ڕێکخستنی کەسیاندن</span>
+              </button>
+            </div>
+          </div>
+
+          {/* CARD 3: EXPORT LEARNING DATA */}
+          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 shadow-2xs">
+                <FileText className="w-4 h-4 text-indigo-600" />
+              </div>
+              <div>
+                <span className="font-sans font-bold text-xs text-slate-900 block">
+                  داگرتنی کۆپییەک لە داتاکانم (Export Learning Data)
+                </span>
+                <span className="font-sans text-[11px] text-slate-500">
+                  دەتوانیت پوختەی وانە تەواوکراوەکان، نمرەکان، و ڕێکخستنەکانت بە فۆرماتی JSON دابگریت
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleExportData}
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-slate-700 bg-white border border-slate-300 hover:bg-slate-100 transition-colors cursor-pointer shadow-2xs shrink-0"
+            >
+              <Download className="w-3.5 h-3.5 text-indigo-600" />
+              <span>داگرتنی داتا (Export)</span>
+            </button>
+          </div>
+
+          {/* CARD 4: PRIVACY & SHARING CONTROLS */}
+          <div className="p-5 bg-white rounded-2xl border border-slate-200 space-y-3">
+            <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              <h3 className="font-sans font-bold text-sm text-slate-900">
+                کۆنتڕۆڵی بەشکردنی داتا و پاراستنی تایبەتمەندی (Privacy Controls)
+              </h3>
+            </div>
+
+            <label className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-sans cursor-pointer">
               <span>ڕێگەپێدان بە مامۆستا بۆ بینینی نمرە و هەڵسەنگاندنەکان</span>
               <input
                 type="checkbox"
@@ -971,7 +1382,7 @@ export function ProfileAndSettings({
               />
             </label>
 
-            <label className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-sans cursor-pointer">
+            <label className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-sans cursor-pointer">
               <span>ڕێگەپێدان بە باوان بۆ داگرتنی ڕاپۆرتی مانگانە</span>
               <input
                 type="checkbox"
@@ -981,7 +1392,7 @@ export function ProfileAndSettings({
               />
             </label>
 
-            <label className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-sans cursor-pointer">
+            <label className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-sans cursor-pointer">
               <span>بەشداریکردنی داتای بێناونیشان بۆ باشترکردنی مۆدێلی زانا</span>
               <input
                 type="checkbox"
@@ -992,21 +1403,22 @@ export function ProfileAndSettings({
             </label>
           </div>
 
-          {/* Danger Zone */}
-          <div className="pt-4 border-t border-red-100 space-y-3">
+          {/* CARD 5: DANGER ZONE */}
+          <div className="pt-2 border-t border-red-100 space-y-3">
             <div className="flex items-center gap-2 text-red-600 font-bold text-xs">
               <AlertTriangle className="w-4 h-4" />
-              <span>ناوچەی هەستیار و سڕینەوەی گشتی</span>
+              <span>ناوچەی هەستیار و سڕینەوەی گشتی (Danger Zone)</span>
             </div>
 
-            <div className="p-4 bg-red-50/50 rounded-xl border border-red-200 flex items-center justify-between">
+            <div className="p-4 bg-red-50/50 rounded-xl border border-red-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <span className="font-bold text-xs text-red-900 block font-sans">سڕینەوەی گشتی سەرجەم داتا و مێژوو</span>
                 <span className="text-[11px] text-red-700 font-sans">ئەم کردارە گەڕانەوەی نییە و مێژووی چات و نمرەکان دەسڕێتەوە</span>
               </div>
               <button
+                type="button"
                 onClick={() => setShowDeleteModal(true)}
-                className="text-xs font-bold text-white bg-red-600 hover:bg-red-700 px-4 py-2 rounded-xl transition-colors cursor-pointer shadow-xs"
+                className="text-xs font-bold text-white bg-red-600 hover:bg-red-700 px-4 py-2 rounded-xl transition-colors cursor-pointer shadow-xs shrink-0"
               >
                 سڕینەوەی داتا
               </button>
@@ -1092,6 +1504,68 @@ export function ProfileAndSettings({
               className="text-xs font-bold px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white"
             >
               بەڵێ، بە تەواوی ڕەشیبکەرەوە
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Clear Cache Confirmation Modal */}
+      <Modal
+        isOpen={showClearCacheModal}
+        onClose={() => setShowClearCacheModal(false)}
+        title="سڕینەوەی کاشی ناوخۆیی (Clear Cache) 🧹"
+      >
+        <div className="space-y-4 text-right font-sans">
+          <p className="text-xs text-slate-600 leading-relaxed">
+            ئەم کردارە سەرجەم فایلە کاتییەکان، چەمکە پاشەکەوتکراوەکان و وەڵامە ئۆفلاینەکانی ناو ئەم ئامێرە پاک دەکاتەوە ({cacheMetrics.formattedSize}).
+          </p>
+          <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-[11px] text-emerald-800">
+            ✅ نمرەکانت، باجەکان، و هەژمارەکەت پارێزراون و ناسڕدرێنەوە.
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setShowClearCacheModal(false)}
+              className="text-xs px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 cursor-pointer"
+            >
+              پەشیمانبوونەوە
+            </button>
+            <button
+              type="button"
+              onClick={handleClearCache}
+              disabled={isClearingCache}
+              className="text-xs font-bold px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer shadow-xs disabled:opacity-50"
+            >
+              {isClearingCache ? "خاوێنکردنەوە..." : "بەڵێ، کاش بسڕەوە"}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Reset Personalization Confirmation Modal */}
+      <Modal
+        isOpen={showResetPersonalizationModal}
+        onClose={() => setShowResetPersonalizationModal(false)}
+        title="ڕێکخستنەوەی یادگەی کەسیاندن 🔄"
+      >
+        <div className="space-y-4 text-right font-sans">
+          <p className="text-xs text-slate-600 leading-relaxed">
+            ئەم کردارە شێوازی فێرکاری زانا و مێژووی چەمکە لاوازەکان دەگەڕێنێتەوە دۆخی سەرەتایی. لەمەودوا مامۆستا زانا سەرلەنوێ ئاست و شێوازی وەڵامەکانت هەڵدەسەنگێنێتەوە.
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setShowResetPersonalizationModal(false)}
+              className="text-xs px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 cursor-pointer"
+            >
+              پەشیمانبوونەوە
+            </button>
+            <button
+              type="button"
+              onClick={handleResetPersonalization}
+              className="text-xs font-bold px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white cursor-pointer shadow-xs"
+            >
+              ڕێکخستنەوەی کەسیاندن
             </button>
           </div>
         </div>

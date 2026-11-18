@@ -169,6 +169,49 @@ export async function migrateUsersMissingRole(dbOverride?: Firestore): Promise<M
     if (batchOperations > 0) {
       await batch.commit();
     }
+
+    // Also scan 'students' collection and ensure corresponding user documents exist with role: 'student'
+    try {
+      const studentsCol = collection(db, "students");
+      const studentsSnap = await getDocs(studentsCol);
+      for (const sDoc of studentsSnap.docs) {
+        const sData = sDoc.data();
+        const userRef = doc(db, "users", sDoc.id);
+        const userSnap = await getDoc(userRef);
+        if (!userSnap.exists()) {
+          const nowIso = sData.createdAt || new Date().toISOString();
+          await setDoc(
+            userRef,
+            {
+              id: sDoc.id,
+              uid: sDoc.id,
+              role: "student",
+              name: sData.name || "قوتابی",
+              displayName: sData.name || "قوتابی",
+              email: sData.email || "",
+              grade: sData.grade || "12",
+              stream: sData.stream || "scientific",
+              school: sData.school || "",
+              lastActive: sData.updatedAt || nowIso,
+              createdAt: nowIso,
+              updatedAt: sData.updatedAt || nowIso,
+              profile: {
+                name: sData.name || "قوتابی",
+                grade: sData.grade || "12",
+                stream: sData.stream || "scientific",
+                school: sData.school || "",
+                language: "ckb",
+                email: sData.email || "",
+              },
+            },
+            { merge: true }
+          );
+          result.migratedCount++;
+        }
+      }
+    } catch {
+      // Safe fallback
+    }
   } catch (err) {
     result.errors.push(`Migration error: ${err instanceof Error ? err.message : String(err)}`);
   }

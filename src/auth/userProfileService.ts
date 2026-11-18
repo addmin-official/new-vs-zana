@@ -142,7 +142,20 @@ export async function createUserDocumentIfMissing(
       const userRef = doc(db, "users", uid);
       const studentRef = doc(db, "students", uid);
 
+      const nowIso = new Date().toISOString();
       const payload = {
+        id: uid,
+        uid,
+        role: "student",
+        name: sanitizedName,
+        displayName: sanitizedName,
+        email: email || "",
+        grade: validatedGrade,
+        stream: validatedStream,
+        school: newProfile.school || "",
+        lastActive: nowIso,
+        createdAt: nowIso,
+        updatedAt: nowIso,
         profile: {
           name: sanitizedName,
           grade: validatedGrade,
@@ -156,8 +169,6 @@ export async function createUserDocumentIfMissing(
           notifications: true,
           language: "ckb",
         },
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
       };
 
       // Write to both users/{uid} and students/{uid}
@@ -166,13 +177,14 @@ export async function createUserDocumentIfMissing(
         setDoc(studentRef, {
           id: uid,
           name: sanitizedName,
+          email: email || "",
           grade: validatedGrade,
           stream: validatedStream,
           activeSubject: newProfile.activeSubject,
           school: newProfile.school || "",
           onboardingCompleted: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+          createdAt: nowIso,
+          updatedAt: nowIso,
         }, { merge: true }),
       ]);
     } catch (err) {

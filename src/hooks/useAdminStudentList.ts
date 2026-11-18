@@ -11,7 +11,7 @@ import {
   getDoc,
 } from "firebase/firestore";
 import { getFirebaseAuth, getFirestoreDb } from "../services/firebase.ts";
-import { isAdmin } from "../auth/roles.ts";
+import { isAdmin, ADMIN_EMAIL } from "../auth/roles.ts";
 
 export interface StudentListItem {
   id: string;
@@ -122,34 +122,94 @@ export function useAdminStudentList() {
     }
 
     try {
-      const q = query(
-        collection(db, "users"),
-        where("role", "==", "student"),
-        orderBy("lastActive", "desc"),
-        limit(100)
-      );
+      // 1. Fetch from 'students' collection (primary student table) and 'users' collection
+      const docsMap = new Map<string, Record<string, unknown>>();
 
-      let snap;
       try {
-        snap = await getDocs(q);
-      } catch {
-        // Fallback without orderBy in case composite index is building
-        snap = await getDocs(
-          query(collection(db, "users"), where("role", "==", "student"), limit(100))
+        const studentsSnap = await getDocs(
+          query(collection(db, "students"), limit(100))
         );
+        studentsSnap.forEach((docSnap) => {
+          docsMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() });
+        });
+      } catch (studentsErr) {
+        console.warn("[useAdminStudentList] Notice reading students collection:", studentsErr);
+      }
+
+      try {
+        let usersSnap;
+        try {
+          usersSnap = await getDocs(
+            query(
+              collection(db, "users"),
+              where("role", "==", "student"),
+              orderBy("lastActive", "desc"),
+              limit(100)
+            )
+          );
+        } catch {
+          usersSnap = await getDocs(
+            query(collection(db, "users"), where("role", "==", "student"), limit(100))
+          );
+        }
+        usersSnap.forEach((docSnap) => {
+          const existing = docsMap.get(docSnap.id) || { id: docSnap.id };
+          docsMap.set(docSnap.id, { ...existing, ...docSnap.data() });
+        });
+      } catch (usersErr) {
+        console.warn("[useAdminStudentList] Notice reading users collection:", usersErr);
+      }
+
+      // If docsMap is still empty, fallback to querying non-admin documents in users collection
+      if (docsMap.size === 0) {
+        try {
+          const allUsersSnap = await getDocs(query(collection(db, "users"), limit(100)));
+          allUsersSnap.forEach((d) => {
+            const data = d.data();
+            const email = (data.email || (data.profile as Record<string, unknown> | undefined)?.email || "").toLowerCase();
+            if (data.role !== "admin" && email !== ADMIN_EMAIL.toLowerCase()) {
+              docsMap.set(d.id, { id: d.id, ...data });
+            }
+          });
+        } catch {
+          // Non-blocking
+        }
       }
 
       const fifteenMinAgo = Date.now() - 15 * 60 * 1000;
 
+      // Filter out admin user from student list
+      const rawRecords = Array.from(docsMap.values()).filter((u) => {
+        const email = String(
+          u.email || (u.profile as Record<string, unknown> | undefined)?.email || ""
+        ).toLowerCase();
+        return email !== ADMIN_EMAIL.toLowerCase();
+      });
+
       // Parallel reads for subcollections / mastery / sessions
       const studentItems: StudentListItem[] = await Promise.all(
-        snap.docs.map(async (docSnap) => {
-          const u = docSnap.data();
-          const uid = docSnap.id;
+        rawRecords.map(async (u) => {
+          const uid = String(u.id);
+          const profile = (u.profile && typeof u.profile === "object") ? (u.profile as Record<string, unknown>) : {};
 
-          let masteryScore = typeof u.masteryScore === "number" ? u.masteryScore : 0.7;
-          let sessionsCount = typeof u.sessionsCount === "number" ? u.sessionsCount : 0;
-          let streakDays = typeof u.streakDays === "number" ? u.streakDays : 0;
+          let masteryScore =
+            typeof u.masteryScore === "number"
+              ? u.masteryScore
+              : typeof u.totalScore === "number"
+              ? Math.min(1, u.totalScore / 100)
+              : 0.7;
+          let sessionsCount =
+            typeof u.sessionsCount === "number"
+              ? u.sessionsCount
+              : typeof u.completedLessons === "number"
+              ? u.completedLessons
+              : 0;
+          let streakDays =
+            typeof u.streakDays === "number"
+              ? u.streakDays
+              : typeof u.streak === "number"
+              ? u.streak
+              : 0;
           let hasUnreliableSession = false;
           let masteryDropped = false;
 
@@ -189,12 +249,16 @@ export function useAdminStudentList() {
 
           // Compute last active & inactivity days
           let lastActiveTimestamp: Timestamp | null = null;
-          if (u.lastActive instanceof Timestamp) {
-            lastActiveTimestamp = u.lastActive;
-          } else if (u.lastActive) {
-            lastActiveTimestamp = Timestamp.fromDate(new Date(u.lastActive));
-          } else if (u.updatedAt instanceof Timestamp) {
-            lastActiveTimestamp = u.updatedAt;
+          const candidateTime = u.lastActive || u.updatedAt || u.createdAt;
+          if (candidateTime instanceof Timestamp) {
+            lastActiveTimestamp = candidateTime;
+          } else if (typeof candidateTime === "number") {
+            lastActiveTimestamp = Timestamp.fromMillis(candidateTime);
+          } else if (typeof candidateTime === "string") {
+            const parsed = new Date(candidateTime).getTime();
+            if (!isNaN(parsed)) {
+              lastActiveTimestamp = Timestamp.fromMillis(parsed);
+            }
           }
 
           const lastActiveMs = lastActiveTimestamp ? lastActiveTimestamp.toMillis() : 0;
@@ -206,12 +270,28 @@ export function useAdminStudentList() {
           const hasAnomaly =
             daysInactive >= 7 || masteryDropped || hasUnreliableSession;
 
+          const rawName = u.name || u.displayName || profile.name;
+          const name = typeof rawName === "string" && rawName.trim() ? rawName.trim() : "قوتابی بێ‌ناو";
+
+          const rawEmail = u.email || profile.email;
+          const email = typeof rawEmail === "string" && rawEmail.trim() ? rawEmail.trim() : "بێ ئیمەیڵ";
+
+          const rawGrade = String(u.grade || profile.grade || "12");
+          const grade = (rawGrade === "9" || rawGrade === "10" || rawGrade === "11" || rawGrade === "12")
+            ? (rawGrade as "9" | "10" | "11" | "12")
+            : "12";
+
+          const rawStream = String(u.stream || profile.stream || "scientific");
+          const stream = (rawStream === "literary" || rawStream === "general")
+            ? (rawStream as "literary" | "general")
+            : "scientific";
+
           return {
             id: uid,
-            name: u.name || u.displayName || "قوتابی بێ‌ناو",
-            email: u.email || "بێ ئیمەیڵ",
-            grade: (u.grade || "12") as "9" | "10" | "11" | "12",
-            stream: (u.stream || "scientific") as "scientific" | "literary" | "general",
+            name,
+            email,
+            grade,
+            stream,
             lastActive: lastActiveTimestamp,
             lastActiveLabel: computeRelativeTime(lastActiveTimestamp),
             masteryScore: Math.max(0, Math.min(1, masteryScore)),

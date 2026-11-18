@@ -50,14 +50,13 @@ export async function getMyRole(user: User | null, forceRefresh = false): Promis
       user.email && user.email.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase()
     );
 
-    // Double-check verification for admin role
-    if (roleClaim === ROLES.ADMIN && isExactAdminEmail) {
-      useAppStore.getState().setUserRole("admin");
-      return ROLES.ADMIN;
-    }
+    const hasAdminClaim =
+      roleClaim === ROLES.ADMIN ||
+      roleClaim === "SuperAdmin" ||
+      claims.admin === true;
 
-    // Secondary safety: if email matches hardcoded admin email, ensure claims reflect admin
-    if (isExactAdminEmail && claims.admin === true) {
+    // Strict Double Verification for admin role
+    if (hasAdminClaim && isExactAdminEmail) {
       useAppStore.getState().setUserRole("admin");
       return ROLES.ADMIN;
     }
@@ -74,7 +73,7 @@ export async function getMyRole(user: User | null, forceRefresh = false): Promis
 /**
  * Validates whether the given user possesses authoritative Admin privileges.
  * Returns true ONLY if BOTH conditions are met:
- * 1. Claims state `role === 'admin'` (or `claims.admin === true`)
+ * 1. Claims state `role === 'admin'`, `'SuperAdmin'`, or `claims.admin === true`
  * 2. User email matches `ADMIN_EMAIL` exactly.
  */
 export async function isAdmin(user: User | null, forceRefresh = false): Promise<boolean> {
@@ -93,8 +92,11 @@ export async function isAdmin(user: User | null, forceRefresh = false): Promise<
     const tokenResult = await user.getIdTokenResult(forceRefresh);
     const claims = tokenResult.claims as CustomClaimsStructure;
 
-    const hasAdminClaim = claims.role === ROLES.ADMIN || claims.admin === true;
-    return hasAdminClaim && emailMatches;
+    const hasAdminClaim =
+      claims.role === ROLES.ADMIN ||
+      claims.role === "SuperAdmin" ||
+      claims.admin === true;
+    return Boolean(hasAdminClaim && emailMatches);
   } catch (err) {
     console.error("[RBAC] Error validating admin claim:", err);
     return false;

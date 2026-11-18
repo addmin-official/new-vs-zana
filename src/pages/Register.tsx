@@ -16,6 +16,7 @@ import {
   Brain,
   ChevronLeft,
   ChevronRight,
+  Lock,
 } from "lucide-react";
 import {
   registerWithEmail,
@@ -528,24 +529,35 @@ export function Register({
                   className="grid grid-cols-3 gap-3"
                 >
                   {[
-                    { id: "scientific" as AcademicStream, label: "زانستی", icon: "⚗️" },
-                    { id: "literary" as AcademicStream, label: "وێژەیی", icon: "📚" },
-                    { id: "general" as AcademicStream, label: "گشتی", icon: "🌐" },
+                    { id: "scientific" as AcademicStream, label: "زانستی", icon: "⚗️", isLocked: false },
+                    { id: "literary" as AcademicStream, label: "وێژەیی", icon: "📚", isLocked: true },
+                    { id: "general" as AcademicStream, label: "گشتی", icon: "🌐", isLocked: true },
                   ].map((stream) => (
                     <button
                       key={stream.id}
                       type="button"
                       role="radio"
+                      disabled={stream.isLocked}
+                      aria-disabled={stream.isLocked}
                       aria-checked={selectedStream === stream.id}
-                      onClick={() => setSelectedStream(stream.id)}
-                      className={`p-3 rounded-2xl border text-center transition-all cursor-pointer min-h-[56px] touch-manipulation focus-visible:ring-3 focus-visible:ring-indigo-400 ${
-                        selectedStream === stream.id
-                          ? "bg-indigo-600/25 border-indigo-500 text-white ring-2 ring-indigo-500/30"
-                          : "bg-slate-800/60 border-slate-700 text-slate-300 hover:bg-slate-800"
+                      onClick={() => {
+                        if (!stream.isLocked) {
+                          setSelectedStream(stream.id);
+                        }
+                      }}
+                      className={`p-3 rounded-2xl border text-center transition-all min-h-[56px] touch-manipulation focus-visible:ring-3 focus-visible:ring-indigo-400 ${
+                        stream.isLocked
+                          ? "bg-slate-900/40 border-dashed border-slate-800 text-slate-500 cursor-not-allowed opacity-60"
+                          : selectedStream === stream.id
+                          ? "bg-indigo-600/25 border-indigo-500 text-white ring-2 ring-indigo-500/30 cursor-pointer"
+                          : "bg-slate-800/60 border-slate-700 text-slate-300 hover:bg-slate-800 cursor-pointer"
                       }`}
                     >
                       <span className="text-xl block" aria-hidden="true">{stream.icon}</span>
-                      <span className="text-xs font-bold block mt-1">{stream.label}</span>
+                      <span className="text-xs font-bold flex items-center justify-center gap-1 mt-1">
+                        <span>{stream.label}</span>
+                        {stream.isLocked && <Lock className="w-3 h-3 text-amber-500/80" />}
+                      </span>
                     </button>
                   ))}
                 </div>

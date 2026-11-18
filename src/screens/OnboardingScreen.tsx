@@ -16,9 +16,10 @@ import {
   Award,
   CheckCircle2,
   Check,
-  BookMarked,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Lock,
+  BookMarked,
 } from "lucide-react";
 
 export interface SubjectBookMockItem {
@@ -669,50 +670,26 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
                       type="button"
                       onClick={() => {
                         setActiveStreamTab("scientific");
-                        if (grade === "12") {
-                          setSelectedBookId("math");
-                          setSubject("math");
-                          setStream("scientific");
-                        } else if (grade === "11") {
-                          setSelectedBookId("g11_math");
-                          setSubject("math");
-                          setStream("scientific");
-                        } else if (grade === "10") {
-                          setSelectedBookId("g10_physics");
-                          setSubject("physics");
-                          setStream("scientific");
-                        } else {
-                          setSelectedBookId("");
-                        }
+                        setStream("scientific");
                       }}
-                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                        activeStreamTab === "scientific"
-                          ? "bg-[#2dd4bf] text-slate-950 font-black shadow-md shadow-teal-500/20"
-                          : "text-slate-400 hover:text-white"
-                      }`}
+                      className="px-3.5 py-1.5 rounded-xl text-xs font-black bg-[#2dd4bf] text-slate-950 shadow-md shadow-teal-500/20 cursor-default flex items-center gap-1.5"
                     >
-                      بەشی زانستی
+                      <Check className="w-3.5 h-3.5" />
+                      <span>بەشی زانستی</span>
                     </button>
-                    <button
-                      type="button"
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      aria-disabled="true"
                       onClick={() => {
-                        setActiveStreamTab("literary");
-                        if (grade === "12") {
-                          setSelectedBookId("kurdish");
-                          setSubject("kurdish");
-                          setStream("literary");
-                        } else {
-                          setSelectedBookId("");
-                        }
+                        setError("بەشی وێژەیی لە ئێستادا قوفڵکراوە و لە ماوەی داهاتوودا بۆ قوتابیان کارا دەبێت 🔒");
                       }}
-                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                        activeStreamTab === "literary"
-                          ? "bg-[#2dd4bf] text-slate-950 font-black shadow-md shadow-teal-500/20"
-                          : "text-slate-400 hover:text-white"
-                      }`}
+                      title="بەشی وێژەیی قوفڵکراوە (لە ماوەی داهاتوو کارا دەبێت ⏳)"
+                      className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-500 bg-slate-900/70 border border-slate-800 cursor-not-allowed opacity-75 flex items-center gap-1.5 select-none hover:border-amber-500/40 transition-colors"
                     >
-                      بەشی وێژەیی
-                    </button>
+                      <Lock className="w-3.5 h-3.5 text-amber-500" />
+                      <span>بەشی وێژەیی (قوفڵکراوە 🔒)</span>
+                    </div>
                   </div>
                 )}
               </div>
@@ -726,10 +703,10 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
                 const currentList = isGrade9
                   ? GRADE_9_SUBJECT_BOOKS
                   : isGrade12
-                  ? (activeStreamTab === "literary" ? LITERARY_SUBJECT_BOOKS : SCIENTIFIC_SUBJECT_BOOKS)
-                  : isGrade11 && activeStreamTab === "scientific"
+                  ? SCIENTIFIC_SUBJECT_BOOKS
+                  : isGrade11
                   ? GRADE_11_SCIENTIFIC_SUBJECT_BOOKS
-                  : isGrade10 && activeStreamTab === "scientific"
+                  : isGrade10
                   ? GRADE_10_SCIENTIFIC_SUBJECT_BOOKS
                   : [];
 

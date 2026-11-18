@@ -16,6 +16,7 @@ import {
   Landmark,
   Globe,
   TrendingUp,
+  Lock,
 } from "lucide-react";
 import {
   CURRICULUM_BACKBONE,
@@ -166,18 +167,13 @@ export const CurriculumBackboneExplorer: React.FC<CurriculumBackboneExplorerProp
             </button>
             <button
               type="button"
-              onClick={() => {
-                setStreamFilter("literary");
-                setSelectedSubjectKey("history");
-                setExpandedChapterId(null);
-              }}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                streamFilter === "literary"
-                  ? "bg-indigo-600 text-white"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
+              disabled
+              aria-disabled="true"
+              title="بەشی وێژەیی لە ماوەی داهاتوودا کارا دەکرێت"
+              className="px-3 py-1 rounded-lg text-xs font-bold transition-all bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60 flex items-center gap-1.5 select-none"
             >
-              بەشی وێژەیی
+              <Lock className="w-3 h-3 text-amber-500" />
+              <span>بەشی وێژەیی (قوفڵکراوە 🔒)</span>
             </button>
           </div>
         )}

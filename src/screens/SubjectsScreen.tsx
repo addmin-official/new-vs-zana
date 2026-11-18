@@ -721,13 +721,9 @@ export function SubjectsScreen({ profile, onSelectSubject, onNavigate }: Subject
       ? GRADE_11_TEXTBOOKS
       : GRADE_12_TEXTBOOKS;
 
-    // Filter strictly by the student's registered stream (Grade 9 is general for all)
+    // Filter strictly by scientific stream (Literary stream is locked across UI)
     if (studentGrade !== "9") {
-      if (studentStream === "scientific") {
-        list = list.filter((b) => b.stream === "scientific" || b.stream === "both");
-      } else if (studentStream === "literary") {
-        list = list.filter((b) => b.stream === "literary" || b.stream === "both");
-      }
+      list = list.filter((b) => b.stream === "scientific" || b.stream === "both");
     }
 
     // Filter by search query

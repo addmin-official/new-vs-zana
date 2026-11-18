@@ -18,16 +18,16 @@ const isTest =
   nodeEnv.ALLOW_TEST_AUTH_MOCK === "true";
 
 export const FALLBACK_FIREBASE_CONFIG = {
-  apiKey: "AIzaSyD_u4I9xPn6dFoSnDTe9pyNMQwltDEpjN0",
+  apiKey: "AIzaSyDHR1wy42EGBH37K6w6yAUC9OEO6hX8ons",
   authDomain: "gen-lang-client-0009572581.firebaseapp.com",
   projectId: "gen-lang-client-0009572581",
   storageBucket: "gen-lang-client-0009572581.firebasestorage.app",
   messagingSenderId: "958839183835",
   appId: "1:958839183835:web:80cec81bbb0227f7b82ffe",
   measurementId: "G-RG8T98ZHBB",
-  firestoreDatabaseId: "ai-studio-zana-61fd6b5f-d052-40d1-8657-de471d642e8c",
+  firestoreDatabaseId: "default",
   oAuthClientId: "958839183835-3bc7tgfegi6ohldn6imvj7l9goombl6d.apps.googleusercontent.com",
-  recaptchaSiteKey: "AIzaSyCE9MMzIC_o6dPDsrfYUlbZ8EMWAV6rdDI",
+  recaptchaSiteKey: "AIzaSyDpcEo0LJdjOg_ATmnFdrwVMKAX_MSOLVE",
 };
 
 // Helper: read from Vite env first, then Node env, then canonical fallback
