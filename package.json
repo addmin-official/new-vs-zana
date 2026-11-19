@@ -100,6 +100,7 @@
     "cross-spawn": "7.0.6",
     "micromatch": "4.0.8",
     "brace-expansion": "1.1.21",
+    "minimatch": "11.0.9",
     "postcss": "8.5.33",
     "js-yaml": "4.3.2",
     "@opentelemetry/core": "2.12.1",
