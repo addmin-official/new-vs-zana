@@ -51,19 +51,16 @@ export function Login({
       // Handled
     }
 
-    const role = await getMyRole(user as unknown as import("firebase/auth").User, true);
+    const navigate = (path: string) => {
+      if (typeof window !== "undefined") {
+        window.history.pushState(null, "", path);
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      }
+    };
 
-    if (role === "admin") {
-      if (typeof window !== "undefined") {
-        window.history.pushState(null, "", "/admin");
-        window.dispatchEvent(new PopStateEvent("popstate"));
-      }
-    } else {
-      if (typeof window !== "undefined") {
-        window.history.pushState(null, "", "/home");
-        window.dispatchEvent(new PopStateEvent("popstate"));
-      }
-    }
+    const role = await getMyRole(user as unknown as import("firebase/auth").User);
+    if (role === "admin") navigate("/admin");
+    else navigate("/home");
 
     const check = await checkUserExists(user.uid);
     onLoginSuccess?.(!check.exists, role);

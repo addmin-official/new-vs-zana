@@ -49,7 +49,6 @@ export const NAV_ITEMS: { key: NavItemKey; label: string; path: string }[] = [
   { key: "assessment", label: "هەڵسەنگاندن", path: "/assessment" },
   { key: "plan", label: "پلان", path: "/plan" },
   { key: "rooms", label: "ژوورەکان", path: "/rooms" },
-  { key: "report", label: "ڕاپۆرت", path: "/report" },
   { key: "profile", label: "پرۆفایل", path: "/profile" },
 ];
 
@@ -69,7 +68,7 @@ export const STUDENT_NAV_ITEMS: NavItem[] = [
   },
   {
     key: "chat",
-    label: "زانا (مامۆستا)",
+    label: "زانا",
     path: "/chat",
     icon: (active) => (
       <MessageCircle

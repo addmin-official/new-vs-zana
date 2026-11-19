@@ -1,173 +1,46 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Global Safety Net: Deny all by default
-    match /{document=**} {
-      allow read, write: if false;
+    function isAuthenticated() { return request.auth != null; }
+    function isAdmin() {
+      return isAuthenticated() &&
+        request.auth.token.role == 'admin' &&
+        request.auth.token.email == 'addmin.official.idg@gmail.com';
     }
-    
-    // ========================================================================
-    // Helper Functions
-    // ========================================================================
-    
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-    
-    function isVerifiedUser() {
-      return isAuthenticated() && 
-             request.auth.token.firebase.sign_in_provider != 'anonymous';
-    }
-    
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
-    
-    // Strict Admin Double Verification: Both custom claim role AND hardcoded authorized email
-    function isAdmin() {
-      return isAuthenticated() &&
-             (request.auth.token.role == 'admin' || request.auth.token.admin == true) &&
-             request.auth.token.email == 'addmin.official.idg@gmail.com';
-    }
-    
-    function isValidId(id) {
-      return id is string && id.size() > 0 && id.size() <= 128;
-    }
-    
-    // Rate Limiting: Minimum 600ms between consecutive individual writes per document
-    // Enforces maximum write rate of ~100 writes/minute
-    function isWithinRateLimit() {
-      return !('updatedAt' in resource.data) ||
-             (request.time.toMillis() - resource.data.updatedAt.toMillis()) >= 600;
-    }
-    
-    // ========================================================================
-    // 1. Users Collection: users/{userId}
-    // ========================================================================
-    
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create, update: if (isOwner(userId) || isAdmin()) && isValidId(userId);
-      allow delete: if isAdmin();
-      
-      // Subcollection: users/{userId}/mastery/{subjectId}
+      allow write: if isOwner(userId) || isAdmin();
       match /mastery/{subjectId} {
         allow read: if isOwner(userId) || isAdmin();
-        allow write: if (isOwner(userId) || isAdmin()) && isValidId(subjectId);
+        allow write: if isOwner(userId);
       }
-      
-      // Subcollection: users/{userId}/sessions/{sessionId}
-      // Sessions cannot be deleted by students
       match /sessions/{sessionId} {
         allow read: if isOwner(userId) || isAdmin();
-        allow create, update: if (isOwner(userId) || isAdmin()) && isValidId(sessionId);
-        allow delete: if isAdmin();
-      }
-      
-      // Subcollection: users/{userId}/studyPlan/{weekId}
-      match /studyPlan/{weekId} {
-        allow read: if isOwner(userId) || isAdmin();
-        allow write: if (isOwner(userId) || isAdmin()) && isValidId(weekId);
-      }
-      
-      // Subcollection: users/{userId}/achievements/{achievementId}
-      // Achievements cannot be deleted
-      match /achievements/{achievementId} {
-        allow read: if isOwner(userId) || isAdmin();
-        allow create, update: if (isOwner(userId) || isAdmin()) && isValidId(achievementId);
+        allow write: if isOwner(userId);
         allow delete: if false;
       }
     }
-    
-    // ========================================================================
-    // 2. Curriculum: curriculum/{grade}/{subject}/concepts/{conceptId}
-    // Read: All / Write: Admin only
-    // ========================================================================
-    
-    match /curriculum/{document=**} {
-      allow read: if true;
+    match /curriculum/{grade}/{subject}/{document=**} {
+      allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
-    
-    // ========================================================================
-    // 3. System Configuration & Feature Flags
-    // ========================================================================
-    
-    // SYSTEM METRICS — read admin only
-    match /system/{document} {
-      allow read: if isAdmin();
-      allow write: if isAdmin();
-    }
-    
-    match /featureFlags/{document=**} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-    
-    // ========================================================================
-    // 4. Assessments: assessments/{assessmentId}
-    // Read: Own or Admin / Write: Own / Delete: None
-    // ========================================================================
-    
-    match /assessments/{assessmentId} {
-      allow read: if isAuthenticated() && (resource.data.studentId == request.auth.uid || isAdmin());
-      allow create: if isAuthenticated() && request.resource.data.studentId == request.auth.uid;
-      allow update: if isAuthenticated() && resource.data.studentId == request.auth.uid;
-      allow delete: if false;
-    }
-    
-    // ========================================================================
-    // 5. System Errors & Telemetry: errors/{errorId}
-    // Create: Anyone / Read, Update, Delete: Admin only
-    // ========================================================================
-    
-    match /errors/{errorId} {
-      allow create: if true;
-      allow read, update, delete: if isAdmin();
-    }
-    
-    // ========================================================================
-    // 6. Admin Audit Logs: adminLogs/{logId}
-    // Read & Write: Admin only
-    // ========================================================================
-    
-    match /adminLogs/{logId} {
+    match /system/{document=**} {
       allow read, write: if isAdmin();
     }
-    
-    // ========================================================================
-    // 7. Backward Compatibility: students/{studentId}
-    // ========================================================================
-    
-    match /students/{studentId} {
-      allow read: if isOwner(studentId) || isAdmin();
-      allow create, update: if (isOwner(studentId) || isAdmin()) && isValidId(studentId);
-      allow delete: if isAdmin();
-      
-      match /{allSubcollections=**} {
-        allow read, write: if isOwner(studentId) || isAdmin();
-      }
+    match /featureFlags/{flagId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
     }
-
-    // ========================================================================
-    // 8. Admin Anomalies & Live Analytics Monitoring
-    // ========================================================================
-
-    // ANOMALIES — read admin, write admin, create system functions
-    match /anomalies/{anomalyId} {
+    match /errors/{errorId} {
       allow read: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if false;
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
     }
-
-    match /{path=**}/sessions/{sessionId} {
-      allow read: if isAdmin();
-    }
-
-    match /{path=**}/mastery/{masteryId} {
-      allow read: if isAdmin();
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

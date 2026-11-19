@@ -35,7 +35,7 @@ import { useAdminAnomalies } from "../hooks/useAdminAnomalies.ts";
 
 import { useSystemAuditLogs } from "../hooks/useSystemAuditLogs.ts";
 
-export type AdminTab = "overview" | "students" | "content" | "system";
+export type AdminTab = "overview" | "students" | "content" | "system" | "flags";
 
 export interface AdminDashboardProps {
   initialTab?: AdminTab;
@@ -81,6 +81,7 @@ export function AdminDashboard({
       if (p.includes("/admin/students")) return "students";
       if (p.includes("/admin/content")) return "content";
       if (p.includes("/admin/system")) return "system";
+      if (p.includes("/admin/flags")) return "flags";
     }
     return initialTab;
   });
@@ -254,8 +255,9 @@ export function AdminDashboard({
             {[
               { id: "overview", label: "پوختەی گشتی", labelEn: "Overview", icon: Activity },
               { id: "students", label: "بەڕێوەبردنی قوتابیان", labelEn: "Students", icon: Users },
-              { id: "content", label: "مەنهەج و تایبەتمەندییەکان", labelEn: "Content & Flags", icon: BookOpen },
-              { id: "system", label: "تەندروستی سیستم", labelEn: "System Health", icon: Settings },
+              { id: "content", label: "بەڕێوەبردنی مەنهەج", labelEn: "Curriculum", icon: BookOpen },
+              { id: "system", label: "ڕێکخستنی سیستم", labelEn: "System", icon: Settings },
+              { id: "flags", label: "ئاڵاکانی سیستەم", labelEn: "Feature Flags", icon: Zap },
             ].map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
@@ -811,8 +813,41 @@ export function AdminDashboard({
           </div>
         )}
 
-        {/* TAB 3: CONTENT & FLAGS (/admin/content) */}
+        {/* TAB 3: CURRICULUM MANAGEMENT (/admin/content) */}
         {activeTab === "content" && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            {/* Curriculum Management Section */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-emerald-400" />
+                <span>مەنهەجی خوێندن (Curriculum Enable/Disable)</span>
+              </h3>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                {[
+                  { nameKu: "کیمیا", nameEn: "Chemistry", count: "٢٤ چەمک", active: true },
+                  { nameKu: "فیزیا", nameEn: "Physics", count: "٢٨ چەمک", active: true },
+                  { nameKu: "بیرکاری", nameEn: "Mathematics", count: "٣٢ چەمک", active: true },
+                  { nameKu: "بایۆلۆژی", nameEn: "Biology", count: "٢٠ چەمک", active: true },
+                  { nameKu: "ئینگلیزی", nameEn: "English", count: "١٦ چەمک", active: true },
+                  { nameKu: "زمانی کوردی", nameEn: "Kurdish", count: "١٨ چەمک", active: true },
+                ].map((s) => (
+                  <div
+                    key={s.nameEn}
+                    className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-700/60 space-y-1 text-center"
+                  >
+                    <span className="text-xs font-bold text-white block">{s.nameKu}</span>
+                    <span className="font-mono text-[10px] text-slate-400 block">{s.nameEn}</span>
+                    <span className="text-[10px] text-emerald-400 font-bold block">{s.count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 5: FEATURE FLAGS (/admin/flags) */}
+        {activeTab === "flags" && (
           <div className="space-y-6 animate-in fade-in duration-200">
             {/* Feature Flags Section */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
@@ -860,34 +895,6 @@ export function AdminDashboard({
                     </div>
                   );
                 })}
-              </div>
-            </div>
-
-            {/* Curriculum Management Section */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <BookOpen className="w-4 h-4 text-emerald-400" />
-                <span>مەنهەجی خوێندن (Curriculum Enable/Disable)</span>
-              </h3>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                {[
-                  { nameKu: "کیمیا", nameEn: "Chemistry", count: "٢٤ چەمک", active: true },
-                  { nameKu: "فیزیا", nameEn: "Physics", count: "٢٨ چەمک", active: true },
-                  { nameKu: "بیرکاری", nameEn: "Mathematics", count: "٣٢ چەمک", active: true },
-                  { nameKu: "بایۆلۆژی", nameEn: "Biology", count: "٢٠ چەمک", active: true },
-                  { nameKu: "ئینگلیزی", nameEn: "English", count: "١٦ چەمک", active: true },
-                  { nameKu: "زمانی کوردی", nameEn: "Kurdish", count: "١٨ چەمک", active: true },
-                ].map((s) => (
-                  <div
-                    key={s.nameEn}
-                    className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-700/60 space-y-1 text-center"
-                  >
-                    <span className="text-xs font-bold text-white block">{s.nameKu}</span>
-                    <span className="font-mono text-[10px] text-slate-400 block">{s.nameEn}</span>
-                    <span className="text-[10px] text-emerald-400 font-bold block">{s.count}</span>
-                  </div>
-                ))}
               </div>
             </div>
           </div>

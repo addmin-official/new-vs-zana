@@ -11,7 +11,8 @@
 import React, { useState, useEffect } from "react";
 import { onIdTokenChanged, User } from "firebase/auth";
 import { getFirebaseAuth } from "../services/firebase.ts";
-import { isAdmin, getMyRole, ADMIN_EMAIL } from "./roles.ts";
+import { isAdmin, getMyRole, ADMIN_EMAIL, ROLES } from "./roles.ts";
+export { getMyRole, isAdmin, ADMIN_EMAIL, ROLES };
 
 export interface RouteGuardProps {
   children: React.ReactNode;

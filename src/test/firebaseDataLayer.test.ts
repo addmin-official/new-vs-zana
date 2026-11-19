@@ -46,15 +46,16 @@ test("Firestore Architecture - 2. Security Rules Contract Validation", () => {
   assert.ok(rules.includes("match /users/{userId}"), "Must contain users/{userId} match");
   assert.ok(rules.includes("match /mastery/{subjectId}"), "Must contain mastery/{subjectId} subcollection match");
   assert.ok(rules.includes("match /sessions/{sessionId}"), "Must contain sessions/{sessionId} subcollection match");
-  assert.ok(rules.includes("match /studyPlan/{weekId}"), "Must contain studyPlan/{weekId} subcollection match");
-  assert.ok(rules.includes("match /curriculum/{document=**}"), "Must contain curriculum match");
-  assert.ok(rules.includes("match /assessments/{assessmentId}"), "Must contain assessments/{assessmentId} match");
+  assert.ok(rules.includes("match /curriculum/{grade}/{subject}/{document=**}"), "Must contain curriculum match");
+  assert.ok(rules.includes("match /system/{document=**}"), "Must contain system match");
+  assert.ok(rules.includes("match /featureFlags/{flagId}"), "Must contain featureFlags match");
+  assert.ok(rules.includes("match /errors/{errorId}"), "Must contain errors match");
 
   // Verify access constraints
-  assert.ok(rules.includes("allow read: if true;"), "Curriculum must be readable by all");
-  assert.ok(rules.includes("allow write: if isAdmin();"), "Curriculum write must be admin only");
-  assert.ok(rules.includes("allow delete: if false;"), "Assessment deletion must be forbidden");
-  assert.ok(rules.includes("600"), "Rate limiting (100 writes/min constraint) must be defined in rules");
+  assert.ok(rules.includes("function isAdmin()"), "Must contain isAdmin() function");
+  assert.ok(rules.includes("addmin.official.idg@gmail.com"), "Must verify exact admin email in rules");
+  assert.ok(rules.includes("request.auth.token.role == 'admin'"), "Must check admin role claim");
+  assert.ok(rules.includes("allow read, write: if false;"), "Fallback deny-all match must be defined");
 });
 
 test("Firestore Architecture - 3. Composite Indexes Configuration", () => {

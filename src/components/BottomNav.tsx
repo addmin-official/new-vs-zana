@@ -93,12 +93,7 @@ function isTabActive(itemKey: NavItemKey, currentTab: NavItemKey): boolean {
   ) {
     return true;
   }
-  if (
-    itemKey === "profile" &&
-    (currentTab === "settings" ||
-      currentTab === "report" ||
-      currentTab === "admin")
-  ) {
+  if (itemKey === "profile" && (currentTab === "settings" || currentTab === "profile")) {
     return true;
   }
   return false;

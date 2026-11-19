@@ -77,6 +77,9 @@ export async function handleSetAdminOnCreate(
   };
 }
 
+export const setAdminClaimOnCreate = handleSetAdminOnCreate;
+export const onUserCreate = handleSetAdminOnCreate;
+
 /**
  * Callable function for manual role assignment / revocation.
  * Security: Callable ONLY by the authenticated admin user (addmin.official.idg@gmail.com).

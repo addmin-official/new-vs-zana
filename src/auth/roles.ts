@@ -23,7 +23,7 @@ export type UserRole = (typeof ROLES)[keyof typeof ROLES];
 /**
  * Hardcoded, authoritative admin email — single source of truth across the platform.
  */
-export const ADMIN_EMAIL = "addmin.official.idg@gmail.com";
+export const ADMIN_EMAIL = "addmin.official.idg@gmail.com" as const;
 
 export interface CustomClaimsStructure {
   role?: "admin" | "student" | string;

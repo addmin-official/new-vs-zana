@@ -70,8 +70,11 @@ const PATH_TO_TAB: Record<string, NavItemKey> = {
   "/assessment": "assessment",
   "/plan": "plan",
   "/rooms": "rooms",
-  "/report": "report",
   "/admin": "admin",
+  "/admin/students": "admin",
+  "/admin/content": "admin",
+  "/admin/system": "admin",
+  "/admin/flags": "admin",
   "/profile": "profile",
   "/settings": "settings",
 };
@@ -86,7 +89,7 @@ const TAB_TO_PATH: Record<NavItemKey, string> = {
   assessment: "/assessment",
   plan: "/plan",
   rooms: "/rooms",
-  report: "/report",
+  report: "/profile",
   admin: "/admin",
   profile: "/profile",
   settings: "/settings",
@@ -94,6 +97,22 @@ const TAB_TO_PATH: Record<NavItemKey, string> = {
 
 function resolveTabFromPath(pathname: string): NavItemKey {
   const normalized = pathname.replace(/\/+$/, "") || "/";
+
+  // DELETE these routes entirely from platform: /teacher, /teacher/*, /parent, /parent/*, /manager
+  if (
+    normalized === "/teacher" ||
+    normalized.startsWith("/teacher/") ||
+    normalized === "/parent" ||
+    normalized.startsWith("/parent/") ||
+    normalized === "/manager" ||
+    normalized.startsWith("/manager/")
+  ) {
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", "/home");
+    }
+    return "home";
+  }
+
   if (PATH_TO_TAB[normalized]) return PATH_TO_TAB[normalized];
   // Deep-linking: Match subpath prefix, e.g. /subjects/chemistry -> subjects
   for (const [routePath, tabKey] of Object.entries(PATH_TO_TAB)) {
