@@ -1,5 +1,5 @@
 import React from "react";
-import { User, Menu, Cpu, Award, ArrowLeftRight, LogIn, LogOut, Bell } from "lucide-react";
+import { User, Menu, Cpu, Award, ArrowLeftRight, LogIn, LogOut, Bell, GraduationCap } from "lucide-react";
 import { UserProfile } from "../store/appStore.ts";
 import { SoundToggle } from "./SoundToggle.tsx";
 import { ThemeToggle } from "./ThemeToggle.tsx";
@@ -70,8 +70,8 @@ export function Header({
       }}
       dir="rtl"
     >
-      {/* Brand & Text-Only Logo */}
-      <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+      {/* Original ZANA Logo & Brand */}
+      <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
         {onOpenMobileNav && (
           <button
             onClick={onOpenMobileNav}
@@ -82,17 +82,16 @@ export function Header({
           </button>
         )}
 
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* ZANA text-only logo */}
-          <span className="font-sans font-black text-xl sm:text-2xl tracking-tight text-indigo-600 dark:text-indigo-400">
-            زانا
-          </span>
-          <div className="hidden sm:block border-r border-slate-200 dark:border-slate-700 pr-2">
-            <p className="font-sans font-bold text-xs text-slate-800 dark:text-slate-200 leading-tight">
-              پلاتفۆرمی زانا
-            </p>
-            <p className="text-[10px] text-slate-500 dark:text-slate-400 font-sans">
-              پۆلی {user.grade} • {user.stream === "scientific" ? "زانستی" : "وێژەیی (بەمنزیکانە ⏳)"}
+        <div className="flex items-center gap-2">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-sm shadow-indigo-600/20 shrink-0">
+            <GraduationCap className="w-5 h-5 sm:w-6 sm:h-6" />
+          </div>
+          <div className="flex flex-col">
+            <span className="font-sans font-bold text-base sm:text-lg text-slate-900 dark:text-white leading-tight">
+              زانا
+            </span>
+            <p className="hidden sm:block font-sans text-[11px] text-indigo-600 dark:text-indigo-400 font-medium leading-tight">
+              هاوڕێی زیرەکی فێربوونی تۆ
             </p>
           </div>
         </div>
@@ -139,7 +138,7 @@ export function Header({
             title="مێشکی زیرەکی ناوخۆی پلاتفۆرم"
             className="flex items-center gap-1 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 active:scale-95"
           >
-            <Cpu className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
+            <Cpu className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
             <span className="hidden sm:inline text-[11px]">مێشک</span>
           </button>
         )}
@@ -169,13 +168,13 @@ export function Header({
         )}
 
         {/* Student Mini Badge */}
-        <div className="hidden lg:flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 rounded-xl px-2.5 py-1">
-          <Award className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+        <div className="hidden lg:flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 rounded-xl px-2.5 py-1">
+          <Award className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
           <div className="text-right">
-            <p className="font-sans text-[11px] font-bold text-slate-800 leading-none truncate max-w-[80px]">
+            <p className="font-sans text-[11px] font-bold text-slate-800 dark:text-slate-100 leading-none truncate max-w-[80px]">
               {user.name}
             </p>
-            <p className="font-sans text-[9px] text-slate-400 mt-0.5 leading-none">
+            <p className="font-sans text-[9px] text-slate-500 dark:text-slate-400 mt-0.5 leading-none">
               پۆلی {user.grade} • {user.stream === "scientific" ? "زانستی" : "وێژەیی (بەمنزیکانە ⏳)"}
             </p>
           </div>
@@ -198,14 +197,14 @@ export function Header({
               <img
                 src={user.avatar}
                 alt={user.name}
-                className="w-8 h-8 rounded-full object-cover border border-indigo-600"
+                className="w-8 h-8 rounded-full object-cover border border-indigo-600 dark:border-indigo-400"
               />
             ) : (
-              <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold text-xs border border-indigo-200">
+              <div className="w-8 h-8 rounded-full bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 flex items-center justify-center font-bold text-xs border border-indigo-200 dark:border-indigo-800">
                 <User className="w-4 h-4" />
               </div>
             )}
-            <span className="font-sans text-xs font-bold text-slate-800 hidden md:inline truncate max-w-[100px]">
+            <span className="font-sans text-xs font-bold text-slate-800 dark:text-slate-100 hidden md:inline truncate max-w-[100px]">
               {user.name}
             </span>
             {onLogout && (
@@ -213,7 +212,7 @@ export function Header({
                 type="button"
                 onClick={onLogout}
                 title="چوونەدەرەوە لە هەژمار"
-                className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
+                className="p-1.5 text-slate-500 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
               >
                 <LogOut className="w-3.5 h-3.5" />
               </button>

@@ -8,7 +8,15 @@ import {
   Calendar,
   Clock,
   Compass,
-  GraduationCap,
+  Brain,
+  Activity,
+  Swords,
+  FileSpreadsheet,
+  Dumbbell,
+  FlaskConical,
+  Target,
+  Users,
+  FileBarChart2,
 } from "lucide-react";
 import { StudentProfile, SubjectKey } from "../features/student/studentTypes.ts";
 import { useStudentProfile } from "../features/student/useStudentProfile.ts";
@@ -16,6 +24,7 @@ import { useAppStore } from "../store/appStore.ts";
 import { getSessionRecovery, getSubjectKurdishName } from "../auth/sessionRecovery.ts";
 import { getSubjectCustomIcon } from "../components/SubjectCard.tsx";
 import { formatNumber } from "../i18n/i18n.ts";
+import type { PedagogyPillarTab } from "../screens/PedagogicalHubScreen.tsx";
 
 export interface HomeProps {
   profile?: StudentProfile;
@@ -24,7 +33,10 @@ export interface HomeProps {
   onNavigateToPlan?: () => void;
   onNavigateToAssessment?: () => void;
   onNavigateToPractice?: () => void;
-  onNavigateToPedagogy?: () => void;
+  onNavigateToPedagogy?: (pillar?: PedagogyPillarTab) => void;
+  onNavigateToLabs?: () => void;
+  onNavigateToRooms?: () => void;
+  onNavigateToReport?: () => void;
 }
 
 interface TodayTask {
@@ -48,7 +60,12 @@ export function Home({
   onNavigateToChat,
   onNavigateToSubjects,
   onNavigateToPlan,
+  onNavigateToAssessment,
+  onNavigateToPractice,
   onNavigateToPedagogy,
+  onNavigateToLabs,
+  onNavigateToRooms,
+  onNavigateToReport,
 }: HomeProps) {
   const { profile: hookProfile } = useStudentProfile();
   const studentProfile = propProfile || hookProfile;
@@ -373,44 +390,6 @@ export function Home({
       </section>
 
       {/* ═════════════════════════════════════════════════════════════ */}
-      {/* SECTION: PEDAGOGICAL EXCELLENCE HUB (5 GOLDEN PILLARS)         */}
-      {/* ═════════════════════════════════════════════════════════════ */}
-      {onNavigateToPedagogy && (
-        <section aria-labelledby="pedagogy-hub-title" className="space-y-3">
-          <div className="p-5 rounded-3xl bg-gradient-to-l from-indigo-900 via-slate-900 to-indigo-950 text-white border border-indigo-800/60 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="flex items-start gap-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 flex items-center justify-center shrink-0">
-                <GraduationCap className="w-6 h-6 text-indigo-400" aria-hidden="true" />
-              </div>
-              <div className="space-y-1 text-right">
-                <div className="flex items-center gap-2">
-                  <h2 id="pedagogy-hub-title" className="font-sans font-black text-base text-white">
-                    تاقیگەی نایابی پێداگۆجی (٥ پایەی زێڕینی فێربوون)
-                  </h2>
-                  <span className="text-[10px] font-bold text-amber-300 bg-amber-950/70 border border-amber-700/60 px-2 py-0.5 rounded-full">
-                    پۆلی ٩ - ١٢
-                  </span>
-                </div>
-                <p className="font-sans text-xs text-indigo-200/90 leading-relaxed max-w-xl">
-                  ستۆدیۆی فاینمان، دەستنیشانی مێتاکۆگنیتیڤ، ماتریکسی لایتنەر، دیبەیتی سۆکراتی، و هاوشێوەکاری تاقیکردنەوەی وەزاری سۆما.
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={onNavigateToPedagogy}
-              className="w-full md:w-auto px-5 py-3 rounded-xl bg-indigo-500 hover:bg-indigo-400 active:scale-97 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-indigo-300 touch-manipulation"
-              aria-label="کردنەوەی تاقیگەی نایابی پێداگۆجی"
-            >
-              <span>چوونە تاقیگەی پێداگۆجی</span>
-              <ArrowLeft className="w-4 h-4 -rotate-180" aria-hidden="true" />
-            </button>
-          </div>
-        </section>
-      )}
-
-      {/* ═════════════════════════════════════════════════════════════ */}
       {/* SECTION 4 — QUICK SUBJECT ACCESS (HORIZONTAL SCROLL)          */}
       {/* ═════════════════════════════════════════════════════════════ */}
       <section aria-labelledby="quick-subjects-title" className="space-y-3">
@@ -461,6 +440,210 @@ export function Home({
               </div>
             </button>
           ))}
+        </div>
+      </section>
+
+      {/* ═════════════════════════════════════════════════════════════ */}
+      {/* SECTION 4B — PEDAGOGICAL EXCELLENCE HUB (5 PILLARS)           */}
+      {/* ═════════════════════════════════════════════════════════════ */}
+      {onNavigateToPedagogy && (
+        <section aria-labelledby="pedagogy-hub-title" className="space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <h2 id="pedagogy-hub-title" className="font-sans font-black text-lg text-slate-900 dark:text-white flex items-center gap-2">
+                <Brain className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                <span>تاقیگەی نایابی پێداگۆجی (٥ پایەی فێربوون)</span>
+              </h2>
+              <p className="font-sans text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                فێربوونی قووڵ و ئامادەکاری وەزاری بە ڕێبازە زانستییەکان بۆ پۆلەکانی ٩ تا ١٢
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => onNavigateToPedagogy()}
+              className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer min-h-[36px] py-1 px-2 focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-lg flex items-center shrink-0"
+            >
+              کردنەوەی تاقیگە ←
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            {[
+              {
+                id: "feynman" as PedagogyPillarTab,
+                title: "ستۆدیۆی فاینمان",
+                desc: "فێربوون بە فێرکردنی زانا بە سادەیی",
+                icon: Sparkles,
+                iconBg: "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400",
+                borderHover: "hover:border-indigo-400 dark:hover:border-indigo-500",
+              },
+              {
+                id: "metacognitive" as PedagogyPillarTab,
+                title: "ڕاداری هەڵەکان",
+                desc: "شیکاریی مێتاکۆگنیتیڤی DNAی هەڵە",
+                icon: Activity,
+                iconBg: "bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400",
+                borderHover: "hover:border-rose-400 dark:hover:border-rose-500",
+              },
+              {
+                id: "leitner" as PedagogyPillarTab,
+                title: "ماتریکسی لایتنەر",
+                desc: "بیرگەی درێژخایەن (١ تا ٣٥ ڕۆژ)",
+                icon: Brain,
+                iconBg: "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400",
+                borderHover: "hover:border-emerald-400 dark:hover:border-emerald-500",
+              },
+              {
+                id: "dialectic" as PedagogyPillarTab,
+                title: "مەیدانی دیبەیت",
+                desc: "بەڵگاندنی سۆکراتی و هەڵوەشاندنەوەی هەڵە",
+                icon: Swords,
+                iconBg: "bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400",
+                borderHover: "hover:border-amber-400 dark:hover:border-amber-500",
+              },
+              {
+                id: "soma" as PedagogyPillarTab,
+                title: "هاوشێوەکاری سۆما",
+                desc: "پەڕەی سۆمای وەزاری + هەناسەی ٤-٧-٨",
+                icon: FileSpreadsheet,
+                iconBg: "bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400",
+                borderHover: "hover:border-teal-400 dark:hover:border-teal-500",
+              },
+            ].map((pillar) => {
+              const Icon = pillar.icon;
+              return (
+                <button
+                  key={pillar.id}
+                  type="button"
+                  onClick={() => onNavigateToPedagogy(pillar.id)}
+                  className={`p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 ${pillar.borderHover} hover:shadow-md transition-all text-right flex flex-col justify-between gap-3 cursor-pointer touch-manipulation focus-visible:ring-3 focus-visible:ring-indigo-500`}
+                >
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${pillar.iconBg}`}>
+                    <Icon className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-sans font-bold text-xs sm:text-sm text-slate-900 dark:text-white">
+                      {pillar.title}
+                    </h3>
+                    <p className="font-sans text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                      {pillar.desc}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* ═════════════════════════════════════════════════════════════ */}
+      {/* SECTION 4C — CORE STUDY TOOLS & ROOMS                         */}
+      {/* ═════════════════════════════════════════════════════════════ */}
+      <section aria-labelledby="study-tools-title" className="space-y-3">
+        <h2 id="study-tools-title" className="font-sans font-black text-lg text-slate-900 dark:text-white">
+          تاقیگە و ئامرازە فێرکارییەکان
+        </h2>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          {onNavigateToPractice && (
+            <button
+              type="button"
+              onClick={onNavigateToPractice}
+              className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-sm transition-all text-right flex items-start gap-3 cursor-pointer"
+            >
+              <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                <Dumbbell className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="font-sans font-bold text-xs text-slate-900 dark:text-white block">
+                  تاقیگەی ڕاهێنان
+                </span>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-0.5">
+                  پرسیاری وەزاری و مەشق
+                </span>
+              </div>
+            </button>
+          )}
+
+          {onNavigateToLabs && (
+            <button
+              type="button"
+              onClick={onNavigateToLabs}
+              className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-400 dark:hover:border-emerald-500 hover:shadow-sm transition-all text-right flex items-start gap-3 cursor-pointer"
+            >
+              <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                <FlaskConical className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="font-sans font-bold text-xs text-slate-900 dark:text-white block">
+                  تاقیگەی زانستی
+                </span>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-0.5">
+                  سیمولەیشنی کیمیا و فیزیا
+                </span>
+              </div>
+            </button>
+          )}
+
+          {onNavigateToAssessment && (
+            <button
+              type="button"
+              onClick={onNavigateToAssessment}
+              className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-amber-400 dark:hover:border-amber-500 hover:shadow-sm transition-all text-right flex items-start gap-3 cursor-pointer"
+            >
+              <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                <Target className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="font-sans font-bold text-xs text-slate-900 dark:text-white block">
+                  تاقیکردنەوەی ئەداپتیڤ
+                </span>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-0.5">
+                  پێوانەکردنی ئاستی لێهاتوویی
+                </span>
+              </div>
+            </button>
+          )}
+
+          {onNavigateToRooms && (
+            <button
+              type="button"
+              onClick={onNavigateToRooms}
+              className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-indigo-400 dark:hover:border-indigo-500 hover:shadow-sm transition-all text-right flex items-start gap-3 cursor-pointer"
+            >
+              <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                <Users className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="font-sans font-bold text-xs text-slate-900 dark:text-white block">
+                  ژوورەکانی خوێندن
+                </span>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-0.5">
+                  پۆمۆدۆرۆ و دەنگی تەرکیز
+                </span>
+              </div>
+            </button>
+          )}
+
+          {onNavigateToReport && (
+            <button
+              type="button"
+              onClick={onNavigateToReport}
+              className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-400 dark:hover:border-emerald-500 hover:shadow-sm transition-all text-right flex items-start gap-3 cursor-pointer"
+            >
+              <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                <FileBarChart2 className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="font-sans font-bold text-xs text-slate-900 dark:text-white block">
+                  ڕاپۆرتی باوان
+                </span>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-0.5">
+                  پوختەی پێشکەوتنی هەفتانە
+                </span>
+              </div>
+            </button>
+          )}
         </div>
       </section>
 

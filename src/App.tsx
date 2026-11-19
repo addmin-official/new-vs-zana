@@ -5,7 +5,6 @@ import { AppShell } from "./components/AppShell.tsx";
 import { LoadingScreen } from "./screens/LoadingScreen.tsx";
 import { useStudentProfile } from "./features/student/useStudentProfile.ts";
 import { SubjectKey } from "./features/student/studentTypes.ts";
-import { ThemeProvider } from "./context/ThemeContext.tsx";
 import { getFirebaseAuth, isFirebaseConfigured } from "./services/firebase.ts";
 import { getCurrentUser, logoutUser, subscribeToAuthChanges } from "./services/authService.ts";
 import { useAppStore } from "./store/appStore.ts";
@@ -24,6 +23,7 @@ import {
 } from "./auth/sessionRecovery.ts";
 import { checkUserExists } from "./auth/userProfileService.ts";
 import { FeatureFlagProvider } from "./features/flags/index.ts";
+import type { PedagogyPillarTab } from "./screens/PedagogicalHubScreen.tsx";
 
 // Lazy-loaded routes for code-splitting and performance (LCP/FCP < 2s)
 const Home = lazy(() => import("./pages/Home.tsx").then((m) => ({ default: m.Home })));
@@ -199,6 +199,7 @@ export default function App() {
     }
     return "home";
   });
+  const [pedagogyPillar, setPedagogyPillar] = useState<PedagogyPillarTab>("feynman");
   const [isForcedOnboarding, setIsForcedOnboarding] = useState(false);
   const [isBrainActive, setIsBrainActive] = useState(() => {
     if (typeof window !== "undefined") {
@@ -430,21 +431,19 @@ export default function App() {
   // 1. Initial Authentication Loading State
   if (authLoading) {
     return (
-      <ThemeProvider>
-        <LoadingScreen
-          message="چاوەڕێبکە... پشکنینی ناسنامە"
-          isTimedOut={authTimedOut}
-          onRetry={() => {
-            setAuthTimedOut(false);
-            setAuthLoading(true);
-            const auth = getFirebaseAuth();
-            if (auth) {
-              setCurrentUser(auth.currentUser);
-            }
-            setAuthLoading(false);
-          }}
-        />
-      </ThemeProvider>
+      <LoadingScreen
+        message="چاوەڕێبکە... پشکنینی ناسنامە"
+        isTimedOut={authTimedOut}
+        onRetry={() => {
+          setAuthTimedOut(false);
+          setAuthLoading(true);
+          const auth = getFirebaseAuth();
+          if (auth) {
+            setCurrentUser(auth.currentUser);
+          }
+          setAuthLoading(false);
+        }}
+      />
     );
   }
 
@@ -453,138 +452,126 @@ export default function App() {
   if (showAuthFlow) {
     if (authScreen === "welcome") {
       return (
-        <ThemeProvider>
-          <ErrorBoundary>
-            <Suspense fallback={<ScreenLoadingFallback />}>
-              <WelcomeScreen
-                onGetStarted={() => navigateAuth("register")}
-                onNavigateToLogin={() => navigateAuth("login")}
-              />
-            </Suspense>
-          </ErrorBoundary>
-        </ThemeProvider>
+        <ErrorBoundary>
+          <Suspense fallback={<ScreenLoadingFallback />}>
+            <WelcomeScreen
+              onGetStarted={() => navigateAuth("register")}
+              onNavigateToLogin={() => navigateAuth("login")}
+            />
+          </Suspense>
+        </ErrorBoundary>
       );
     }
 
     if (authScreen === "register") {
       return (
-        <ThemeProvider>
-          <ErrorBoundary>
-            <Suspense fallback={<ScreenLoadingFallback />}>
-              <RegisterScreen
-                onNavigateToLogin={() => navigateAuth("login")}
-                onRegisterSuccess={(regData) => {
-                  setIsAuthExplicit(false);
-                  if (typeof window !== "undefined") {
-                    sessionStorage.setItem("zana_guest_bypassed", "true");
-                    window.history.replaceState(null, "", "/");
-                  }
-                  setIsGuestBypassed(true);
-                  setIsForcedOnboarding(false);
-                  handleOnboardingComplete(
-                    regData.name,
-                    regData.grade,
-                    regData.subject,
-                    "intermediate",
-                    regData.stream
-                  );
-                  setActiveTabState("home");
-                }}
-              />
-            </Suspense>
-          </ErrorBoundary>
-        </ThemeProvider>
+        <ErrorBoundary>
+          <Suspense fallback={<ScreenLoadingFallback />}>
+            <RegisterScreen
+              onNavigateToLogin={() => navigateAuth("login")}
+              onRegisterSuccess={(regData) => {
+                setIsAuthExplicit(false);
+                if (typeof window !== "undefined") {
+                  sessionStorage.setItem("zana_guest_bypassed", "true");
+                  window.history.replaceState(null, "", "/");
+                }
+                setIsGuestBypassed(true);
+                setIsForcedOnboarding(false);
+                handleOnboardingComplete(
+                  regData.name,
+                  regData.grade,
+                  regData.subject,
+                  "intermediate",
+                  regData.stream
+                );
+                setActiveTabState("home");
+              }}
+            />
+          </Suspense>
+        </ErrorBoundary>
       );
     }
 
     if (authScreen === "forgot-password") {
       return (
-        <ThemeProvider>
-          <ErrorBoundary>
-            <Suspense fallback={<ScreenLoadingFallback />}>
-              <ForgotPasswordScreen
-                onNavigateToLogin={() => navigateAuth("login")}
-              />
-            </Suspense>
-          </ErrorBoundary>
-        </ThemeProvider>
+        <ErrorBoundary>
+          <Suspense fallback={<ScreenLoadingFallback />}>
+            <ForgotPasswordScreen
+              onNavigateToLogin={() => navigateAuth("login")}
+            />
+          </Suspense>
+        </ErrorBoundary>
       );
     }
 
     return (
-      <ThemeProvider>
-        <ErrorBoundary>
-          <Suspense fallback={<ScreenLoadingFallback />}>
-            <LoginScreen
-              onNavigateToRegister={() => navigateAuth("register")}
-              onNavigateToForgotPassword={() => navigateAuth("forgot-password")}
-              onLoginSuccess={(isNewUser) => {
-                setIsAuthExplicit(false);
-                setIsGuestBypassed(true);
-                if (typeof window !== "undefined") {
-                  sessionStorage.setItem("zana_guest_bypassed", "true");
-                  const target = isBrainActive ? "/admin/brain" : "/";
-                  window.history.replaceState(null, "", target);
-                }
-                if (!isNewUser) {
-                  setIsForcedOnboarding(false);
-                  const rec = getSessionRecovery();
-                  if (rec) {
-                    setSessionRecoveryNotice(rec);
-                    setActiveTabState(resolveTabFromPath(rec.lastRoute));
-                  } else {
-                    setActiveTabState("home");
-                  }
+      <ErrorBoundary>
+        <Suspense fallback={<ScreenLoadingFallback />}>
+          <LoginScreen
+            onNavigateToRegister={() => navigateAuth("register")}
+            onNavigateToForgotPassword={() => navigateAuth("forgot-password")}
+            onLoginSuccess={(isNewUser) => {
+              setIsAuthExplicit(false);
+              setIsGuestBypassed(true);
+              if (typeof window !== "undefined") {
+                sessionStorage.setItem("zana_guest_bypassed", "true");
+                const target = isBrainActive ? "/admin/brain" : "/";
+                window.history.replaceState(null, "", target);
+              }
+              if (!isNewUser) {
+                setIsForcedOnboarding(false);
+                const rec = getSessionRecovery();
+                if (rec) {
+                  setSessionRecoveryNotice(rec);
+                  setActiveTabState(resolveTabFromPath(rec.lastRoute));
                 } else {
-                  setIsForcedOnboarding(true);
+                  setActiveTabState("home");
                 }
-              }}
-            />
-          </Suspense>
-        </ErrorBoundary>
-      </ThemeProvider>
+              } else {
+                setIsForcedOnboarding(true);
+              }
+            }}
+          />
+        </Suspense>
+      </ErrorBoundary>
     );
   }
 
   // 3. Admin Route Direct Access (if admin is authenticated)
   if (isBrainActive) {
     return (
-      <ThemeProvider>
-        <ErrorBoundary>
-          <Suspense fallback={<ScreenLoadingFallback />}>
-            <AdminRoute>
-              <BrainAdminDashboard
-                onBackToApp={() => {
-                  if (typeof window !== "undefined" && window.location.pathname.startsWith("/admin")) {
-                    window.history.pushState(null, "", "/");
-                  }
-                  setIsBrainActive(false);
-                }}
-              />
-            </AdminRoute>
-          </Suspense>
-        </ErrorBoundary>
-      </ThemeProvider>
+      <ErrorBoundary>
+        <Suspense fallback={<ScreenLoadingFallback />}>
+          <AdminRoute>
+            <BrainAdminDashboard
+              onBackToApp={() => {
+                if (typeof window !== "undefined" && window.location.pathname.startsWith("/admin")) {
+                  window.history.pushState(null, "", "/");
+                }
+                setIsBrainActive(false);
+              }}
+            />
+          </AdminRoute>
+        </Suspense>
+      </ErrorBoundary>
     );
   }
 
   // 4. Authenticated Student Onboarding Flow
   if (!profile.onboardingCompleted || isForcedOnboarding) {
     return (
-      <ThemeProvider>
-        <div className="min-h-screen w-full bg-[#071927] flex flex-col items-center py-4 sm:py-8 px-2 sm:px-4 overflow-y-auto overflow-x-hidden transition-colors duration-300">
-          <ErrorBoundary>
-            <Suspense fallback={<ScreenLoadingFallback />}>
-              <OnboardingScreen
-                onComplete={(...args) => {
-                  handleOnboardingComplete(...args);
-                  setIsForcedOnboarding(false);
-                }}
-              />
-            </Suspense>
-          </ErrorBoundary>
-        </div>
-      </ThemeProvider>
+      <div className="min-h-screen w-full bg-slate-50 dark:bg-slate-950 flex flex-col items-center py-4 sm:py-8 px-2 sm:px-4 overflow-y-auto overflow-x-hidden transition-colors duration-300">
+        <ErrorBoundary>
+          <Suspense fallback={<ScreenLoadingFallback />}>
+            <OnboardingScreen
+              onComplete={(...args) => {
+                handleOnboardingComplete(...args);
+                setIsForcedOnboarding(false);
+              }}
+            />
+          </Suspense>
+        </ErrorBoundary>
+      </div>
     );
   }
 
@@ -603,7 +590,13 @@ export default function App() {
             onNavigateToPlan={() => setActiveTab("plan")}
             onNavigateToAssessment={() => setActiveTab("assessment")}
             onNavigateToPractice={() => setActiveTab("practice")}
-            onNavigateToPedagogy={() => setActiveTab("pedagogy")}
+            onNavigateToPedagogy={(pillar) => {
+              if (pillar) setPedagogyPillar(pillar);
+              setActiveTab("pedagogy");
+            }}
+            onNavigateToLabs={() => setActiveTab("labs")}
+            onNavigateToRooms={() => setActiveTab("rooms")}
+            onNavigateToReport={() => setActiveTab("report")}
           />
         );
       case "chat":
@@ -637,6 +630,7 @@ export default function App() {
         return (
           <Suspense fallback={<ScreenLoadingFallback />}>
             <PedagogicalHubScreen
+              initialTab={pedagogyPillar}
               onNavigateToHome={() => setActiveTab("home")}
               onNavigateToPractice={() => setActiveTab("practice")}
             />
@@ -698,7 +692,16 @@ export default function App() {
               setActiveTab("chat");
             }}
             onNavigateToSubjects={() => setActiveTab("subjects")}
+            onNavigateToPlan={() => setActiveTab("plan")}
             onNavigateToAssessment={() => setActiveTab("assessment")}
+            onNavigateToPractice={() => setActiveTab("practice")}
+            onNavigateToPedagogy={(pillar) => {
+              if (pillar) setPedagogyPillar(pillar);
+              setActiveTab("pedagogy");
+            }}
+            onNavigateToLabs={() => setActiveTab("labs")}
+            onNavigateToRooms={() => setActiveTab("rooms")}
+            onNavigateToReport={() => setActiveTab("report")}
           />
         );
     }
@@ -724,8 +727,7 @@ export default function App() {
 
   return (
     <FeatureFlagProvider userId={currentUser?.uid}>
-      <ThemeProvider>
-        <OfflineBanner />
+      <OfflineBanner />
       <AppShell
         activeTab={activeTab}
         onTabChange={(tab) => {
@@ -741,16 +743,16 @@ export default function App() {
       >
         <ErrorBoundary>
           {sessionRecoveryNotice && (
-            <div className="mb-4 p-4 rounded-2xl bg-indigo-950/70 border border-indigo-500/30 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg animate-in fade-in duration-200">
+            <div className="mb-4 p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-950/70 border border-indigo-200 dark:border-indigo-500/30 text-slate-900 dark:text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm animate-in fade-in duration-200">
               <div className="flex items-center gap-3">
-                <span className="w-9 h-9 rounded-xl bg-indigo-600/30 border border-indigo-500/40 flex items-center justify-center text-indigo-300 shrink-0">
-                  <Sparkles className="w-5 h-5 text-indigo-400" />
+                <span className="w-9 h-9 rounded-xl bg-indigo-100 dark:bg-indigo-600/30 border border-indigo-200 dark:border-indigo-500/40 flex items-center justify-center text-indigo-600 dark:text-indigo-300 shrink-0">
+                  <Sparkles className="w-5 h-5" />
                 </span>
                 <div>
-                  <h4 className="text-xs font-bold text-white">
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-white">
                     بەخێربێیتەوە! دواجار لە {getSubjectKurdishName(sessionRecoveryNotice.lastSubject)} بوویت
                   </h4>
-                  <p className="text-[11px] text-slate-400">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
                     دەتوانیت ڕاستەوخۆ لەو وانەیەی کە لێی وەستابوویت بەردەوام بیت.
                   </p>
                 </div>
@@ -764,7 +766,7 @@ export default function App() {
                     clearSessionRecovery();
                     setSessionRecoveryNotice(null);
                   }}
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition cursor-pointer"
                 >
                   بەردەوام بە
                 </button>
@@ -774,7 +776,7 @@ export default function App() {
                     clearSessionRecovery();
                     setSessionRecoveryNotice(null);
                   }}
-                  className="px-2.5 py-2 rounded-xl text-slate-400 hover:text-white text-xs transition cursor-pointer"
+                  className="px-2.5 py-2 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white text-xs transition cursor-pointer"
                 >
                   ✕
                 </button>
@@ -798,8 +800,7 @@ export default function App() {
           onLogout={handleLogout}
         />
       )}
-    </ThemeProvider>
-  </FeatureFlagProvider>
+    </FeatureFlagProvider>
   );
 }
 

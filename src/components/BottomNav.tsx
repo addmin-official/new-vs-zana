@@ -1,5 +1,5 @@
 import React, { useRef } from "react";
-import { Home, MessageCircle, BookOpen, User } from "lucide-react";
+import { Home, MessageCircle, Brain, BookOpen, User } from "lucide-react";
 import { NavItemKey } from "./Sidebar.tsx";
 import { useUiStore } from "../store/uiStore.ts";
 
@@ -23,7 +23,7 @@ export const BOTTOM_NAV_ITEMS: BottomNavItem[] = [
       <Home
         className={`w-5 h-5 transition-transform duration-200 ${
           active
-            ? "fill-indigo-600 dark:fill-indigo-400 text-indigo-600 dark:text-indigo-400 scale-105"
+            ? "text-indigo-600 dark:text-indigo-400 scale-105"
             : "text-slate-500 dark:text-slate-400 stroke-[1.8]"
         }`}
         aria-hidden="true"
@@ -38,7 +38,21 @@ export const BOTTOM_NAV_ITEMS: BottomNavItem[] = [
       <MessageCircle
         className={`w-5 h-5 transition-transform duration-200 ${
           active
-            ? "fill-indigo-600 dark:fill-indigo-400 text-indigo-600 dark:text-indigo-400 scale-105"
+            ? "text-indigo-600 dark:text-indigo-400 scale-105"
+            : "text-slate-500 dark:text-slate-400 stroke-[1.8]"
+        }`}
+        aria-hidden="true"
+      />
+    ),
+  },
+  {
+    key: "pedagogy",
+    label: "پێداگۆجی",
+    icon: (active) => (
+      <Brain
+        className={`w-5 h-5 transition-transform duration-200 ${
+          active
+            ? "text-amber-600 dark:text-amber-400 scale-105"
             : "text-slate-500 dark:text-slate-400 stroke-[1.8]"
         }`}
         aria-hidden="true"
@@ -47,12 +61,12 @@ export const BOTTOM_NAV_ITEMS: BottomNavItem[] = [
   },
   {
     key: "subjects",
-    label: "بابەت",
+    label: "بابەتەکان",
     icon: (active) => (
       <BookOpen
         className={`w-5 h-5 transition-transform duration-200 ${
           active
-            ? "fill-indigo-600 dark:fill-indigo-400 text-indigo-600 dark:text-indigo-400 scale-105"
+            ? "text-indigo-600 dark:text-indigo-400 scale-105"
             : "text-slate-500 dark:text-slate-400 stroke-[1.8]"
         }`}
         aria-hidden="true"
@@ -61,13 +75,13 @@ export const BOTTOM_NAV_ITEMS: BottomNavItem[] = [
   },
   {
     key: "profile",
-    label: "من",
+    label: "پرۆفایل",
     badgeKey: "profile",
     icon: (active) => (
       <User
         className={`w-5 h-5 transition-transform duration-200 ${
           active
-            ? "fill-indigo-600 dark:fill-indigo-400 text-indigo-600 dark:text-indigo-400 scale-105"
+            ? "text-indigo-600 dark:text-indigo-400 scale-105"
             : "text-slate-500 dark:text-slate-400 stroke-[1.8]"
         }`}
         aria-hidden="true"
@@ -84,13 +98,10 @@ function isTabActive(itemKey: NavItemKey, currentTab: NavItemKey): boolean {
   if (itemKey === currentTab) return true;
   if (itemKey === "home" && currentTab === "plan") return true;
   if (itemKey === "chat" && currentTab === "rooms") return true;
-  if (
-    itemKey === "subjects" &&
-    (currentTab === "practice" ||
-      currentTab === "labs" ||
-      currentTab === "assessment" ||
-      currentTab === "pedagogy")
-  ) {
+  if (itemKey === "pedagogy" && (currentTab === "practice" || currentTab === "assessment")) {
+    return true;
+  }
+  if (itemKey === "subjects" && currentTab === "labs") {
     return true;
   }
   if (itemKey === "profile" && (currentTab === "settings" || currentTab === "profile")) {

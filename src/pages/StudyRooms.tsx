@@ -178,14 +178,14 @@ export function StudyRooms() {
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-6xl mx-auto w-full" dir="rtl">
       {/* Header */}
-      <div className="border-b border-slate-200 pb-4">
-        <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">
+      <div className="border-b border-slate-200 dark:border-slate-800 pb-4">
+        <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-3 py-1 rounded-full border border-indigo-100 dark:border-indigo-800/60">
           ژوورەکانی خوێندنی بەکۆمەڵ (Collaborative Study Rooms) 👥
         </span>
-        <h1 className="font-sans font-black text-2xl text-slate-900 mt-1">
+        <h1 className="font-sans font-black text-2xl text-slate-900 dark:text-white mt-1">
           ژووری تەرکیز و هاوبەشی هاوپۆلەکان
         </h1>
-        <p className="font-sans text-xs sm:text-sm text-slate-500">
+        <p className="font-sans text-xs sm:text-sm text-slate-500 dark:text-slate-400">
           لەگەڵ هاوڕێکانت بە شێوازی پۆمۆدۆرۆ و دەنگی ئارامبەخش بخوێنە بەبێ چاتی لاوەکی
         </p>
       </div>
@@ -194,7 +194,7 @@ export function StudyRooms() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Room Selector (4 Cols) */}
         <div className="lg:col-span-4 space-y-3">
-          <h2 className="font-sans font-bold text-sm text-slate-900">
+          <h2 className="font-sans font-bold text-sm text-slate-900 dark:text-white">
             ژوورە چالاکەکان
           </h2>
 
@@ -210,22 +210,22 @@ export function StudyRooms() {
                   }}
                   className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between space-y-3 ${
                     isSelected
-                      ? "bg-indigo-50/70 border-indigo-300 shadow-2xs"
-                      : "bg-white border-slate-200 hover:border-slate-300"
+                      ? "bg-indigo-50/70 dark:bg-indigo-950/40 border-indigo-300 dark:border-indigo-700 shadow-2xs"
+                      : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
                   }`}
                 >
                   <div>
-                    <span className="text-[10px] font-bold text-indigo-700 bg-white px-2 py-0.5 rounded-full border border-indigo-100">
+                    <span className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300 bg-white dark:bg-slate-800 px-2 py-0.5 rounded-full border border-indigo-100 dark:border-indigo-800/60">
                       {r.subject}
                     </span>
-                    <h3 className="font-sans font-bold text-sm text-slate-900 mt-1.5">
+                    <h3 className="font-sans font-bold text-sm text-slate-900 dark:text-white mt-1.5">
                       {r.name}
                     </h3>
                   </div>
 
-                  <div className="flex items-center justify-between text-xs text-slate-500 font-sans pt-1 border-t border-slate-100">
+                  <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-sans pt-1 border-t border-slate-100 dark:border-slate-800">
                     <span className="flex items-center gap-1">
-                      <Users className="w-3.5 h-3.5 text-indigo-600" />
+                      <Users className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                       <span>{r.activeCount} قوتابی ئێستا چالاکن</span>
                     </span>
                     <span className="text-[11px] text-slate-400">
@@ -239,34 +239,34 @@ export function StudyRooms() {
         </div>
 
         {/* Active Room Canvas (8 Cols) */}
-        <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
+        <div className="lg:col-span-8 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-6">
           {/* Room Name Bar */}
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-              <h2 className="font-sans font-bold text-base text-slate-900">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+              <h2 className="font-sans font-bold text-base text-slate-900 dark:text-white">
                 {activeRoom.name}
               </h2>
             </div>
-            <span className="text-xs font-sans text-slate-500 font-medium">
+            <span className="text-xs font-sans text-slate-500 dark:text-slate-400 font-medium">
               {peers.length + 3} قوتابی بەشدارن
             </span>
           </div>
 
           {/* Pomodoro Timer Center Card */}
-          <div className="bg-slate-50 rounded-2xl border border-slate-200 p-6 text-center space-y-4 max-w-md mx-auto">
+          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 text-center space-y-4 max-w-md mx-auto">
             {/* Work / Break mode toggle indicator */}
-            <div className="inline-flex p-1 bg-white rounded-xl border border-slate-200 text-xs font-bold font-sans">
+            <div className="inline-flex p-1 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold font-sans">
               <span
                 className={`px-3 py-1 rounded-lg transition-colors ${
-                  mode === "work" ? "bg-indigo-600 text-white" : "text-slate-500"
+                  mode === "work" ? "bg-indigo-600 text-white" : "text-slate-500 dark:text-slate-400"
                 }`}
               >
                 کاتی تەرکیز (٢٥ خولەک)
               </span>
               <span
                 className={`px-3 py-1 rounded-lg transition-colors ${
-                  mode === "break" ? "bg-emerald-600 text-white" : "text-slate-500"
+                  mode === "break" ? "bg-emerald-600 text-white" : "text-slate-500 dark:text-slate-400"
                 }`}
               >
                 پشوو (٥ خولەک)
@@ -274,7 +274,7 @@ export function StudyRooms() {
             </div>
 
             {/* Countdown Display */}
-            <div className="font-mono font-black text-5xl sm:text-6xl text-slate-900 tracking-wider">
+            <div className="font-mono font-black text-5xl sm:text-6xl text-slate-900 dark:text-white tracking-wider">
               {formatTimer(secondsLeft)}
             </div>
 
@@ -289,8 +289,8 @@ export function StudyRooms() {
                 }}
                 className={`px-2.5 py-1 rounded-lg border font-bold transition cursor-pointer ${
                   secondsLeft === 1500 && mode === "work"
-                    ? "bg-indigo-50 border-indigo-300 text-indigo-700"
-                    : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"
+                    ? "bg-indigo-50 dark:bg-indigo-950/60 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300"
+                    : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                 }`}
               >
                 ٢٥ خولەک (تەرکیز)
@@ -304,8 +304,8 @@ export function StudyRooms() {
                 }}
                 className={`px-2.5 py-1 rounded-lg border font-bold transition cursor-pointer ${
                   secondsLeft === 900
-                    ? "bg-indigo-50 border-indigo-300 text-indigo-700"
-                    : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"
+                    ? "bg-indigo-50 dark:bg-indigo-950/60 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300"
+                    : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                 }`}
               >
                 ١٥ خولەک (خێرا)
@@ -319,8 +319,8 @@ export function StudyRooms() {
                 }}
                 className={`px-2.5 py-1 rounded-lg border font-bold transition cursor-pointer ${
                   secondsLeft === 300 && mode === "break"
-                    ? "bg-emerald-50 border-emerald-300 text-emerald-700"
-                    : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"
+                    ? "bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300"
+                    : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                 }`}
               >
                 ٥ خولەک (پشوو)
@@ -348,7 +348,7 @@ export function StudyRooms() {
 
               <button
                 onClick={resetTimer}
-                className="bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 font-sans font-bold text-xs px-3.5 py-2.5 rounded-xl transition-colors cursor-pointer"
+                className="bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 font-sans font-bold text-xs px-3.5 py-2.5 rounded-xl transition-colors cursor-pointer"
                 title="سفرکردنەوەی کاتژمێر"
               >
                 <RotateCcw className="w-4 h-4" />
@@ -365,7 +365,7 @@ export function StudyRooms() {
                 className={`px-3 py-1.5 rounded-xl border text-xs font-bold cursor-pointer min-h-[36px] transition-all ${
                   focusStatus === chip.key
                     ? chip.activeClass
-                    : "bg-white border-slate-200 text-slate-500 hover:border-slate-300"
+                    : "bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600"
                 }`}
               >
                 {chip.label}
@@ -374,10 +374,10 @@ export function StudyRooms() {
           </div>
 
           {/* ── Feature 2: Custom Study Goal ── */}
-          <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-4 space-y-2" dir="rtl">
+          <div className="bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/60 rounded-2xl p-4 space-y-2" dir="rtl">
             <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
-                <Target className="w-3.5 h-3.5 text-indigo-600" />
+              <span className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-slate-200">
+                <Target className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                 ئامانجی خوێندنت بنووسە
               </span>
               {customGoal && !isEditingGoal && (
@@ -386,7 +386,7 @@ export function StudyRooms() {
                     setGoalInput(customGoal);
                     setIsEditingGoal(true);
                   }}
-                  className="text-[11px] text-indigo-600 hover:underline cursor-pointer"
+                  className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
                 >
                   دەستکاری
                 </button>
@@ -408,7 +408,7 @@ export function StudyRooms() {
                   }}
                   placeholder="وەک: پێوەری pH فێر دەبم..."
                   dir="rtl"
-                  className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-900 focus:outline-hidden focus:border-indigo-500 min-h-[36px]"
+                  className="flex-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-white focus:outline-hidden focus:border-indigo-500 min-h-[36px]"
                 />
                 <button
                   onClick={() => {
@@ -424,27 +424,27 @@ export function StudyRooms() {
                 </button>
               </div>
             ) : (
-              <div className="bg-white border border-indigo-100 rounded-xl px-3 py-2 text-xs font-semibold text-indigo-800">
+              <div className="bg-white dark:bg-slate-900 border border-indigo-100 dark:border-indigo-900/60 rounded-xl px-3 py-2 text-xs font-semibold text-indigo-800 dark:text-indigo-300">
                 🎯 {customGoal}
               </div>
             )}
           </div>
 
           {/* Ambient Soundscape Sliders */}
-          <div className="space-y-3 bg-slate-50/50 p-4 rounded-xl border border-slate-200">
+          <div className="space-y-3 bg-slate-50/50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Volume2
                   className={`w-4 h-4 ${
-                    isAmbientPlaying ? "text-emerald-600 animate-pulse" : "text-indigo-600"
+                    isAmbientPlaying ? "text-emerald-600 dark:text-emerald-400" : "text-indigo-600 dark:text-indigo-400"
                   }`}
                 />
-                <h3 className="font-sans font-bold text-xs text-slate-800">
+                <h3 className="font-sans font-bold text-xs text-slate-800 dark:text-slate-200">
                   دەنگی ژینگە و تەرکیز (Ambient Soundscape Mixer)
                 </h3>
                 {isAmbientPlaying && (
-                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                  <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                     دەنگ چالاکە
                   </span>
                 )}
@@ -454,7 +454,7 @@ export function StudyRooms() {
                 onClick={toggleAmbientSoundscape}
                 className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm ${
                   isAmbientPlaying
-                    ? "bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-200"
+                    ? "bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-200 dark:ring-emerald-900"
                     : "bg-indigo-600 hover:bg-indigo-700 text-white"
                 }`}
               >
@@ -472,7 +472,7 @@ export function StudyRooms() {
               </button>
             </div>
 
-            <p className="text-[11px] text-slate-500">
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
               دەنگی ڕاستەوخۆی سوودبەخش بۆ تەرکیز بە تەکنەلۆژیای Web Audio بەبێ پێویستی بە دابەزاندنی فایل
             </p>
 
@@ -486,7 +486,7 @@ export function StudyRooms() {
                 ]
               ).map((sound) => (
                 <div key={sound.key} className="space-y-1">
-                  <div className="flex justify-between text-[11px] font-sans text-slate-600">
+                  <div className="flex justify-between text-[11px] font-sans text-slate-600 dark:text-slate-300">
                     <span>{sound.label}</span>
                     <span className="font-mono">{sound.val}%</span>
                   </div>
@@ -498,7 +498,7 @@ export function StudyRooms() {
                     onChange={(e) =>
                       handleVolumeChange(sound.key, parseInt(e.target.value, 10))
                     }
-                    className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                    className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
                   />
                 </div>
               ))}
@@ -507,7 +507,7 @@ export function StudyRooms() {
 
           {/* Active Peers & Cheer Reactions */}
           <div className="space-y-3">
-            <h3 className="font-sans font-bold text-xs text-slate-800">
+            <h3 className="font-sans font-bold text-xs text-slate-800 dark:text-slate-200">
               هاوپۆلە چالاکەکانی ناو ئەم ژوورە:
             </h3>
 
@@ -515,14 +515,14 @@ export function StudyRooms() {
               {peers.map((peer, pIdx) => (
                 <div
                   key={pIdx}
-                  className="p-3 bg-white border border-slate-200 rounded-xl flex flex-col gap-2 text-xs font-sans"
+                  className="p-3 bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl flex flex-col gap-2 text-xs font-sans"
                 >
                   {/* Peer header row */}
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
-                      <span className="font-bold text-slate-900 block">{peer.name}</span>
+                      <span className="font-bold text-slate-900 dark:text-white block">{peer.name}</span>
                       {/* ── Feature 4: subject + chat link ── */}
-                      <span className="text-[10px] text-slate-500 flex items-center gap-1 flex-wrap">
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1 flex-wrap">
                         {peer.topic}
                         <button
                           onClick={() => {
@@ -533,20 +533,20 @@ export function StudyRooms() {
                               console.log("Navigate to chat for:", peer.topic);
                             }
                           }}
-                          className="inline-flex items-center gap-0.5 text-[10px] text-indigo-600 hover:underline cursor-pointer"
+                          className="inline-flex items-center gap-0.5 text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
                         >
                           <ExternalLink className="w-3 h-3" />
                           خوێندن لەگەڵ زانا
                         </button>
                       </span>
                     </div>
-                    <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full">
+                    <span className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-full">
                       {peer.status}
                     </span>
                   </div>
 
                   {/* ── Feature 3: Per-peer cheer buttons ── */}
-                  <div className="flex flex-wrap gap-1 pt-1 border-t border-slate-100 relative">
+                  <div className="flex flex-wrap gap-1 pt-1 border-t border-slate-100 dark:border-slate-700 relative">
                     {CHEER_TEMPLATES.map((tmpl, tIdx) => (
                       <button
                         key={tIdx}
@@ -555,7 +555,7 @@ export function StudyRooms() {
                           setCheerFeedback(`${tIdx}-${pIdx}`);
                           setTimeout(() => setCheerFeedback(null), 2000);
                         }}
-                        className="rounded-lg bg-white border border-slate-200 px-2 py-1 text-sm cursor-pointer hover:bg-slate-50 transition-colors"
+                        className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-2 py-1 text-sm cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                         title={tmpl.text}
                       >
                         {tmpl.emoji}
@@ -564,7 +564,7 @@ export function StudyRooms() {
                     {/* Mini toast anchored to this peer card */}
                     {cheerFeedback !== null &&
                       cheerFeedback.endsWith(`-${pIdx}`) && (
-                        <span className="absolute left-0 -bottom-6 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg animate-in fade-in z-10 whitespace-nowrap">
+                        <span className="absolute left-0 -bottom-6 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-lg animate-in fade-in z-10 whitespace-nowrap">
                           ✅ هاندانەکەت نێردرا!
                         </span>
                       )}
@@ -585,7 +585,7 @@ export function StudyRooms() {
                 <button
                   key={cIdx}
                   onClick={() => handleSendCheer(c.emoji, c.text)}
-                  className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-xs font-sans font-medium transition-colors cursor-pointer border border-slate-200"
+                  className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 hover:text-indigo-700 dark:hover:text-indigo-300 text-slate-700 dark:text-slate-300 text-xs font-sans font-medium transition-colors cursor-pointer border border-slate-200 dark:border-slate-700"
                 >
                   <span>{c.emoji} {c.text}</span>
                 </button>
@@ -593,7 +593,7 @@ export function StudyRooms() {
             </div>
 
             {cheerNotice && (
-              <p className="text-xs font-bold text-emerald-700 bg-emerald-50 p-2 rounded-lg border border-emerald-200 text-center animate-in fade-in">
+              <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 p-2 rounded-lg border border-emerald-200 dark:border-emerald-800 text-center animate-in fade-in">
                 {cheerNotice}
               </p>
             )}

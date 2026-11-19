@@ -10,6 +10,11 @@ import {
   LogOut,
   ChevronRight,
   ChevronLeft,
+  Brain,
+  Target,
+  Dumbbell,
+  Users,
+  FileBarChart2,
 } from "lucide-react";
 import { useAppStore } from "../store/appStore.ts";
 import { useUiStore } from "../store/uiStore.ts";
@@ -43,85 +48,146 @@ export const NAV_ITEMS: { key: NavItemKey; label: string; path: string }[] = [
   { key: "home", label: "ماڵەوە", path: "/" },
   { key: "chat", label: "زانا", path: "/chat" },
   { key: "subjects", label: "بابەتەکان", path: "/subjects" },
-  { key: "practice", label: "ڕاهێنان", path: "/practice" },
   { key: "pedagogy", label: "تاقیگەی پێداگۆجی", path: "/pedagogy" },
-  { key: "labs", label: "تاقیگە", path: "/labs" },
+  { key: "practice", label: "ڕاهێنان", path: "/practice" },
+  { key: "labs", label: "تاقیگەی زانستی", path: "/labs" },
   { key: "assessment", label: "هەڵسەنگاندن", path: "/assessment" },
   { key: "plan", label: "پلان", path: "/plan" },
   { key: "rooms", label: "ژوورەکان", path: "/rooms" },
+  { key: "report", label: "ڕاپۆرتی باوان", path: "/report" },
   { key: "profile", label: "پرۆفایل", path: "/profile" },
 ];
 
-// Student navigation: strictly simplified to 6 core destinations
+// Full ZANA student navigation exposing all core & pedagogical destinations
 export const STUDENT_NAV_ITEMS: NavItem[] = [
   {
     key: "home",
-    label: "ماڵەوە",
+    label: "چروسکەی ڕۆژانە",
     path: "/",
     icon: (active) => (
       <Home
         className={`w-5 h-5 shrink-0 transition-transform ${
-          active ? "fill-indigo-600 dark:fill-indigo-400 text-indigo-600 dark:text-indigo-400" : "text-slate-500"
+          active ? "text-indigo-600 dark:text-indigo-400" : "text-slate-500 dark:text-slate-400"
         }`}
       />
     ),
   },
   {
     key: "chat",
-    label: "زانا",
+    label: "مامۆستا زانا",
     path: "/chat",
     icon: (active) => (
       <MessageCircle
         className={`w-5 h-5 shrink-0 transition-transform ${
-          active ? "fill-indigo-600 dark:fill-indigo-400 text-indigo-600 dark:text-indigo-400" : "text-slate-500"
+          active ? "text-indigo-600 dark:text-indigo-400" : "text-slate-500 dark:text-slate-400"
         }`}
       />
     ),
   },
   {
     key: "subjects",
-    label: "بابەتەکان",
+    label: "بابەت و پەڕتووک",
     path: "/subjects",
     icon: (active) => (
       <BookOpen
         className={`w-5 h-5 shrink-0 transition-transform ${
-          active ? "fill-indigo-600 dark:fill-indigo-400 text-indigo-600 dark:text-indigo-400" : "text-slate-500"
+          active ? "text-indigo-600 dark:text-indigo-400" : "text-slate-500 dark:text-slate-400"
+        }`}
+      />
+    ),
+  },
+  {
+    key: "pedagogy",
+    label: "تاقیگەی پێداگۆجی (٥ پایە)",
+    path: "/pedagogy",
+    icon: (active) => (
+      <Brain
+        className={`w-5 h-5 shrink-0 transition-transform ${
+          active ? "text-amber-600 dark:text-amber-400" : "text-slate-500 dark:text-slate-400"
+        }`}
+      />
+    ),
+  },
+  {
+    key: "practice",
+    label: "تاقیگەی ڕاهێنان",
+    path: "/practice",
+    icon: (active) => (
+      <Dumbbell
+        className={`w-5 h-5 shrink-0 transition-transform ${
+          active ? "text-indigo-600 dark:text-indigo-400" : "text-slate-500 dark:text-slate-400"
         }`}
       />
     ),
   },
   {
     key: "labs",
-    label: "تاقیگە",
+    label: "تاقیگەی زانستی",
     path: "/labs",
     icon: (active) => (
       <FlaskConical
         className={`w-5 h-5 shrink-0 transition-transform ${
-          active ? "fill-emerald-600 dark:fill-emerald-400 text-emerald-600 dark:text-emerald-400" : "text-slate-500"
+          active ? "text-emerald-600 dark:text-emerald-400" : "text-slate-500 dark:text-slate-400"
+        }`}
+      />
+    ),
+  },
+  {
+    key: "assessment",
+    label: "تاقیکردنەوەی ئەداپتیڤ",
+    path: "/assessment",
+    icon: (active) => (
+      <Target
+        className={`w-5 h-5 shrink-0 transition-transform ${
+          active ? "text-emerald-600 dark:text-emerald-400" : "text-slate-500 dark:text-slate-400"
         }`}
       />
     ),
   },
   {
     key: "plan",
-    label: "پلانم",
+    label: "پلانی خوێندن",
     path: "/plan",
     icon: (active) => (
       <Compass
         className={`w-5 h-5 shrink-0 transition-transform ${
-          active ? "fill-indigo-600 dark:fill-indigo-400 text-indigo-600 dark:text-indigo-400" : "text-slate-500"
+          active ? "text-indigo-600 dark:text-indigo-400" : "text-slate-500 dark:text-slate-400"
+        }`}
+      />
+    ),
+  },
+  {
+    key: "rooms",
+    label: "ژوورەکانی خوێندن",
+    path: "/rooms",
+    icon: (active) => (
+      <Users
+        className={`w-5 h-5 shrink-0 transition-transform ${
+          active ? "text-indigo-600 dark:text-indigo-400" : "text-slate-500 dark:text-slate-400"
+        }`}
+      />
+    ),
+  },
+  {
+    key: "report",
+    label: "ڕاپۆرتی باوان",
+    path: "/report",
+    icon: (active) => (
+      <FileBarChart2
+        className={`w-5 h-5 shrink-0 transition-transform ${
+          active ? "text-emerald-600 dark:text-emerald-400" : "text-slate-500 dark:text-slate-400"
         }`}
       />
     ),
   },
   {
     key: "profile",
-    label: "پرۆفایلم",
+    label: "پڕۆفایل و ڕێکخستن",
     path: "/profile",
     icon: (active) => (
       <User
         className={`w-5 h-5 shrink-0 transition-transform ${
-          active ? "fill-indigo-600 dark:fill-indigo-400 text-indigo-600 dark:text-indigo-400" : "text-slate-500"
+          active ? "text-indigo-600 dark:text-indigo-400" : "text-slate-500 dark:text-slate-400"
         }`}
       />
     ),

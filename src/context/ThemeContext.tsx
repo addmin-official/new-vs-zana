@@ -1,9 +1,11 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 
 export type ThemeMode = "light" | "dark" | "system";
+export type ResolvedTheme = "light" | "dark";
 
 interface ThemeContextType {
  theme: ThemeMode;
+ resolvedTheme: ResolvedTheme;
  isDark: boolean;
  setTheme: (theme: ThemeMode) => void;
  toggleTheme: () => void;
@@ -51,6 +53,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
  }, []);
 
  const isDark = theme === "dark" || (theme === "system" && systemIsDark);
+ const resolvedTheme: ResolvedTheme = isDark ? "dark" : "light";
 
  // Apply dark class to documentElement whenever isDark changes
  useEffect(() => {
@@ -80,7 +83,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
  };
 
  return (
- <ThemeContext.Provider value={{ theme, isDark, setTheme, toggleTheme }}>
+ <ThemeContext.Provider value={{ theme, resolvedTheme, isDark, setTheme, toggleTheme }}>
  {children}
  </ThemeContext.Provider>
  );

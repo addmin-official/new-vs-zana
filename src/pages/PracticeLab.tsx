@@ -1080,29 +1080,29 @@ export function PracticeLab({
   const getDifficultyBadge = (diff: string) => {
     switch (diff) {
       case "beginner":
-        return <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">سەرەتایی</span>;
+        return <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">سەرەتایی</span>;
       case "intermediate":
-        return <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">مامناوەند</span>;
+        return <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60">مامناوەند</span>;
       case "advanced":
-        return <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200">پێشکەوتوو</span>;
+        return <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-50 dark:bg-red-950/50 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800/60">پێشکەوتوو</span>;
       default:
         return null;
     }
   };
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col lg:flex-row h-full overflow-hidden bg-slate-50" dir="rtl">
+    <div className="flex-1 min-h-0 flex flex-col lg:flex-row h-full overflow-hidden bg-slate-50 dark:bg-slate-950" dir="rtl">
       {/* 1. Sidebar Practice Library (280px Desktop) */}
-      <aside className="w-full lg:w-[280px] bg-white border-l border-slate-200 flex flex-col h-auto lg:h-full shrink-0 shadow-2xs">
+      <aside className="w-full lg:w-[280px] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 flex flex-col h-auto lg:h-full shrink-0 shadow-2xs">
         {/* Search & Subject Badge */}
-        <div className="p-4 border-b border-slate-100 space-y-3">
-          <div className="p-3 bg-indigo-50/70 border border-indigo-100 rounded-xl flex items-center justify-between">
+        <div className="p-4 border-b border-slate-100 dark:border-slate-800 space-y-3">
+          <div className="p-3 bg-indigo-50/70 dark:bg-indigo-950/50 border border-indigo-100 dark:border-indigo-800/60 rounded-xl flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-base">{activeSubjectMeta.icon}</span>
-              <span className="text-xs font-bold text-indigo-900 font-sans">{activeSubjectMeta.label}</span>
+              <span className="text-xs font-bold text-indigo-900 dark:text-indigo-200 font-sans">{activeSubjectMeta.label}</span>
             </div>
-            <div className="flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-              <Lock className="w-2.5 h-2.5 text-amber-600" />
+            <div className="flex items-center gap-1 text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800/60 px-2 py-0.5 rounded-full">
+              <Lock className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
               <span>جێگیرکراوە</span>
             </div>
           </div>
@@ -1114,7 +1114,7 @@ export function PracticeLab({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={`گەڕان لە بابەتەکانی ${activeSubjectMeta.label}...`}
-              className="w-full pr-9 pl-3 py-2 rounded-xl border border-slate-200 text-xs font-sans focus:outline-none focus:ring-2 focus:ring-indigo-600"
+              className="w-full pr-9 pl-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-xs font-sans focus:outline-none focus:ring-2 focus:ring-indigo-600"
             />
           </div>
         </div>
@@ -1130,8 +1130,8 @@ export function PracticeLab({
               }}
               className={`p-3 rounded-xl border transition-all cursor-pointer flex flex-col gap-1.5 text-right ${
                 currentProblemIndex === idx
-                  ? "bg-indigo-50/70 border-indigo-200 text-indigo-900 shadow-2xs"
-                  : "bg-white border-slate-200 hover:border-slate-300 text-slate-800"
+                  ? "bg-indigo-50/70 dark:bg-indigo-950/50 border-indigo-200 dark:border-indigo-700 text-indigo-900 dark:text-indigo-200 shadow-2xs"
+                  : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 text-slate-800 dark:text-slate-200"
               }`}
             >
               <div className="flex items-center justify-between">
@@ -1148,13 +1148,13 @@ export function PracticeLab({
                 >
                   <Star
                     className={`w-4 h-4 ${
-                      bookmarked[prob.id] ? "text-amber-500 fill-amber-500" : "text-slate-300"
+                      bookmarked[prob.id] ? "text-amber-500 fill-amber-500" : "text-slate-300 dark:text-slate-600"
                     }`}
                   />
                 </button>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-[10px] text-slate-500 uppercase tracking-wider font-mono">
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-mono">
                   {prob.category}
                 </span>
                 {getDifficultyBadge(prob.difficulty)}
@@ -1166,17 +1166,17 @@ export function PracticeLab({
 
       {/* Badges Modal */}
       {isBadgesModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm space-y-4 relative border border-slate-100 shadow-xl" dir="rtl">
+        <div className="fixed inset-0 z-50 bg-slate-950/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 w-full max-w-sm space-y-4 relative border border-slate-100 dark:border-slate-800 shadow-xl" dir="rtl">
             <button
               onClick={() => setIsBadgesModalOpen(false)}
-              className="absolute top-4 left-4 text-slate-400 hover:text-slate-700 cursor-pointer p-1 rounded-lg"
+              className="absolute top-4 left-4 text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer p-1 rounded-lg"
             >
               <X className="w-5 h-5" />
             </button>
             <div className="flex items-center gap-2">
               <Trophy className="w-5 h-5 text-amber-500" />
-              <h3 className="font-sans font-bold text-base text-slate-900">{t("practice.badges")}</h3>
+              <h3 className="font-sans font-bold text-base text-slate-900 dark:text-white">{t("practice.badges")}</h3>
             </div>
             <div className="grid grid-cols-2 gap-3 pt-2">
               {badgesList.map((b) => (
@@ -1184,13 +1184,13 @@ export function PracticeLab({
                   key={b.id}
                   className={`p-3 rounded-xl border text-center space-y-1 ${
                     b.unlocked
-                      ? "bg-amber-50/60 border-amber-200 text-slate-800"
-                      : "bg-slate-50 border-slate-100 opacity-40 grayscale"
+                      ? "bg-amber-50/60 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/60 text-slate-800 dark:text-slate-100"
+                      : "bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800 opacity-40 grayscale"
                   }`}
                 >
                   <span className="text-3xl block">{b.icon}</span>
                   <span className="font-sans font-bold text-xs block">{b.name}</span>
-                  <span className="text-[10px] text-slate-500">
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400">
                     {b.unlocked ? "کراوەتەوە ✅" : "داخراوە 🔒"}
                   </span>
                 </div>
@@ -1248,33 +1248,33 @@ export function PracticeLab({
           </div>
 
           {/* Active Subject Showcase Banner & Switcher */}
-          <div className="bg-white rounded-2xl border border-indigo-100 p-4 shadow-2xs flex items-center justify-between gap-3">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-indigo-100 dark:border-slate-800 p-4 shadow-2xs flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <span className="w-11 h-11 rounded-xl bg-indigo-50 border border-indigo-100 text-2xl flex items-center justify-center shrink-0">
+              <span className="w-11 h-11 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-100 dark:border-indigo-800/60 text-2xl flex items-center justify-center shrink-0">
                 {activeSubjectMeta.icon}
               </span>
               <div className="text-right">
                 <div className="flex items-center gap-2">
-                  <span className="font-sans font-bold text-slate-900 text-sm">
+                  <span className="font-sans font-bold text-slate-900 dark:text-white text-sm">
                     تاقیگەی ڕاهێنانی {activeSubjectMeta.label}
                   </span>
-                  <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
+                  <span className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800/60 px-2 py-0.5 rounded-full">
                     مەنهەجی پۆلی {studentGrade}
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-500 font-sans mt-0.5">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-sans mt-0.5">
                   پرسیار و ڕاهێنانەکان تایبەت و چەسپاون بە پۆلی {studentGrade} • {streamLabel}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold font-sans">
-              <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-800 dark:text-amber-300 text-xs font-bold font-sans">
+              <Lock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
               <span>پۆلی {studentGrade} • {streamLabel} (جێگیرکراوە)</span>
             </div>
           </div>
 
           {/* Practice Mode Switcher */}
-          <div className="flex items-center justify-between gap-3 bg-white p-1.5 rounded-2xl border border-slate-200 shadow-2xs">
+          <div className="flex items-center justify-between gap-3 bg-white dark:bg-slate-900 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs">
             <button
               type="button"
               onClick={() => {
@@ -1284,7 +1284,7 @@ export function PracticeLab({
               className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
                 practiceTab === "standard_solver"
                   ? "bg-indigo-600 text-white shadow-xs"
-                  : "text-slate-600 hover:bg-slate-100"
+                  : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
               }`}
             >
               <Calculator className="w-4 h-4" />
@@ -1300,7 +1300,7 @@ export function PracticeLab({
               className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
                 practiceTab === "interactive_types"
                   ? "bg-indigo-600 text-white shadow-xs"
-                  : "text-slate-600 hover:bg-slate-100"
+                  : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
               }`}
             >
               <Sparkles className="w-4 h-4 text-amber-400" />
@@ -1312,8 +1312,8 @@ export function PracticeLab({
           {practiceTab === "interactive_types" && (
             <div className="space-y-6">
               {/* Exercise Selector Pills */}
-              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
-                <span className="text-xs font-bold text-slate-500 font-sans block">
+              <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs space-y-3">
+                <span className="text-xs font-bold text-slate-500 dark:text-slate-400 font-sans block">
                   جۆری ڕاهێنانی کارلێککارانەی {activeSubjectMeta.label} هەڵبژێرە:
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
@@ -1330,7 +1330,7 @@ export function PracticeLab({
                         className={`p-3 rounded-xl border text-right transition-all cursor-pointer font-sans space-y-1 ${
                           isSelected
                             ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
-                            : "bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200/80"
+                            : "bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-200/80 dark:border-slate-700"
                         }`}
                       >
                         <span className="text-[10px] font-bold block opacity-80">
@@ -1369,30 +1369,30 @@ export function PracticeLab({
           {practiceTab === "standard_solver" && (
             <>
           {/* Locked Curriculum Status Bar */}
-          <div className="space-y-2 bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
+          <div className="space-y-2 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs">
             {/* Row 1: Locked Grade & Stream Status */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs">
               <div className="flex items-center gap-2">
-                <span className="font-bold text-slate-500 font-sans">پۆل و بەش:</span>
-                <span className="font-black text-slate-900 font-sans">پۆلی {studentGrade}ی ئامادەیی • {streamLabel}</span>
+                <span className="font-bold text-slate-500 dark:text-slate-400 font-sans">پۆل و بەش:</span>
+                <span className="font-black text-slate-900 dark:text-white font-sans">پۆلی {studentGrade}ی ئامادەیی • {streamLabel}</span>
               </div>
-              <div className="flex items-center gap-1.5 self-start sm:self-auto text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-full">
-                <Lock className="w-3 h-3 text-amber-600" />
+              <div className="flex items-center gap-1.5 self-start sm:self-auto text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800/60 px-2.5 py-0.5 rounded-full">
+                <Lock className="w-3 h-3 text-amber-600 dark:text-amber-400" />
                 <span>جێگیرکراوە بەپێی هەژمار</span>
               </div>
             </div>
 
             {/* Row 2: Locked Subject Status */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl bg-indigo-50/60 border border-indigo-100 text-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-800/60 text-xs">
               <div className="flex items-center gap-2">
-                <span className="font-bold text-indigo-700 font-sans">بابەتی تەرکیز:</span>
-                <div className="flex items-center gap-1.5 font-sans font-black text-indigo-950">
+                <span className="font-bold text-indigo-700 dark:text-indigo-400 font-sans">بابەتی تەرکیز:</span>
+                <div className="flex items-center gap-1.5 font-sans font-black text-indigo-950 dark:text-indigo-200">
                   <span>{activeSubjectMeta.icon}</span>
                   <span>{activeSubjectMeta.label}</span>
                 </div>
               </div>
-              <div className="flex items-center gap-1.5 self-start sm:self-auto text-[10px] font-bold text-indigo-700 bg-white border border-indigo-200 px-2.5 py-0.5 rounded-full shadow-2xs">
-                <Lock className="w-3 h-3 text-indigo-600" />
+              <div className="flex items-center gap-1.5 self-start sm:self-auto text-[10px] font-bold text-indigo-700 dark:text-indigo-300 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800/60 px-2.5 py-0.5 rounded-full shadow-2xs">
+                <Lock className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
                 <span>مەنهەجی فەرمی وەزارەت</span>
               </div>
             </div>
@@ -1420,8 +1420,8 @@ export function PracticeLab({
                   }}
                   className={`px-3 py-1.5 rounded-xl text-xs shrink-0 cursor-pointer transition-colors font-sans ${
                     selectedFormat === f.id
-                      ? "bg-slate-200 text-slate-900 font-bold"
-                      : "bg-slate-50 text-slate-500 hover:bg-slate-100"
+                      ? "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white font-bold"
+                      : "bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
                   }`}
                 >
                   {f.label}
@@ -1431,19 +1431,19 @@ export function PracticeLab({
           </div>
 
           {/* Module count indicator */}
-          <div className="flex items-center justify-between text-xs text-slate-500 font-sans px-1">
+          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-sans px-1">
             <span>{filteredProblems.length} مۆدیوڵی ڕاهێنان بەردەستە</span>
           </div>
 
           {filteredProblems.length === 0 ? (
-            <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center space-y-3 shadow-xs">
-              <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center mx-auto">
+            <div className="bg-white dark:bg-slate-900 p-8 rounded-2xl border border-slate-200 dark:border-slate-800 text-center space-y-3 shadow-xs">
+              <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center mx-auto">
                 <Search className="w-6 h-6 text-slate-400" />
               </div>
-              <h3 className="font-sans font-bold text-base text-slate-800">
+              <h3 className="font-sans font-bold text-base text-slate-800 dark:text-white">
                 هیچ پرسیارێک بەپێی ئەم فلتەرانە نەدۆزرایەوە
               </h3>
-              <p className="font-sans text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+              <p className="font-sans text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto leading-relaxed">
                 تکایە فلتەری شێوازی پرسیار یان وشەی گەڕانەکەت پاکبکەرەوە.
               </p>
               <button
@@ -1451,7 +1451,7 @@ export function PracticeLab({
                   setSelectedFormat("all");
                   setSearchQuery("");
                 }}
-                className="mt-2 px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-xl text-xs font-bold transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                className="mt-2 px-4 py-2 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-950 rounded-xl text-xs font-bold transition-colors cursor-pointer inline-flex items-center gap-1.5"
               >
                 <span>پاککردنەوەی فلتەرەکان</span>
                 <RotateCcw className="w-3.5 h-3.5" />
@@ -1477,18 +1477,18 @@ export function PracticeLab({
               )}
 
               {/* Header Card */}
-              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+              <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-3">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-3 py-1 rounded-full border border-indigo-100 dark:border-indigo-800/60">
                       تاقیگەی ڕاهێنانی ئەکادیمی 📝
                     </span>
                     {currentProblem.isMasteryGapTargeted && (
-                      <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                      <span className="text-[10px] font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800/60 px-2.5 py-0.5 rounded-full flex items-center gap-1">
                         <span>🎯 بەهێزکردنی چەمکی لاواز</span>
                       </span>
                     )}
-                    <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
+                    <span className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800/60 px-2 py-0.5 rounded-full">
                       {currentProblem.questionType === "MULTIPLE_CHOICE"
                         ? "هەڵبژاردن (MCQ)"
                         : currentProblem.questionType === "FILL_BLANK"
@@ -1503,22 +1503,22 @@ export function PracticeLab({
                   {getDifficultyBadge(currentProblem.difficulty)}
                 </div>
 
-                <h1 className="font-sans font-bold text-xl sm:text-2xl text-slate-900">
+                <h1 className="font-sans font-bold text-xl sm:text-2xl text-slate-900 dark:text-white">
                   {currentProblem.title}
                 </h1>
 
-                <p className="font-sans text-sm sm:text-base text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-200/80">
+                <p className="font-sans text-sm sm:text-base text-slate-700 dark:text-slate-200 leading-relaxed bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700">
                   {currentProblem.statement}
                 </p>
 
                 {/* Worked Example Mode Reveal */}
                 {isWorkedExampleMode && (
-                  <div className="p-4 bg-emerald-50/80 border border-emerald-300 rounded-2xl text-xs text-emerald-950 font-sans space-y-2 shadow-2xs">
-                    <div className="flex items-center gap-2 font-bold text-emerald-800">
-                      <BookOpen className="w-4 h-4 text-emerald-600" />
+                  <div className="p-4 bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800/60 rounded-2xl text-xs text-emerald-950 dark:text-emerald-200 font-sans space-y-2 shadow-2xs">
+                    <div className="flex items-center gap-2 font-bold text-emerald-800 dark:text-emerald-300">
+                      <BookOpen className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                       <span>شێوازی نموونەی شیکارکراو (Worked Example Mode) چالاکە:</span>
                     </div>
-                    <p className="leading-relaxed bg-white/80 p-3 rounded-xl border border-emerald-200">
+                    <p className="leading-relaxed bg-white/80 dark:bg-slate-900/80 p-3 rounded-xl border border-emerald-200 dark:border-emerald-800/60">
                       {currentProblem.workedExample}
                     </p>
                   </div>
@@ -1526,8 +1526,8 @@ export function PracticeLab({
               </div>
 
               {/* Interactive Problem Form per Question Type */}
-              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-5">
-                <h2 className="font-sans font-bold text-sm text-slate-900 border-b border-slate-100 pb-2">
+              <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-5">
+                <h2 className="font-sans font-bold text-sm text-slate-900 dark:text-white border-b border-slate-100 dark:border-slate-800 pb-2">
                   {currentProblem.questionType === "MULTIPLE_CHOICE"
                     ? "بژاردەی دروست هەڵبژێرە"
                     : currentProblem.questionType === "FILL_BLANK"
@@ -1552,14 +1552,14 @@ export function PracticeLab({
                           onClick={() => setSelectedMcqIndex(oIdx)}
                           className={`p-4 rounded-xl border text-right transition-all cursor-pointer flex items-center justify-between font-sans ${
                             isSelected
-                              ? "bg-indigo-50 border-indigo-600 text-indigo-950 ring-2 ring-indigo-500 shadow-xs"
-                              : "bg-white hover:bg-slate-50 border-slate-200 text-slate-800"
+                              ? "bg-indigo-50 dark:bg-indigo-950/60 border-indigo-600 text-indigo-950 dark:text-indigo-200 ring-2 ring-indigo-500 shadow-xs"
+                              : "bg-white dark:bg-slate-800/60 hover:bg-slate-50 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200"
                           }`}
                         >
                           <span className="text-xs sm:text-sm font-bold">{opt}</span>
                           <span
                             className={`w-7 h-7 rounded-lg text-xs font-bold flex items-center justify-center shrink-0 ${
-                              isSelected ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600"
+                              isSelected ? "bg-indigo-600 text-white" : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
                             }`}
                           >
                             {labels[oIdx] || oIdx + 1}
@@ -1573,16 +1573,16 @@ export function PracticeLab({
                 {/* 2. FILL IN THE BLANK RENDERER */}
                 {currentProblem.questionType === "FILL_BLANK" && (
                   <div className="space-y-4">
-                    <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm leading-relaxed text-slate-800 font-sans">
+                    <div className="p-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm leading-relaxed text-slate-800 dark:text-slate-200 font-sans">
                       {currentProblem.fillBlankTemplate}
                     </div>
                     {currentProblem.wordBank && (
-                      <div className="flex flex-wrap items-center gap-2 p-3 bg-indigo-50/50 rounded-xl border border-indigo-100">
-                        <span className="text-xs font-bold text-indigo-800 font-sans">بانکی وشەکان:</span>
+                      <div className="flex flex-wrap items-center gap-2 p-3 bg-indigo-50/50 dark:bg-indigo-950/40 rounded-xl border border-indigo-100 dark:border-indigo-800/60">
+                        <span className="text-xs font-bold text-indigo-800 dark:text-indigo-300 font-sans">بانکی وشەکان:</span>
                         {currentProblem.wordBank.map((word, wIdx) => (
                           <span
                             key={wIdx}
-                            className="px-2.5 py-1 bg-white border border-indigo-200 text-indigo-900 rounded-lg text-xs font-bold font-sans shadow-2xs"
+                            className="px-2.5 py-1 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 text-indigo-900 dark:text-indigo-200 rounded-lg text-xs font-bold font-sans shadow-2xs"
                           >
                             {word}
                           </span>
@@ -1592,7 +1592,7 @@ export function PracticeLab({
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {(currentProblem.fillBlankExpected || []).map((_, bIdx) => (
                         <div key={bIdx} className="space-y-1">
-                          <label className="text-xs font-bold text-slate-700 font-sans">
+                          <label className="text-xs font-bold text-slate-700 dark:text-slate-300 font-sans">
                             بۆشایی [{bIdx + 1}]:
                           </label>
                           <input
@@ -1602,7 +1602,7 @@ export function PracticeLab({
                               setUserInputs((prev) => ({ ...prev, [bIdx]: e.target.value }))
                             }
                             placeholder={`وەڵامی بۆشایی [${bIdx + 1}]...`}
-                            className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-xs sm:text-sm font-sans focus:outline-none focus:ring-2 focus:ring-indigo-600 bg-white"
+                            className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs sm:text-sm font-sans focus:outline-none focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-slate-950 text-slate-900 dark:text-white"
                           />
                         </div>
                       ))}
@@ -1613,16 +1613,16 @@ export function PracticeLab({
                 {/* 3. MATCHING RENDERER */}
                 {currentProblem.questionType === "MATCHING" && (
                   <div className="space-y-3">
-                    <p className="text-xs font-bold text-slate-600 font-sans">
+                    <p className="text-xs font-bold text-slate-600 dark:text-slate-300 font-sans">
                       هاوتای گونجاو هەڵبژێرە بۆ هەر چەمکێک:
                     </p>
                     <div className="space-y-2.5">
                       {currentProblem.matchingPairs?.map((pair) => (
                         <div
                           key={pair.id}
-                          className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                          className="p-3.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                         >
-                          <span className="text-xs font-bold text-slate-900 font-sans sm:w-1/3">
+                          <span className="text-xs font-bold text-slate-900 dark:text-white font-sans sm:w-1/3">
                             {pair.left}
                           </span>
                           <select
@@ -1633,7 +1633,7 @@ export function PracticeLab({
                                 [pair.id]: e.target.value,
                               }))
                             }
-                            className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-sans focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                            className="flex-1 px-3 py-2 bg-white dark:bg-slate-950 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-sans focus:outline-none focus:ring-2 focus:ring-indigo-600"
                           >
                             <option value="">-- پێناسەی گونجاو دیاری بکە --</option>
                             {currentProblem.matchingPairs?.map((p) => (
@@ -1651,20 +1651,20 @@ export function PracticeLab({
                 {/* 4. ORDERING RENDERER */}
                 {currentProblem.questionType === "ORDERING" && (
                   <div className="space-y-3">
-                    <p className="text-xs font-bold text-slate-600 font-sans">
+                    <p className="text-xs font-bold text-slate-600 dark:text-slate-300 font-sans">
                       هەنگاوەکان بە تیرەکان بەرز یان نزم بکەرەوە بۆ ڕێکخستنی ڕیزبەندی دروست:
                     </p>
                     <div className="space-y-2">
                       {orderingCurrentList.map((item, idx) => (
                         <div
                           key={item.id}
-                          className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between gap-3 shadow-2xs"
+                          className="p-3 bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl flex items-center justify-between gap-3 shadow-2xs"
                         >
                           <div className="flex items-center gap-3">
-                            <span className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-700 font-bold text-xs flex items-center justify-center">
+                            <span className="w-6 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-bold text-xs flex items-center justify-center">
                               {idx + 1}
                             </span>
-                            <span className="text-xs font-medium text-slate-800 font-sans">
+                            <span className="text-xs font-medium text-slate-800 dark:text-slate-200 font-sans">
                               {item.text}
                             </span>
                           </div>
@@ -1680,10 +1680,10 @@ export function PracticeLab({
                                 next[idx] = temp;
                                 setOrderingCurrentList(next);
                               }}
-                              className="p-1 rounded-md border border-slate-200 hover:bg-slate-100 disabled:opacity-30 cursor-pointer"
+                              className="p-1 rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 cursor-pointer"
                               title="بەرەو سەرەوە"
                             >
-                              <MoveUp className="w-3.5 h-3.5 text-slate-600" />
+                              <MoveUp className="w-3.5 h-3.5 text-slate-600 dark:text-slate-300" />
                             </button>
                             <button
                               type="button"
@@ -1696,10 +1696,10 @@ export function PracticeLab({
                                 next[idx] = temp;
                                 setOrderingCurrentList(next);
                               }}
-                              className="p-1 rounded-md border border-slate-200 hover:bg-slate-100 disabled:opacity-30 cursor-pointer"
+                              className="p-1 rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 cursor-pointer"
                               title="بەرەو خوارەوە"
                             >
-                              <MoveDown className="w-3.5 h-3.5 text-slate-600" />
+                              <MoveDown className="w-3.5 h-3.5 text-slate-600 dark:text-slate-300" />
                             </button>
                           </div>
                         </div>
@@ -1714,9 +1714,9 @@ export function PracticeLab({
                     {currentProblem.steps.map((step, idx) => (
                       <div
                         key={idx}
-                        className="space-y-2 p-3 bg-slate-50/60 rounded-xl border border-slate-200"
+                        className="space-y-2 p-3 bg-slate-50/60 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700"
                       >
-                        <label className="block text-xs font-bold text-slate-800 font-sans">
+                        <label className="block text-xs font-bold text-slate-800 dark:text-slate-200 font-sans">
                           {step.instruction}
                         </label>
                         <input
@@ -1726,7 +1726,7 @@ export function PracticeLab({
                             setUserInputs((prev) => ({ ...prev, [idx]: e.target.value }))
                           }
                           placeholder="وەڵام بنووسە..."
-                          className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-indigo-600 bg-white"
+                          className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-indigo-600 bg-white dark:bg-slate-950 text-slate-900 dark:text-white"
                         />
                       </div>
                     ))}
@@ -1735,10 +1735,10 @@ export function PracticeLab({
 
                 {/* 3-Level Progressive Hint Drawer */}
                 {hintLevel > 0 && (
-                  <div className="space-y-2 p-4 bg-amber-50/70 border border-amber-200 rounded-2xl animate-in fade-in">
+                  <div className="space-y-2 p-4 bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 rounded-2xl animate-in fade-in">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 font-bold text-xs text-amber-900 font-sans">
-                        <Lightbulb className="w-4 h-4 text-amber-600" />
+                      <div className="flex items-center gap-1.5 font-bold text-xs text-amber-900 dark:text-amber-300 font-sans">
+                        <Lightbulb className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                         <span>سیستەمی تێبینی پێشکەوتوو (ئاستی {hintLevel} لە ٣)</span>
                       </div>
                       <div className="flex items-center gap-1">
@@ -1746,7 +1746,7 @@ export function PracticeLab({
                           <span
                             key={lvl}
                             className={`w-2 h-2 rounded-full ${
-                              hintLevel >= lvl ? "bg-amber-600" : "bg-amber-200"
+                              hintLevel >= lvl ? "bg-amber-600 dark:bg-amber-400" : "bg-amber-200 dark:bg-amber-900"
                             }`}
                           />
                         ))}
@@ -1754,8 +1754,8 @@ export function PracticeLab({
                     </div>
 
                     {hintLevel >= 1 && (
-                      <div className="p-2.5 bg-white/90 rounded-xl border border-amber-200 text-xs text-amber-900 font-sans space-y-0.5">
-                        <span className="font-bold text-amber-800 block text-[11px]">
+                      <div className="p-2.5 bg-white/90 dark:bg-slate-900/90 rounded-xl border border-amber-200 dark:border-amber-800/60 text-xs text-amber-900 dark:text-amber-200 font-sans space-y-0.5">
+                        <span className="font-bold text-amber-800 dark:text-amber-300 block text-[11px]">
                           ئاستی ١: ئاماژەی ورد (Subtle Hint):
                         </span>
                         <p>{currentProblem.subtleHint || currentProblem.steps[0]?.hint}</p>
@@ -1763,8 +1763,8 @@ export function PracticeLab({
                     )}
 
                     {hintLevel >= 2 && (
-                      <div className="p-2.5 bg-white/90 rounded-xl border border-orange-200 text-xs text-orange-950 font-sans space-y-0.5">
-                        <span className="font-bold text-orange-800 block text-[11px]">
+                      <div className="p-2.5 bg-white/90 dark:bg-slate-900/90 rounded-xl border border-orange-200 dark:border-orange-800/60 text-xs text-orange-950 dark:text-orange-200 font-sans space-y-0.5">
+                        <span className="font-bold text-orange-800 dark:text-orange-300 block text-[11px]">
                           ئاستی ٢: ڕێنمایی مامناوەند (Moderate Hint):
                         </span>
                         <p>
@@ -1775,8 +1775,8 @@ export function PracticeLab({
                     )}
 
                     {hintLevel >= 3 && (
-                      <div className="p-2.5 bg-white/90 rounded-xl border border-rose-200 text-xs text-rose-950 font-sans space-y-0.5">
-                        <span className="font-bold text-rose-800 block text-[11px]">
+                      <div className="p-2.5 bg-white/90 dark:bg-slate-900/90 rounded-xl border border-rose-200 dark:border-rose-800/60 text-xs text-rose-950 dark:text-rose-200 font-sans space-y-0.5">
+                        <span className="font-bold text-rose-800 dark:text-rose-300 block text-[11px]">
                           ئاستی ٣: شیکاری ڕاستەوخۆ (Direct Hint):
                         </span>
                         <p>
@@ -1790,7 +1790,7 @@ export function PracticeLab({
                       <button
                         type="button"
                         onClick={() => setHintLevel((prev) => Math.min(3, prev + 1) as 0 | 1 | 2 | 3)}
-                        className="text-[11px] font-bold text-amber-800 hover:text-amber-950 underline cursor-pointer pt-1"
+                        className="text-[11px] font-bold text-amber-800 dark:text-amber-300 hover:text-amber-950 dark:hover:text-amber-200 underline cursor-pointer pt-1"
                       >
                         ئاشکراکردنی ئاستی داهاتووی تێبینی (+{hintLevel + 1})
                       </button>
@@ -1815,7 +1815,7 @@ export function PracticeLab({
 
         {/* Bottom Action Buttons (Only for standard solver) */}
         {practiceTab === "standard_solver" && (
-          <div className="max-w-3xl w-full mx-auto pt-4 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
+          <div className="max-w-3xl w-full mx-auto pt-4 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
@@ -1824,11 +1824,11 @@ export function PracticeLab({
                 }
                 className={`text-xs font-bold px-3.5 py-2.5 rounded-xl border transition-colors cursor-pointer flex items-center gap-1.5 ${
                   hintLevel > 0
-                    ? "bg-amber-50 border-amber-300 text-amber-800"
-                    : "border-slate-200 hover:bg-slate-100 text-slate-700"
+                    ? "bg-amber-50 dark:bg-amber-950/50 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300"
+                    : "border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200"
                 }`}
               >
-                <Lightbulb className="w-3.5 h-3.5 text-amber-600" />
+                <Lightbulb className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                 <span>
                   {hintLevel === 0 ? "تێبینی (٣ ئاست)" : `تێبینی: ئاستی ${hintLevel}/٣`}
                 </span>
@@ -1839,18 +1839,18 @@ export function PracticeLab({
                 onClick={() => setIsWorkedExampleMode(!isWorkedExampleMode)}
                 className={`text-xs font-bold px-3.5 py-2.5 rounded-xl border transition-colors cursor-pointer flex items-center gap-1.5 ${
                   isWorkedExampleMode
-                    ? "bg-emerald-50 border-emerald-300 text-emerald-800"
-                    : "border-slate-200 hover:bg-slate-100 text-slate-700"
+                    ? "bg-emerald-50 dark:bg-emerald-950/50 border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-300"
+                    : "border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200"
                 }`}
               >
-                <BookOpen className="w-3.5 h-3.5 text-emerald-600" />
+                <BookOpen className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                 <span>نموونەی شیکارکراو</span>
               </button>
 
               <button
                 type="button"
                 onClick={handleReset}
-                className="text-xs font-bold px-3 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
+                className="text-xs font-bold px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
                 title="نوێکردنەوەی هەنگاوەکان"
               >
                 <RotateCcw className="w-4 h-4" />
@@ -1868,7 +1868,7 @@ export function PracticeLab({
               <button
                 type="button"
                 onClick={handleNextProblem}
-                className="text-xs font-bold px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white transition-colors cursor-pointer flex items-center gap-1.5"
+                className="text-xs font-bold px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-white transition-colors cursor-pointer flex items-center gap-1.5"
               >
                 <span>پرسیاری دواتر</span>
                 <ArrowLeft className="w-3.5 h-3.5" />

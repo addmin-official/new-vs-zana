@@ -1202,55 +1202,55 @@ export function AdaptiveAssessment({
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-3xl mx-auto w-full min-h-full flex flex-col justify-center" dir="rtl">
       {/* ─── GLOBAL PROMINENT SUBJECT BANNER & SWITCHER ───────────────────────── */}
-      <div className="bg-white rounded-2xl border border-indigo-100 p-4 shadow-2xs flex items-center justify-between gap-3 mb-5">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-indigo-100 dark:border-slate-800 p-4 shadow-2xs flex flex-wrap items-center justify-between gap-3 mb-5">
         <div className="flex items-center gap-3">
-          <span className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 text-xl flex items-center justify-center shrink-0">
+          <span className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-100 dark:border-indigo-800/60 text-xl flex items-center justify-center shrink-0">
             {activeSubjectMeta.icon}
           </span>
           <div className="text-right">
             <div className="flex items-center gap-2">
-              <span className="font-sans font-bold text-slate-900 text-sm">
+              <span className="font-sans font-bold text-slate-900 dark:text-white text-sm">
                 وانەی {activeSubjectMeta.label}
               </span>
-              <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
+              <span className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800/60 px-2 py-0.5 rounded-full">
                 تاقیکردنەوەی ئاست
               </span>
             </div>
-            <p className="text-[11px] text-slate-500 font-sans mt-0.5">
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-sans mt-0.5">
               پرسیارەکان بە تەواوی تایبەت و چەسپاون لەسەر مەنهەجی پۆلی {user.grade || "١٢"} • {user.stream === "scientific" ? "بەشی زانستی" : "بەشی وێژەیی"}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold font-sans">
-          <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-800 dark:text-amber-300 text-xs font-bold font-sans">
+          <Lock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
           <span>پۆلی {user.grade || "١٢"} • {user.stream === "scientific" ? "بەشی زانستی" : "بەشی وێژەیی"} (جێگیرکراوە)</span>
         </div>
       </div>
 
       {/* 1. INTRO PRE-ASSESSMENT SCREEN */}
       {phase === "intro" && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-xs text-center space-y-6">
-          <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 shadow-xs text-center space-y-6">
+          <div className="w-16 h-16 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto">
             <Target className="w-8 h-8" />
           </div>
 
           <div className="space-y-2">
-            <h1 className="font-sans font-black text-2xl text-slate-900">
+            <h1 className="font-sans font-black text-2xl text-slate-900 dark:text-white">
               تاقیکردنەوەی ئەداپتیڤی {activeSubjectMeta.label} {activeSubjectMeta.icon}
             </h1>
-            <p className="font-sans text-sm text-slate-600 max-w-md mx-auto leading-relaxed">
+            <p className="font-sans text-sm text-slate-600 dark:text-slate-300 max-w-md mx-auto leading-relaxed">
               ئەم هەڵسەنگاندنە کورتە ئاستی تێگەیشتنت لە مەنهەجی فەرمی {activeSubjectMeta.label} دیاری دەکات، بەبێ تێکەڵبوونی هیچ پرسیارێکی وانەکانی تر.
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 max-w-sm mx-auto text-right bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs text-slate-700">
+          <div className="grid grid-cols-2 gap-4 max-w-sm mx-auto text-right bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300">
             <div>
               <span className="text-slate-400 block">ژمارەی پرسیار:</span>
-              <span className="font-bold text-slate-900 text-sm">{questions.length} پرسیاری مەنهەجی</span>
+              <span className="font-bold text-slate-900 dark:text-white text-sm">{questions.length} پرسیاری مەنهەجی</span>
             </div>
             <div>
               <span className="text-slate-400 block">ماوەی پێشبینیکراو:</span>
-              <span className="font-bold text-slate-900 text-sm">~ ٥ خولەک</span>
+              <span className="font-bold text-slate-900 dark:text-white text-sm">~ ٥ خولەک</span>
             </div>
           </div>
 
@@ -1266,14 +1266,14 @@ export function AdaptiveAssessment({
 
       {/* 2. DURING ASSESSMENT SCREEN */}
       {phase === "testing" && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-xs space-y-6">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 shadow-xs space-y-6">
           {/* Header: Progress & Timer */}
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
             <div className="space-y-1">
-              <span className="text-xs font-bold text-indigo-600 font-sans">
+              <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 font-sans">
                 پرسیاری {currentIndex + 1} لە {questions.length} ({activeSubjectMeta.label})
               </span>
-              <div className="w-36 sm:w-48 h-2 bg-slate-100 rounded-full overflow-hidden">
+              <div className="w-36 sm:w-48 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-indigo-600 rounded-full transition-all duration-300"
                   style={{
@@ -1287,8 +1287,8 @@ export function AdaptiveAssessment({
             <div
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-mono text-xs font-bold border ${
                 timeLeft < 60
-                  ? "bg-red-50 text-red-600 border-red-200 animate-pulse"
-                  : "bg-slate-50 text-slate-700 border-slate-200"
+                  ? "bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800 animate-pulse"
+                  : "bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700"
               }`}
             >
               <Clock className="w-4 h-4" />
@@ -1299,10 +1299,10 @@ export function AdaptiveAssessment({
           {/* Question Text & Format Badge */}
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-md font-sans">
+              <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-0.5 rounded-md font-sans">
                 {currentQ?.topic}
               </span>
-              <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
                 {currentQ?.type === "true_false"
                   ? "ڕاست یان هەڵە"
                   : currentQ?.type === "numeric"
@@ -1310,7 +1310,7 @@ export function AdaptiveAssessment({
                   : "فرەهەڵبژاردن (MCQ)"}
               </span>
             </div>
-            <h2 className="font-sans font-bold text-base sm:text-lg text-slate-900 leading-snug">
+            <h2 className="font-sans font-bold text-base sm:text-lg text-slate-900 dark:text-white leading-snug">
               {currentQ?.question}
             </h2>
           </div>
@@ -1323,8 +1323,8 @@ export function AdaptiveAssessment({
                 onClick={() => handleSelectOption(0)}
                 className={`min-h-[56px] p-4 rounded-2xl border text-center font-sans font-bold text-sm transition-all cursor-pointer flex items-center justify-center gap-2 ${
                   selectedAnswers[currentIndex] === 0
-                    ? "bg-emerald-50 border-emerald-600 text-emerald-900 shadow-sm ring-2 ring-emerald-500/20"
-                    : "bg-white border-slate-200 hover:bg-slate-50 text-slate-800"
+                    ? "bg-emerald-50 dark:bg-emerald-950/50 border-emerald-600 text-emerald-900 dark:text-emerald-200 shadow-sm ring-2 ring-emerald-500/20"
+                    : "bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200"
                 }`}
               >
                 <span className="text-lg">✅</span>
@@ -1335,8 +1335,8 @@ export function AdaptiveAssessment({
                 onClick={() => handleSelectOption(1)}
                 className={`min-h-[56px] p-4 rounded-2xl border text-center font-sans font-bold text-sm transition-all cursor-pointer flex items-center justify-center gap-2 ${
                   selectedAnswers[currentIndex] === 1
-                    ? "bg-rose-50 border-rose-600 text-rose-900 shadow-sm ring-2 ring-rose-500/20"
-                    : "bg-white border-slate-200 hover:bg-slate-50 text-slate-800"
+                    ? "bg-rose-50 dark:bg-rose-950/50 border-rose-600 text-rose-900 dark:text-rose-200 shadow-sm ring-2 ring-rose-500/20"
+                    : "bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200"
                 }`}
               >
                 <span className="text-lg">❌</span>
@@ -1355,7 +1355,7 @@ export function AdaptiveAssessment({
                   value={numericAnswers[currentIndex] || ""}
                   onChange={(e) => handleNumericInput(e.target.value)}
                   placeholder="0.0"
-                  className="w-full text-center py-4 px-4 text-2xl font-mono font-bold rounded-2xl border-2 border-slate-200 focus:border-indigo-600 focus:outline-none focus:ring-4 focus:ring-indigo-100"
+                  className="w-full text-center py-4 px-4 text-2xl font-mono font-bold rounded-2xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:border-indigo-600 focus:outline-none focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-900/40"
                 />
                 <span className="text-xs text-slate-400 block text-right mt-1.5 font-sans">
                   تەنها ژمارە یان خاڵی دەیی بنووسە. نموونە: 7 یان 3.5
@@ -1370,7 +1370,7 @@ export function AdaptiveAssessment({
                       const cur = numericAnswers[currentIndex] || "";
                       handleNumericInput(cur + char);
                     }}
-                    className="h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-900 font-mono font-bold text-sm flex items-center justify-center cursor-pointer transition-all active:scale-95"
+                    className="h-10 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-white font-mono font-bold text-sm flex items-center justify-center cursor-pointer transition-all active:scale-95"
                   >
                     {char}
                   </button>
@@ -1390,8 +1390,8 @@ export function AdaptiveAssessment({
                     onClick={() => handleSelectOption(oIdx)}
                     className={`w-full min-h-[48px] p-3.5 sm:p-4 rounded-xl border text-right font-sans text-xs sm:text-sm transition-all cursor-pointer flex items-center justify-between ${
                       isSelected
-                        ? "bg-indigo-50 border-indigo-600 text-indigo-900 font-bold shadow-2xs"
-                        : "bg-white border-slate-200 hover:bg-slate-50 text-slate-800 font-medium"
+                        ? "bg-indigo-50 dark:bg-indigo-950/60 border-indigo-600 text-indigo-900 dark:text-indigo-200 font-bold shadow-2xs"
+                        : "bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 font-medium"
                     }`}
                   >
                     <div className="flex items-center gap-3">
@@ -1399,7 +1399,7 @@ export function AdaptiveAssessment({
                         className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border ${
                           isSelected
                             ? "bg-indigo-600 text-white border-indigo-600"
-                            : "bg-slate-100 text-slate-600 border-slate-200"
+                            : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600"
                         }`}
                       >
                         {String.fromCharCode(65 + oIdx)}
@@ -1413,11 +1413,11 @@ export function AdaptiveAssessment({
           )}
 
           {/* Navigation Buttons */}
-          <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
+          <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
             <button
               onClick={handlePrevious}
               disabled={currentIndex === 0}
-              className="text-xs font-bold px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 disabled:opacity-40 text-slate-600 transition-colors cursor-pointer flex items-center gap-1.5"
+              className="text-xs font-bold px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer flex items-center gap-1.5"
             >
               <ArrowRight className="w-4 h-4" />
               <span>پێشتر</span>
@@ -1439,33 +1439,33 @@ export function AdaptiveAssessment({
 
       {/* 3. RESULTS SCREEN */}
       {phase === "results" && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-xs space-y-6 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 shadow-xs space-y-6 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto">
             <CheckCircle2 className="w-8 h-8" />
           </div>
 
           <div className="space-y-1">
-            <h2 className="font-sans font-black text-2xl text-slate-900">
+            <h2 className="font-sans font-black text-2xl text-slate-900 dark:text-white">
               تاقیکردنەوەی {activeSubjectMeta.label} بە سەرکەوتوویی تێپەڕکرا! 🎉
             </h2>
-            <p className="font-sans text-xs sm:text-sm text-slate-500">
+            <p className="font-sans text-xs sm:text-sm text-slate-500 dark:text-slate-400">
               ئەمەش ئەنجام و شیکاری لێهاتوویی تۆیە لەسەر بابەتەکانی {activeSubjectMeta.label}:
             </p>
           </div>
 
           {/* Metric Badges */}
           <div className="grid grid-cols-2 gap-4 max-w-sm mx-auto">
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-center">
-              <span className="text-xs text-slate-500 font-sans block">نمرەی بەدەستهاتوو</span>
-              <span className="font-sans font-black text-2xl text-indigo-700">
+            <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 text-center">
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-sans block">نمرەی بەدەستهاتوو</span>
+              <span className="font-sans font-black text-2xl text-indigo-700 dark:text-indigo-400">
                 {score} / {questions.length}
               </span>
               <span className="text-[11px] text-slate-400 font-mono block mt-0.5">({percentage}%)</span>
             </div>
 
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-center">
-              <span className="text-xs text-slate-500 font-sans block">ئاستی دەستنیشانکراو</span>
-              <span className="font-sans font-black text-lg text-emerald-700 mt-1 block">
+            <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 text-center">
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-sans block">ئاستی دەستنیشانکراو</span>
+              <span className="font-sans font-black text-lg text-emerald-700 dark:text-emerald-400 mt-1 block">
                 {percentage >= 80 ? "پێشکەوتوو و باڵا" : percentage >= 50 ? "مامناوەند" : "سەرەتایی"}
               </span>
               <span className="text-[10px] text-slate-400 block mt-0.5">بەپێی مەنهەجی {activeSubjectMeta.label}</span>
@@ -1473,21 +1473,21 @@ export function AdaptiveAssessment({
           </div>
 
           {/* Weaknesses and Recommendations Strictly Specific to Active Subject */}
-          <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-4 text-right space-y-2 text-xs font-sans text-slate-700">
-            <span className="font-bold text-amber-900 block">
+          <div className="bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 rounded-xl p-4 text-right space-y-2 text-xs font-sans text-slate-700 dark:text-slate-300">
+            <span className="font-bold text-amber-900 dark:text-amber-300 block">
               خاڵە پێویستەکان بە پێداچوونەوە لە {activeSubjectMeta.label}:
             </span>
             {missedTopics.length > 0 ? (
               <p>
                 • پێویستت بە بەهێزکردنی تێگەیشتنت لەم بابەتانە هەیە:{" "}
-                <span className="font-bold text-amber-950">{missedTopics.join("، ")}</span>.
+                <span className="font-bold text-amber-950 dark:text-amber-200">{missedTopics.join("، ")}</span>.
               </p>
             ) : (
-              <p className="text-emerald-800 font-bold">
+              <p className="text-emerald-800 dark:text-emerald-300 font-bold">
                 • ئافەرم! لە تەواوی بابەت و چەمکە سەرەکییەکانی {activeSubjectMeta.label} بە سەرکەوتوویی وەڵامت دایەوە.
               </p>
             )}
-            <p className="font-bold text-indigo-700 pt-1">
+            <p className="font-bold text-indigo-700 dark:text-indigo-400 pt-1">
               ڕاسپاردەی داهاتوو: بەشداری لە تاقیگەی مەجازی و ڕاهێنانی کارلێککارانە بکە لەسەر {activeSubjectMeta.label}.
             </p>
           </div>
@@ -1495,7 +1495,7 @@ export function AdaptiveAssessment({
           <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
             <button
               onClick={handleStart}
-              className="text-xs font-bold px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+              className="text-xs font-bold px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
             >
               <RotateCcw className="w-4 h-4" />
               <span>دووبارەکردنەوەی تاقیکردنەوە</span>

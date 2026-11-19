@@ -692,18 +692,18 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
       </div>
 
       {/* 2. Mobile Chapter Bar / Selector */}
-      <div className="lg:hidden p-3 bg-white border-b border-slate-200 flex items-center justify-between shadow-2xs">
+      <div className="lg:hidden p-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shadow-2xs">
         <button
           onClick={() => setMobileChapterDrawer(true)}
-          className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-2 rounded-xl text-right font-sans cursor-pointer max-w-[80%]"
+          className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 px-3 py-2 rounded-xl text-right font-sans cursor-pointer max-w-[80%]"
         >
-          <BookOpen className="w-4 h-4 text-indigo-600 shrink-0" />
+          <BookOpen className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
           <div className="truncate">
-            <span className="font-bold text-xs text-slate-900 block truncate">
+            <span className="font-bold text-xs text-slate-900 dark:text-white block truncate">
               {activeChapter ? `بەندی ${activeChapter.id}: ${activeChapter.title}` : "هەڵبژاردنی بەند"}
             </span>
             {activeChapter?.pages && (
-              <span className="text-[10px] text-slate-500 block truncate">
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 block truncate">
                 لاپەڕە {activeChapter.pages}
               </span>
             )}
@@ -713,7 +713,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
 
         <button
           onClick={() => setMobileChapterDrawer(true)}
-          className="p-2 text-indigo-600 bg-indigo-50 rounded-xl border border-indigo-200 cursor-pointer text-xs font-sans font-bold flex items-center gap-1"
+          className="p-2 text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 rounded-xl border border-indigo-200 dark:border-indigo-800/60 cursor-pointer text-xs font-sans font-bold flex items-center gap-1"
         >
           <Layers className="w-4 h-4" />
           <span>بەندەکان</span>
@@ -723,20 +723,20 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
       {/* 3. Mobile Chapter Drawer Overlay */}
       {mobileChapterDrawer && (
         <div
-          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex justify-end lg:hidden"
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex justify-end lg:hidden"
           onClick={() => setMobileChapterDrawer(false)}
         >
           <div
-            className="w-full max-w-xs h-full bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-200"
+            className="w-full max-w-xs h-full bg-white dark:bg-slate-900 shadow-2xl flex flex-col animate-in slide-in-from-right duration-200"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-              <span className="font-sans font-bold text-base text-slate-900">
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <span className="font-sans font-bold text-base text-slate-900 dark:text-white">
                 {ku.chat.chaptersTitle}
               </span>
               <button
                 onClick={() => setMobileChapterDrawer(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg cursor-pointer"
               >
                 ✕
               </button>
@@ -759,15 +759,15 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
       )}
 
       {/* 4. Main Workspace Area */}
-      <div className="flex-1 flex flex-col h-full min-w-0 bg-slate-50 relative">
+      <div className="flex-1 flex flex-col h-full min-w-0 bg-slate-50 dark:bg-slate-950 relative">
         {/* Lesson Header + Segmented Mode Control Tabs */}
-        <div className="bg-white border-b border-slate-200 shadow-2xs">
+        <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-2xs">
           {/* Top Title Bar */}
-          <div className="px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-2 border-b border-slate-100">
+          <div className="px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2">
-              <BookOpen className="w-4 h-4 text-indigo-600 shrink-0" />
+              <BookOpen className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
               <div>
-                <h2 className="font-sans font-bold text-sm text-slate-900 truncate">
+                <h2 className="font-sans font-bold text-sm text-slate-900 dark:text-white truncate">
                   {activeChapter
                     ? `بەندی ${activeChapter.id}: ${activeChapter.title}`
                     : currentSubject === "physics"
@@ -777,7 +777,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                     : "بیرکاری پۆلی ١٢"}
                 </h2>
                 {activeChapter?.pages && (
-                  <p className="font-sans text-[10px] text-slate-500">
+                  <p className="font-sans text-[10px] text-slate-500 dark:text-slate-400">
                     لاپەڕە {activeChapter.pages} • پڕۆگرامی فەرمی وەزارەت
                   </p>
                 )}
@@ -785,14 +785,14 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
             </div>
 
             {/* Quick Subject Switcher Pills */}
-            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
+            <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
               <button
                 type="button"
                 onClick={() => handleSwitchSubject("physics")}
                 className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   currentSubject === "physics"
-                    ? "bg-white text-indigo-700 shadow-xs"
-                    : "text-slate-500 hover:text-slate-800"
+                    ? "bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-xs"
+                    : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
                 }`}
               >
                 ⚡ فیزیا
@@ -802,8 +802,8 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                 onClick={() => handleSwitchSubject("chemistry")}
                 className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   currentSubject === "chemistry"
-                    ? "bg-white text-indigo-700 shadow-xs"
-                    : "text-slate-500 hover:text-slate-800"
+                    ? "bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-xs"
+                    : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
                 }`}
               >
                 ⚗️ کیمیا
@@ -813,8 +813,8 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                 onClick={() => handleSwitchSubject("math")}
                 className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   currentSubject === "math"
-                    ? "bg-white text-indigo-700 shadow-xs"
-                    : "text-slate-500 hover:text-slate-800"
+                    ? "bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-xs"
+                    : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
                 }`}
               >
                 📐 بیرکاری
@@ -824,8 +824,8 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                 onClick={() => handleSwitchSubject("english")}
                 className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   currentSubject === "english"
-                    ? "bg-white text-indigo-700 shadow-xs"
-                    : "text-slate-500 hover:text-slate-800"
+                    ? "bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-xs"
+                    : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
                 }`}
               >
                 📚 ئینگلیزی
@@ -836,14 +836,14 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
               <div
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-sans font-bold border ${
                   serverHealth.isOnline
-                    ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                    : "bg-rose-50 text-rose-800 border-rose-200"
+                    ? "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60"
+                    : "bg-rose-50 dark:bg-rose-950/50 text-rose-800 dark:text-rose-300 border-rose-200 dark:border-rose-800/60"
                 }`}
                 title={serverHealth.isOnline ? `سێرڤەر کارایە (دواین پشکنین: ${serverHealth.latencyMs || "<50"}ms)` : "پەیوەندی لەگەڵ سێرڤەر نییە"}
               >
                 <span
                   className={`w-2 h-2 rounded-full shrink-0 ${
-                    serverHealth.isOnline ? "bg-emerald-500 animate-pulse" : "bg-rose-500"
+                    serverHealth.isOnline ? "bg-emerald-500" : "bg-rose-500"
                   }`}
                 />
                 <span>
@@ -855,7 +855,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                 <button
                   type="button"
                   onClick={onNavigateToSubjects}
-                  className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-full transition shadow-2xs cursor-pointer"
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-950 border border-indigo-200 dark:border-indigo-800/60 px-2.5 py-1 rounded-full transition shadow-2xs cursor-pointer"
                   title="گۆڕینی وانە بۆ وانەیەکی تر"
                 >
                   <span>گۆڕینی وانە</span>
@@ -863,7 +863,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                 </button>
               )}
 
-              <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/60 px-2.5 py-0.5 rounded-full">
+              <span className="text-[11px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/60 dark:border-indigo-800/60 px-2.5 py-0.5 rounded-full">
                 {earnedXp > 0 ? `+${earnedXp} XP` : "مامۆستا زانا"}
               </span>
 
@@ -871,11 +871,11 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
               <button
                 type="button"
                 onClick={handleContinueLastSession}
-                className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2.5 py-1 rounded-full transition shadow-2xs cursor-pointer"
+                className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-950/70 border border-amber-200 dark:border-amber-800/60 px-2.5 py-1 rounded-full transition shadow-2xs cursor-pointer"
                 title="بەردەوامبوون لە دانیشتنی پێشوو لەگەڵ زانا"
                 aria-label="بەردەوامبوون لە دانیشتنی پێشوو"
               >
-                <RotateCcw className="w-3 h-3 text-amber-600" />
+                <RotateCcw className="w-3 h-3 text-amber-600 dark:text-amber-400" />
                 <span>دانیشتنی پێشوو</span>
               </button>
 
@@ -887,7 +887,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                     clearChatHistory();
                   }
                 }}
-                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                className="p-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
                 title="سڕینەوەی گفتوگۆی ئەم وانەیە"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
@@ -897,13 +897,13 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
 
           {/* ─── Feature 1: Dual View Switcher ─────────────────────────────── */}
           <div className="px-3 pt-3 pb-2">
-            <div className="bg-slate-100 p-1 rounded-2xl flex items-center gap-1">
+            <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl flex items-center gap-1">
               <button
                 onClick={() => setViewMode("tutor")}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl font-sans text-xs font-bold transition-all cursor-pointer min-h-[48px] ${
                   viewMode === "tutor"
-                    ? "bg-white text-indigo-600 shadow-sm"
-                    : "text-slate-500 hover:text-slate-700"
+                    ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-300 shadow-sm"
+                    : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-white"
                 }`}
               >
                 <MessageSquare className="w-4 h-4 shrink-0" />
@@ -913,8 +913,8 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                 onClick={() => setViewMode("workspace")}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl font-sans text-xs font-bold transition-all cursor-pointer min-h-[48px] ${
                   viewMode === "workspace"
-                    ? "bg-white text-indigo-600 shadow-sm"
-                    : "text-slate-500 hover:text-slate-700"
+                    ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-300 shadow-sm"
+                    : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-white"
                 }`}
               >
                 <BookMarked className="w-4 h-4 shrink-0" />
@@ -926,14 +926,14 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
           {/* Segmented Mode Selector: Ask | Socratic | Explain | Practice  (only in tutor mode) */}
           {viewMode === "tutor" && (
             <>
-              <div className="grid grid-cols-4 text-center border-b border-slate-100">
+              <div className="grid grid-cols-4 text-center border-b border-slate-100 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setCurrentMode("ask")}
                   className={`py-2.5 font-sans text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center justify-center gap-1.5 ${
                     currentMode === "ask"
-                      ? "border-indigo-600 text-indigo-600 bg-indigo-50/30"
-                      : "border-transparent text-slate-600 hover:text-slate-900"
+                      ? "border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-indigo-50/30 dark:bg-indigo-950/30"
+                      : "border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                   }`}
                   aria-label="پرسیارکردنی ڕاستەوخۆ"
                 >
@@ -949,14 +949,14 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                   }}
                   className={`py-2.5 font-sans text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center justify-center gap-1.5 ${
                     currentMode === "socratic"
-                      ? "border-purple-600 text-purple-700 bg-purple-50/40"
-                      : "border-transparent text-slate-600 hover:text-slate-900"
+                      ? "border-indigo-600 text-indigo-700 dark:text-indigo-300 bg-indigo-50/40 dark:bg-indigo-950/40"
+                      : "border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                   }`}
                   aria-label="شێوازی فێرکاری سوقراتی"
                 >
-                  <Brain className="w-4 h-4 text-purple-600" />
+                  <Brain className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                   <span>سوقراتی</span>
-                  <span className="text-[9px] bg-purple-100 text-purple-800 px-1 py-0.5 rounded-md font-black">نوێ</span>
+                  <span className="text-[9px] bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-200 px-1 py-0.5 rounded-md font-black">نوێ</span>
                 </button>
 
                 <button
@@ -964,8 +964,8 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                   onClick={() => setCurrentMode("explain")}
                   className={`py-2.5 font-sans text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center justify-center gap-1.5 ${
                     currentMode === "explain"
-                      ? "border-indigo-600 text-indigo-600 bg-indigo-50/30"
-                      : "border-transparent text-slate-600 hover:text-slate-900"
+                      ? "border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-indigo-50/30 dark:bg-indigo-950/30"
+                      : "border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                   }`}
                   aria-label="ڕوونکردنەوەی چەمک"
                 >
@@ -978,8 +978,8 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                   onClick={() => setCurrentMode("practice")}
                   className={`py-2.5 font-sans text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center justify-center gap-1.5 ${
                     currentMode === "practice"
-                      ? "border-indigo-600 text-indigo-600 bg-indigo-50/30"
-                      : "border-transparent text-slate-600 hover:text-slate-900"
+                      ? "border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-indigo-50/30 dark:bg-indigo-950/30"
+                      : "border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                   }`}
                   aria-label="ڕاهێنانی کارلێککارانە"
                 >
@@ -990,21 +990,21 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
 
               {/* Socratic Mode Interactive Tracker Bar */}
               {currentMode === "socratic" && (
-                <div className="bg-purple-50/90 border-b border-purple-200/70 px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs font-sans animate-in fade-in">
+                <div className="bg-indigo-50/90 dark:bg-indigo-950/50 border-b border-indigo-200/70 dark:border-indigo-800/60 px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs font-sans animate-in fade-in">
                   <div className="flex items-center gap-2">
-                    <Brain className="w-4 h-4 text-purple-700 shrink-0" />
-                    <span className="font-black text-purple-900">
+                    <Brain className="w-4 h-4 text-indigo-700 dark:text-indigo-400 shrink-0" />
+                    <span className="font-black text-indigo-900 dark:text-indigo-200">
                       شێوازی فێرکاری سوقراتی:
                     </span>
-                    <span className="text-purple-700 text-[11px] hidden md:inline">
+                    <span className="text-indigo-700 dark:text-indigo-300 text-[11px] hidden md:inline">
                       مامۆستا وەڵامی ڕاستەوخۆ نادات، بە ٤ پرسیاری هاندەر دەتگەیەنێتە وەڵام.
                     </span>
                   </div>
 
                   <div className="flex items-center gap-3">
                     {/* 4-Step Chain Indicator */}
-                    <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-lg border border-purple-200 shadow-2xs">
-                      <span className="text-[11px] font-bold text-purple-900 ml-1">
+                    <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800 shadow-2xs">
+                      <span className="text-[11px] font-bold text-indigo-900 dark:text-indigo-200 ml-1">
                         قۆناغ {socraticChainCount} لە ٤:
                       </span>
                       {[1, 2, 3, 4].map((step) => (
@@ -1012,8 +1012,8 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                           key={step}
                           className={`w-2.5 h-2.5 rounded-full transition-all ${
                             step <= socraticChainCount
-                              ? "bg-purple-600 ring-2 ring-purple-200 scale-110"
-                              : "bg-purple-200"
+                              ? "bg-indigo-600 ring-2 ring-indigo-200 dark:ring-indigo-900 scale-110"
+                              : "bg-indigo-200 dark:bg-indigo-900"
                           }`}
                           title={`هەنگاوی ${step} لە ٤`}
                         />
@@ -1026,7 +1026,6 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                       onClick={() => {
                         const nextHintCount = hintsUsed + 1;
                         setHintsUsed(nextHintCount);
-                        // Track hint usage affecting mastery score
                         useAppStore.getState().addProgressScore(-2);
                         void recordAttempt?.({
                           conceptId: activeChapter?.title || currentSubject,
@@ -1040,11 +1039,11 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                         });
                         void handleSend("مامۆستا زانا، تکایە سەرەداوێک یان ڕێنماییەکم بدەرێ بۆ دۆزینەوەی وەڵامەکە.");
                       }}
-                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 font-bold text-[11px] transition cursor-pointer shadow-2xs"
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 dark:hover:bg-amber-950 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-800/60 font-bold text-[11px] transition cursor-pointer shadow-2xs"
                       title="داوای سەرەداو (کاریگەری لەسەر نمرەی زیرەکی دەبێت)"
                       aria-label="داوای سەرەداو لە شێوازی سوقراتی"
                     >
-                      <Lightbulb className="w-3.5 h-3.5 text-amber-600" />
+                      <Lightbulb className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                       <span>داوای سەرەداو ({hintsUsed})</span>
                     </button>
 
@@ -1052,7 +1051,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                     <button
                       type="button"
                       onClick={() => setCurrentMode("ask")}
-                      className="text-[11px] font-bold text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 px-2 py-1 rounded-lg border border-slate-200 transition cursor-pointer shadow-2xs"
+                      className="text-[11px] font-bold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 transition cursor-pointer shadow-2xs"
                       title="گۆڕین بۆ پرسیارکردنی ئاسایی"
                     >
                       گۆڕین بۆ وەڵامی ڕاستەوخۆ
@@ -1068,22 +1067,22 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
             <div className="px-3 pb-3 pt-1">
               <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
                 {/* Completed concepts (emerald) */}
-                <div className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1.5 shrink-0">
-                  <Check className="w-3 h-3 text-emerald-600" />
-                  <span className="font-sans text-[10px] font-bold text-emerald-800">ترش و تفتەکان</span>
+                <div className="flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800/60 rounded-full px-3 py-1.5 shrink-0">
+                  <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                  <span className="font-sans text-[10px] font-bold text-emerald-800 dark:text-emerald-300">ترش و تفتەکان</span>
                 </div>
-                <div className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1.5 shrink-0">
-                  <Check className="w-3 h-3 text-emerald-600" />
-                  <span className="font-sans text-[10px] font-bold text-emerald-800">پێوەری pH</span>
+                <div className="flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800/60 rounded-full px-3 py-1.5 shrink-0">
+                  <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                  <span className="font-sans text-[10px] font-bold text-emerald-800 dark:text-emerald-300">پێوەری pH</span>
                 </div>
-                {/* Current concept (indigo, animated) */}
-                <div className="flex items-center gap-1 bg-indigo-50 border border-indigo-300 rounded-full px-3 py-1.5 shrink-0 ring-2 ring-indigo-100 animate-pulse">
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 shrink-0"></span>
-                  <span className="font-sans text-[10px] font-bold text-indigo-800">ئۆکسان و داڕزان</span>
+                {/* Current concept (indigo) */}
+                <div className="flex items-center gap-1 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-300 dark:border-indigo-700 rounded-full px-3 py-1.5 shrink-0 ring-2 ring-indigo-100 dark:ring-indigo-900/50">
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 dark:bg-indigo-400 shrink-0"></span>
+                  <span className="font-sans text-[10px] font-bold text-indigo-800 dark:text-indigo-200">ئۆکسان و داڕزان</span>
                 </div>
                 {/* Upcoming (slate) */}
-                <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-full px-3 py-1.5 shrink-0">
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-300 shrink-0"></span>
+                <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-3 py-1.5 shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600 shrink-0"></span>
                   <span className="font-sans text-[10px] text-slate-400">هاوسەنگیی کیمیایی</span>
                 </div>
               </div>
@@ -1109,15 +1108,15 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
 
               {/* ─── Feature 3: Interactive Formula Board ──────────────────────────── */}
               {activeAction === "formula" && (
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 space-y-4">
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs p-5 space-y-4">
                   {/* Header & Filter Controls */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
                     <div>
-                      <h4 className="font-sans font-bold text-sm text-slate-900 flex items-center gap-1.5">
-                        <Brain className="w-4 h-4 text-indigo-600" />
+                      <h4 className="font-sans font-bold text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <Brain className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                         <span>تەختەی هاوکێشە و یاسا زانستییەکان</span>
                       </h4>
-                      <p className="font-sans text-xs text-slate-500">
+                      <p className="font-sans text-xs text-slate-500 dark:text-slate-400">
                         هاوکێشە سەرەکییەکانی پڕۆگرامی خوێندن بە پێناسەی گۆڕاوەکان و یەکەکان
                       </p>
                     </div>
@@ -1137,7 +1136,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                           className={`px-2.5 py-1 rounded-lg text-xs font-sans font-bold transition cursor-pointer ${
                             formulaSubject === sub.id
                               ? "bg-indigo-600 text-white shadow-2xs"
-                              : "bg-slate-100 hover:bg-slate-200 text-slate-600"
+                              : "bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
                           }`}
                         >
                           {sub.label}
@@ -1154,7 +1153,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                       value={formulaSearch}
                       onChange={(e) => setFormulaSearch(e.target.value)}
                       placeholder="گەڕان بەدوای یاسا، چەمک یان گۆڕاوێکدا..."
-                      className="w-full pr-9 pl-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-sans text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full pr-9 pl-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-sans text-slate-800 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     />
                   </div>
 
@@ -1238,18 +1237,17 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                       .map((item) => (
                         <div
                           key={item.id}
-                          className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 space-y-3 text-right"
+                          className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700 rounded-xl p-4 space-y-3 text-right"
                         >
                           <div className="flex items-center justify-between">
-                            <span className="font-sans font-bold text-xs text-slate-800 flex items-center gap-1.5">
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-700">
+                            <span className="font-sans font-bold text-xs text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-100 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300">
                                 {item.subjectLabel}
                               </span>
                               <span>{item.title}</span>
                             </span>
 
                             <div className="flex items-center gap-1.5">
-                              {/* Copy Formula Button */}
                               <button
                                 type="button"
                                 onClick={() => {
@@ -1257,24 +1255,23 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                                   setCopiedFormulaId(item.id);
                                   setTimeout(() => setCopiedFormulaId(null), 2000);
                                 }}
-                                className="p-1.5 bg-white hover:bg-slate-100 text-slate-500 rounded-lg border border-slate-200 cursor-pointer transition"
+                                className="p-1.5 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-300 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer transition"
                                 title="کۆپیکردنی هاوکێشە"
                               >
                                 {copiedFormulaId === item.id ? (
-                                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                  <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                                 ) : (
                                   <Copy className="w-3.5 h-3.5" />
                                 )}
                               </button>
 
-                              {/* Ask Tutor About Formula */}
                               <button
                                 type="button"
                                 onClick={() => {
                                   setInputContent(`مامۆستا زانا، تکایە یاسای "${item.title}" (${item.formula}) بە وردی لەگەڵ نموونەیەکی پرسیاری وەزاری بۆم شیکار بکە.`);
                                   setViewMode("tutor");
                                 }}
-                                className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[11px] font-bold font-sans flex items-center gap-1 border border-indigo-200 cursor-pointer transition"
+                                className="px-2 py-1 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-lg text-[11px] font-bold font-sans flex items-center gap-1 border border-indigo-200 dark:border-indigo-800/60 cursor-pointer transition"
                               >
                                 <span>شیکردنەوە لە چات</span>
                                 <ArrowLeft className="w-3 h-3" />
@@ -1282,28 +1279,26 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                             </div>
                           </div>
 
-                          {/* Code-style formula box */}
-                          <div className="bg-white border border-slate-200 rounded-lg p-3 text-center">
-                            <p className="font-mono text-base font-bold text-indigo-800 tracking-wide dir-ltr">
+                          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-center">
+                            <p className="font-mono text-base font-bold text-indigo-800 dark:text-indigo-300 tracking-wide dir-ltr">
                               {item.formula}
                             </p>
                           </div>
 
-                          {/* Variables Table */}
-                          <div className="divide-y divide-slate-100 border border-slate-200 bg-white rounded-lg overflow-hidden text-xs">
+                          <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg overflow-hidden text-xs">
                             {item.variables.map((v, vIdx) => (
                               <div
                                 key={vIdx}
                                 className="flex items-center justify-between px-3 py-1.5"
                               >
-                                <span className="font-mono font-bold text-indigo-600 dir-ltr">{v.sym}</span>
-                                <span className="font-sans text-slate-700">{v.name}</span>
+                                <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 dir-ltr">{v.sym}</span>
+                                <span className="font-sans text-slate-700 dark:text-slate-300">{v.name}</span>
                                 <span className="font-sans text-[11px] text-slate-400 font-mono">{v.unit}</span>
                               </div>
                             ))}
                           </div>
 
-                          <p className="font-sans text-[11px] text-slate-500 leading-relaxed border-t border-slate-200 pt-2">
+                          <p className="font-sans text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed border-t border-slate-200 dark:border-slate-700 pt-2">
                             💡 {item.note}
                           </p>
                         </div>
@@ -1314,30 +1309,30 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
 
               {/* ─── Feature 4: Summary Panel ──────────────────────────── */}
               {activeAction === "summary" && (
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 space-y-3">
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                    <h3 className="font-sans font-bold text-sm text-slate-800">
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs p-5 space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                    <h3 className="font-sans font-bold text-sm text-slate-800 dark:text-white">
                       پوختەی بەندی {activeChapter?.id}: {chapterData.chapterTitle}
                     </h3>
-                    <span className="text-xs text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full font-bold">
+                    <span className="text-xs text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-full font-bold">
                       لاپەڕە {chapterData.pages}
                     </span>
                   </div>
 
-                  <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
                     {chapterData.summary}
                   </p>
 
                   <div className="space-y-2.5 pt-1">
-                    <span className="text-xs font-bold text-slate-700 block">گرنگترین خاڵ و چەمکەکان:</span>
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200 block">گرنگترین خاڵ و چەمکەکان:</span>
                     {chapterData.keyConcepts.map((item, idx) => (
                       <div key={idx} className="flex items-start gap-2.5">
-                        <div className="w-5 h-5 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5">
+                        <div className="w-5 h-5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
                           <CheckCircle2 className="w-3.5 h-3.5" />
                         </div>
                         <div>
-                          <span className="font-bold text-xs text-slate-800">{item.title}: </span>
-                          <span className="font-sans text-xs text-slate-600 leading-relaxed">{item.desc}</span>
+                          <span className="font-bold text-xs text-slate-800 dark:text-slate-100">{item.title}: </span>
+                          <span className="font-sans text-xs text-slate-600 dark:text-slate-300 leading-relaxed">{item.desc}</span>
                         </div>
                       </div>
                     ))}
@@ -1362,13 +1357,13 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
 
               {/* Workspace Action: Vision Question Solver */}
               {activeAction === "vision" && (
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-4 sm:p-6 space-y-4">
-                  <div className="pb-3 border-b border-slate-100 flex items-center justify-between">
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs p-4 sm:p-6 space-y-4">
+                  <div className="pb-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                     <div>
-                      <h3 className="font-sans font-bold text-base text-slate-900">
+                      <h3 className="font-sans font-bold text-base text-slate-900 dark:text-white">
                         چارەسەرکەری وێنەی پرسیار (Camera OCR Solver)
                       </h3>
-                      <p className="font-sans text-xs text-slate-500">
+                      <p className="font-sans text-xs text-slate-500 dark:text-slate-400">
                         وێنەی پرسیارەکەت باربکە یان بیگرە؛ زانا هەنگاو بە هەنگاو شیکارت بۆ دەکات
                       </p>
                     </div>
@@ -1390,44 +1385,44 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
 
               {/* Workspace Action: Explain (ڕوونکردنەوەی چەمکەکانی وانەکە) */}
               {activeAction === "explain" && (
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-5">
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                    <span className="font-bold text-xs text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full">
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs p-6 space-y-5">
+                  <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                    <span className="font-bold text-xs text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-1 rounded-full">
                       ڕوونکردنەوەی چەمک • بەندی {activeChapter?.id}
                     </span>
                     <span className="text-xs text-slate-400 font-sans">
                       لاپەڕە {chapterData.pages}
                     </span>
                   </div>
-                  <h3 className="font-sans font-bold text-lg text-slate-900">
+                  <h3 className="font-sans font-bold text-lg text-slate-900 dark:text-white">
                     {chapterData.chapterTitle}
                   </h3>
-                  <p className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-slate-800 text-sm leading-relaxed">
+                  <p className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-sm leading-relaxed">
                     {chapterData.summary}
                   </p>
                   {chapterData.keyConcepts.length > 0 && (
                     <div className="space-y-2">
-                      <h4 className="font-bold text-xs text-slate-900">چەمکە سەرەکییەکان:</h4>
+                      <h4 className="font-bold text-xs text-slate-900 dark:text-white">چەمکە سەرەکییەکان:</h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {chapterData.keyConcepts.map((c, idx) => (
-                          <div key={idx} className="p-3.5 bg-slate-50/70 rounded-xl border border-slate-200 space-y-1">
-                            <span className="font-bold text-xs text-indigo-700 block">{c.title}</span>
-                            <p className="text-xs text-slate-600 leading-normal">{c.desc}</p>
+                          <div key={idx} className="p-3.5 bg-slate-50/70 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 space-y-1">
+                            <span className="font-bold text-xs text-indigo-700 dark:text-indigo-300 block">{c.title}</span>
+                            <p className="text-xs text-slate-600 dark:text-slate-300 leading-normal">{c.desc}</p>
                           </div>
                         ))}
                       </div>
                     </div>
                   )}
                   {chapterData.solvedExample && (
-                    <div className="p-4 bg-emerald-50/60 rounded-xl border border-emerald-200 space-y-2">
-                      <h4 className="font-bold text-xs text-emerald-900">نموونەی شیکارکراوی وەزاری:</h4>
-                      <p className="font-bold text-xs text-slate-800">{chapterData.solvedExample.question}</p>
-                      <div className="bg-white p-3 rounded-lg border border-emerald-100 text-xs text-slate-700 space-y-1 leading-relaxed">
-                        <span className="font-sans font-bold text-emerald-700 block mb-1">هەنگاوەکانی شیکار:</span>
+                    <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/30 rounded-xl border border-emerald-200 dark:border-emerald-800/60 space-y-2">
+                      <h4 className="font-bold text-xs text-emerald-900 dark:text-emerald-300">نموونەی شیکارکراوی وەزاری:</h4>
+                      <p className="font-bold text-xs text-slate-800 dark:text-slate-100">{chapterData.solvedExample.question}</p>
+                      <div className="bg-white dark:bg-slate-900 p-3 rounded-lg border border-emerald-100 dark:border-emerald-900/60 text-xs text-slate-700 dark:text-slate-300 space-y-1 leading-relaxed">
+                        <span className="font-sans font-bold text-emerald-700 dark:text-emerald-400 block mb-1">هەنگاوەکانی شیکار:</span>
                         {chapterData.solvedExample.steps.map((st, sIdx) => (
-                          <div key={sIdx} className="text-slate-600">{st}</div>
+                          <div key={sIdx} className="text-slate-600 dark:text-slate-300">{st}</div>
                         ))}
-                        <div className="pt-1 font-bold text-emerald-800 font-sans">ئەنجام: {chapterData.solvedExample.result}</div>
+                        <div className="pt-1 font-bold text-emerald-800 dark:text-emerald-300 font-sans">ئەنجام: {chapterData.solvedExample.result}</div>
                       </div>
                     </div>
                   )}
@@ -1436,7 +1431,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                       setInputContent(`مامۆستا زانا، دەمەوێت لەسەر «${chapterData.chapterTitle}» پرسیار بکەم و پێکەوە تاوتوێی بکەین.`);
                       setViewMode("tutor");
                     }}
-                    className="w-full py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl text-xs flex items-center justify-center gap-2 border border-indigo-200 cursor-pointer transition-all"
+                    className="w-full py-2.5 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold rounded-xl text-xs flex items-center justify-center gap-2 border border-indigo-200 dark:border-indigo-800/60 cursor-pointer transition-all"
                   >
                     <Sparkles className="w-4 h-4" />
                     <span>گفتوگۆ لەگەڵ مامۆستا زانا لەسەر ئەم چەمکە</span>
@@ -1446,9 +1441,9 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
 
               {/* Workspace Action: Practice (ڕاهێنانی کارلێککارانەی وانەکە) */}
               {activeAction === "practice" && (
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-4">
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                    <span className="font-bold text-xs text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full">
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs p-6 space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                    <span className="font-bold text-xs text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-1 rounded-full">
                       ڕاهێنانی وانە • {activeChapter?.title}
                     </span>
                     <span className="text-xs text-slate-400 font-sans">
@@ -1457,26 +1452,25 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                   </div>
                   {practiceSteps.length > 0 && practiceSteps[practiceStepIndex] ? (
                     <div className="space-y-4">
-                      <div className="p-4 bg-indigo-50/40 rounded-xl border border-indigo-100 space-y-2">
-                        <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wide">
+                      <div className="p-4 bg-indigo-50/40 dark:bg-indigo-950/40 rounded-xl border border-indigo-100 dark:border-indigo-800/60 space-y-2">
+                        <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wide">
                           پرسیاری هەنگاوبەندی:
                         </span>
-                        <h4 className="font-bold text-sm text-slate-900 leading-snug">
+                        <h4 className="font-bold text-sm text-slate-900 dark:text-white leading-snug">
                           {practiceSteps[practiceStepIndex].stepTitle}
                         </h4>
-                        <p className="text-xs text-slate-700">
+                        <p className="text-xs text-slate-700 dark:text-slate-300">
                           {practiceSteps[practiceStepIndex].question || practiceSteps[practiceStepIndex].problem}
                         </p>
                       </div>
 
-                      {/* Input for practice */}
                       <div className="space-y-2">
                         <input
                           type="text"
                           value={stepAnswerInput}
                           onChange={(e) => setStepAnswerInput(e.target.value)}
                           placeholder="وەڵام یان ژمارە لێرە بنووسە..."
-                          className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                          className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
                           onKeyDown={(e) => {
                             if (e.key === "Enter") handleCheckStepAnswer();
                           }}
@@ -1496,7 +1490,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                                   message: `💡 سەرەداو: ${practiceSteps[practiceStepIndex].hint}`,
                                 });
                               }}
-                              className="px-3 py-2 bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 font-bold rounded-xl text-xs cursor-pointer"
+                              className="px-3 py-2 bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 hover:bg-amber-100 dark:hover:bg-amber-950 font-bold rounded-xl text-xs cursor-pointer"
                             >
                               سەرەداو
                             </button>
@@ -1508,8 +1502,8 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                         <div
                           className={`p-3 rounded-xl text-xs font-bold ${
                             stepFeedback.isCorrect
-                              ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
-                              : "bg-amber-50 text-amber-800 border border-amber-200"
+                              ? "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60"
+                              : "bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60"
                           }`}
                         >
                           {stepFeedback.message}
@@ -1517,7 +1511,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                       )}
                     </div>
                   ) : (
-                    <div className="text-center py-8 text-slate-500 text-xs">
+                    <div className="text-center py-8 text-slate-500 dark:text-slate-400 text-xs">
                       هیچ ڕاهێنانێک بۆ ئەم بەشە تۆمار نەکراوە.
                     </div>
                   )}
@@ -1526,13 +1520,13 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
 
               {/* Workspace Action: Ask (ڕێبەری پرسیارکردنی سوقراتی) */}
               {activeAction === "ask" && (
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-4">
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                    <span className="font-bold text-xs text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full">
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs p-6 space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                    <span className="font-bold text-xs text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-1 rounded-full">
                       پرسیاری سوقراتی و وەزاری • بەندی {activeChapter?.id}
                     </span>
                   </div>
-                  <h3 className="font-sans font-bold text-sm text-slate-900">
+                  <h3 className="font-sans font-bold text-sm text-slate-900 dark:text-white">
                     پرسیارە گرنگ و باوەکانی ئەم بەشە هەڵبژێرە:
                   </h3>
                   <div className="space-y-2">
@@ -1548,10 +1542,10 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                           setInputContent(prompt);
                           setViewMode("tutor");
                         }}
-                        className="w-full text-right p-3 rounded-xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/50 bg-slate-50 text-xs font-medium text-slate-800 flex items-center justify-between group cursor-pointer transition-all"
+                        className="w-full text-right p-3 rounded-xl border border-slate-100 dark:border-slate-800 hover:border-indigo-200 dark:hover:border-indigo-700 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/40 bg-slate-50 dark:bg-slate-800/50 text-xs font-medium text-slate-800 dark:text-slate-200 flex items-center justify-between group cursor-pointer transition-all"
                       >
                         <span>{prompt}</span>
-                        <ArrowLeft className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 shrink-0 transition-transform group-hover:-translate-x-1" />
+                        <ArrowLeft className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 shrink-0 transition-transform group-hover:-translate-x-1" />
                       </button>
                     ))}
                   </div>
@@ -1570,13 +1564,13 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                 <>
                   {/* Session Memory Context Banner */}
                   {sessionConcepts.length > 0 && (
-                    <div className="bg-slate-100/70 border border-slate-200/80 rounded-xl px-3.5 py-1.5 flex items-center justify-between text-[11px] text-slate-600 font-sans">
+                    <div className="bg-slate-100/70 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl px-3.5 py-1.5 flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-300 font-sans">
                       <div className="flex items-center gap-1.5 truncate">
-                        <Sparkles className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                        <span className="font-bold text-slate-700">تێڕوانینی دانیشتن:</span>
+                        <Sparkles className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400 shrink-0" />
+                        <span className="font-bold text-slate-700 dark:text-slate-200">تێڕوانینی دانیشتن:</span>
                         <span className="truncate">{sessionConcepts.slice(-3).join(" • ")}</span>
                       </div>
-                      <span className="text-[10px] text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full shrink-0 font-bold">
+                      <span className="text-[10px] text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-100 dark:border-indigo-800/60 px-2 py-0.5 rounded-full shrink-0 font-bold">
                         پاشەکەوتکراو
                       </span>
                     </div>
@@ -1584,10 +1578,10 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
 
                   {chatMessages.length === 0 && (
                     <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3">
-                      <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                      <div className="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
                         <Sparkles className="w-7 h-7" />
                       </div>
-                      <p className="font-sans text-sm text-slate-600 max-w-sm leading-relaxed">
+                      <p className="font-sans text-sm text-slate-600 dark:text-slate-300 max-w-sm leading-relaxed">
                         سڵاو! من مامۆستا زانام. پرسیارێکت لەسەر {activeChapter?.title || "ئەم بەندە"} بپرسە، یاخود شێوازی سوقراتی تاقی بکەرەوە تا پێکەوە شیبکەینەوە.
                       </p>
                     </div>
@@ -1599,7 +1593,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                       <button
                         type="button"
                         onClick={() => setShowAllMessages(true)}
-                        className="text-xs font-sans font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3.5 py-1 rounded-full transition shadow-2xs cursor-pointer flex items-center gap-1"
+                        className="text-xs font-sans font-bold text-indigo-700 dark:text-indigo-300 hover:text-indigo-900 dark:hover:text-indigo-200 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-950 border border-indigo-200 dark:border-indigo-800/60 px-3.5 py-1 rounded-full transition shadow-2xs cursor-pointer flex items-center gap-1"
                         aria-label="بینینی پەیامە کۆنەکان"
                       >
                         <ChevronDown className="w-3.5 h-3.5 rotate-180" />
@@ -1633,9 +1627,9 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                       <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
                         <Sparkles className="w-4 h-4" />
                       </div>
-                      <div className="bg-white border border-slate-200 rounded-2xl rounded-bl-none px-4 py-3 shadow-xs flex items-center gap-2">
+                      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl rounded-bl-none px-4 py-3 shadow-xs flex items-center gap-2">
                         <Spinner size="sm" />
-                        <span className="font-sans text-xs text-slate-500 font-medium">
+                        <span className="font-sans text-xs text-slate-500 dark:text-slate-400 font-medium">
                           مامۆستا زانا بیر دەکاتەوە و وەڵامت دەداتەوە...
                         </span>
                       </div>
@@ -1643,8 +1637,8 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                   )}
 
                   {/* Socratic Progressive Hint Card */}
-                  <div className="bg-indigo-50/60 border border-indigo-100 rounded-xl p-3 my-2 flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-xs text-indigo-900 font-sans">
+                  <div className="bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-800/60 rounded-xl p-3 my-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs text-indigo-900 dark:text-indigo-200 font-sans">
                       <Lightbulb className="w-4 h-4 text-amber-500 shrink-0" />
                       <span>
                         {hintLevel === 0
@@ -1660,7 +1654,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                           setHintLevel(1);
                         }
                       }}
-                      className="shrink-0 text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-white px-3 py-1.5 rounded-lg border border-indigo-200 cursor-pointer mr-2 shadow-2xs"
+                      className="shrink-0 text-xs font-bold text-indigo-600 dark:text-indigo-300 hover:text-indigo-700 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-800 cursor-pointer mr-2 shadow-2xs"
                     >
                       {hintLevel === 0 ? "تێبینی یەکەم" : hintLevel < progressiveHints.length ? `تێبینی ${hintLevel + 1}` : "دووبارە"}
                     </button>
@@ -1673,9 +1667,9 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
               {/* MODE 2: Rich Educational Explain */}
               {currentMode === "explain" && (
                 <div className="space-y-4 max-w-3xl mx-auto py-2">
-                  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                      <span className="font-bold text-xs text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full">
+                  <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                      <span className="font-bold text-xs text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-1 rounded-full">
                         {currentSubject === "physics"
                           ? "فیزیای پۆلی ١٢"
                           : currentSubject === "chemistry"
@@ -1689,71 +1683,67 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                       </span>
                     </div>
 
-                    <h3 className="font-sans font-bold text-lg text-slate-900">
+                    <h3 className="font-sans font-bold text-lg text-slate-900 dark:text-white">
                       {chapterData.chapterTitle}
                     </h3>
 
-                    <div className="space-y-4 font-sans text-sm text-slate-700 leading-relaxed">
-                      {/* Chapter Overview Text */}
-                      <p className="bg-slate-50/70 p-3.5 rounded-xl border border-slate-200/70 text-slate-800 leading-relaxed">
+                    <div className="space-y-4 font-sans text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                      <p className="bg-slate-50/70 dark:bg-slate-800/50 p-3.5 rounded-xl border border-slate-200/70 dark:border-slate-700 text-slate-800 dark:text-slate-200 leading-relaxed">
                         {chapterData.summary}
                       </p>
 
-                      {/* Key Concepts Grid */}
                       {chapterData.keyConcepts.length > 0 && (
                         <div className="space-y-2 pt-1">
-                          <h4 className="font-bold text-xs text-slate-900">چەمک و زانیارییە سەرەکییەکان:</h4>
+                          <h4 className="font-bold text-xs text-slate-900 dark:text-white">چەمک و زانیارییە سەرەکییەکان:</h4>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                             {chapterData.keyConcepts.map((concept, idx) => (
-                              <div key={idx} className="p-3 bg-white rounded-xl border border-slate-200/80 shadow-2xs space-y-1">
-                                <span className="font-bold text-xs text-indigo-700 block">{concept.title}</span>
-                                <p className="text-xs text-slate-600 leading-normal">{concept.desc}</p>
+                              <div key={idx} className="p-3 bg-white dark:bg-slate-800/60 rounded-xl border border-slate-200/80 dark:border-slate-700 shadow-2xs space-y-1">
+                                <span className="font-bold text-xs text-indigo-700 dark:text-indigo-300 block">{concept.title}</span>
+                                <p className="text-xs text-slate-600 dark:text-slate-300 leading-normal">{concept.desc}</p>
                               </div>
                             ))}
                           </div>
                         </div>
                       )}
 
-                      {/* Formulas / Rules Box */}
                       {chapterData.formulas.length > 0 && (
-                        <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5">
-                          <h4 className="font-bold text-xs text-slate-900">یاسا و دەستوورە سەرەکییەکان:</h4>
+                        <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2.5">
+                          <h4 className="font-bold text-xs text-slate-900 dark:text-white">یاسا و دەستوورە سەرەکییەکان:</h4>
                           <div className="space-y-2">
                             {chapterData.formulas.map((f, idx) => (
                               <div key={idx} className="space-y-1">
-                                <span className="text-[11px] font-bold text-slate-600">{f.title}:</span>
-                                <p className="font-mono text-left dir-ltr bg-white p-2 rounded-lg border border-slate-200 text-indigo-700 font-bold text-sm">
+                                <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">{f.title}:</span>
+                                <p className="font-mono text-left dir-ltr bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-indigo-700 dark:text-indigo-300 font-bold text-sm">
                                   {f.formula}
                                 </p>
-                                {f.note && <p className="text-[11px] text-slate-500">{f.note}</p>}
+                                {f.note && <p className="text-[11px] text-slate-500 dark:text-slate-400">{f.note}</p>}
                               </div>
                             ))}
                           </div>
                         </div>
                       )}
 
-                      {/* Solved Ministerial Example */}
-                      <div className="p-4 bg-emerald-50/50 rounded-xl border border-emerald-200 text-xs text-slate-800 space-y-2">
-                        <span className="font-bold text-emerald-900 block text-sm">نموونەی شیکارکراوی پڕۆگرامی وەزارەت:</span>
-                        <p className="font-bold text-slate-900">{chapterData.solvedExample.question}</p>
-                        <div className="space-y-1 pt-1 text-slate-700">
+                      <div className="p-4 bg-emerald-50/50 dark:bg-emerald-950/30 rounded-xl border border-emerald-200 dark:border-emerald-800/60 text-xs text-slate-800 dark:text-slate-200 space-y-2">
+                        <span className="font-bold text-emerald-900 dark:text-emerald-300 block text-sm">نموونەی شیکارکراوی پڕۆگرامی وەزارەت:</span>
+                        <p className="font-bold text-slate-900 dark:text-white">{chapterData.solvedExample.question}</p>
+                        <div className="space-y-1 pt-1 text-slate-700 dark:text-slate-300">
                           {chapterData.solvedExample.steps.map((st, idx) => (
                             <p key={idx}>{st}</p>
                           ))}
                         </div>
-                        <p className="font-bold text-emerald-800 pt-1 border-t border-emerald-200/60">
+                        <p className="font-bold text-emerald-800 dark:text-emerald-300 pt-1 border-t border-emerald-200/60 dark:border-emerald-800/60">
                           {chapterData.solvedExample.result}
                         </p>
                       </div>
                     </div>
 
-                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
                       <button
                         onClick={() => {
                           setInputContent(`مامۆستا زانا، تکایە کورتەی بەندی ${activeChapter?.id} (${activeChapter?.title}) و گرنگترین خاڵەکانی تاقیکردنەوەی وەزاریم بۆ ڕوونبکەرەوە.`);
                           setCurrentMode("ask");
                         }}
-                        className="text-xs font-bold text-slate-600 hover:text-indigo-600 px-3 py-2 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
+                        className="text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 px-3 py-2 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
                       >
                         <HelpCircle className="w-3.5 h-3.5" />
                         <span>پرسیار لە مامۆستا زانا سەبارەت بەم وانەیە</span>
@@ -1774,31 +1764,31 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
               {/* MODE 3: Step-by-Step Drill Practice */}
               {currentMode === "practice" && (
                 <div className="space-y-4 max-w-2xl mx-auto py-2">
-                  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
                       <div className="flex items-center gap-2">
                         <Zap className="w-4 h-4 text-amber-500" />
-                        <span className="font-bold text-xs text-slate-800">
+                        <span className="font-bold text-xs text-slate-800 dark:text-white">
                           شیکارکەری هەنگاو بە هەنگاو (Drill)
                         </span>
                       </div>
-                      <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full">
+                      <span className="text-xs font-bold text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-0.5 rounded-full">
                         هەنگاوی {practiceStepIndex + 1} لە {practiceSteps.length}
                       </span>
                     </div>
 
-                    <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-800 space-y-1">
-                      <span className="font-bold text-slate-500">کێشەی سەرەکی:</span>
-                      <p className="font-sans font-bold text-sm text-slate-900">
+                    <div className="p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200 space-y-1">
+                      <span className="font-bold text-slate-500 dark:text-slate-400">کێشەی سەرەکی:</span>
+                      <p className="font-sans font-bold text-sm text-slate-900 dark:text-white">
                         {practiceSteps[practiceStepIndex]?.problem}
                       </p>
                     </div>
 
                     <div className="space-y-2">
-                      <h4 className="font-sans font-bold text-sm text-indigo-900">
+                      <h4 className="font-sans font-bold text-sm text-indigo-900 dark:text-indigo-300">
                         {practiceSteps[practiceStepIndex]?.stepTitle}
                       </h4>
-                      <p className="font-sans text-xs text-slate-700">
+                      <p className="font-sans text-xs text-slate-700 dark:text-slate-300">
                         {practiceSteps[practiceStepIndex]?.question}
                       </p>
 
@@ -1808,7 +1798,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                           value={stepAnswerInput}
                           onChange={(e) => setStepAnswerInput(e.target.value)}
                           placeholder="وەڵامی ژمارەیی یان تەواو بنووسە..."
-                          className="flex-1 px-4 py-2.5 rounded-xl border border-slate-300 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                          className="flex-1 px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-white text-sm font-sans focus:outline-none focus:ring-2 focus:ring-indigo-600"
                         />
                         <button
                           onClick={handleCheckStepAnswer}
@@ -1823,8 +1813,8 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                       <div
                         className={`p-3.5 rounded-xl border text-xs font-sans flex items-center justify-between ${
                           stepFeedback.isCorrect
-                            ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                            : "bg-red-50 border-red-200 text-red-800"
+                            ? "bg-emerald-50 dark:bg-emerald-950/50 border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300"
+                            : "bg-red-50 dark:bg-red-950/50 border-red-200 dark:border-red-800/60 text-red-800 dark:text-red-300"
                         }`}
                       >
                         <span>{stepFeedback.message}</span>
@@ -1857,7 +1847,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                     className={`flex flex-col items-center justify-center p-2 rounded-xl border transition-all cursor-pointer min-h-[48px] ${
                       isActive
                         ? "bg-indigo-600 border-indigo-600 text-white shadow-md"
-                        : "bg-white border-slate-100 text-slate-500 hover:bg-slate-50"
+                        : "bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
                     }`}
                   >
                     <Icon className={`w-5 h-5 mb-1 ${isActive ? "scale-110" : ""} transition-transform shrink-0`} />
@@ -1884,20 +1874,20 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
 
         {/* 6. Sticky Chat Input Area (Shown in Ask and Socratic modes) */}
         {viewMode === "tutor" && (currentMode === "ask" || currentMode === "socratic") && (
-          <div className="p-3 sm:p-4 bg-white border-t border-slate-200 shadow-2xs">
+          <div className="p-3 sm:p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-2xs">
             {/* ─── Feature 6: Quick Prompt Chips ──────────────────────── */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-2 no-scrollbar">
               <button
                 onClick={() => handleQuickPrompt(`مامۆستا زانا، ڕاهێنانی وانەی بەندی ${activeChapter?.id || 1}م بۆ بکە`)}
-                className="shrink-0 flex items-center gap-1 bg-white border border-slate-200 rounded-full px-3 py-1.5 text-[11px] font-sans font-bold shadow-2xs transition-colors cursor-pointer text-indigo-700 hover:bg-indigo-50 min-h-[36px]"
+                className="shrink-0 flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-3 py-1.5 text-[11px] font-sans font-bold shadow-2xs transition-colors cursor-pointer text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 min-h-[36px]"
               >
-                <Award className="w-3.5 h-3.5 text-indigo-600" />
+                <Award className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                 <span>🏆 ڕاهێنانی وانە</span>
               </button>
 
               <button
                 onClick={() => handleQuickPrompt(`مامۆستا زانا، تکایە چەمکە سەرەکییەکانی بەندی ${activeChapter?.id || 1}م بۆ ڕوون بکەرەوە بە شێوازی سوقراتی`)}
-                className="shrink-0 flex items-center gap-1 bg-white border border-slate-200 rounded-full px-3 py-1.5 text-[11px] font-sans font-medium shadow-2xs transition-colors cursor-pointer text-amber-700 hover:bg-amber-50 min-h-[36px]"
+                className="shrink-0 flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-3 py-1.5 text-[11px] font-sans font-medium shadow-2xs transition-colors cursor-pointer text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/50 min-h-[36px]"
               >
                 <Sparkles className="w-3.5 h-3.5 text-amber-500" />
                 <span>✨ شیکردنەوەی سوقراتی</span>
@@ -1905,7 +1895,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
 
               <button
                 onClick={() => handleQuickPrompt(`هەڵە تێگەیشتنە باوەکانی قوتابیان لەسەر بەندی ${activeChapter?.id || 1} چین؟`)}
-                className="shrink-0 flex items-center gap-1 bg-white border border-slate-200 rounded-full px-3 py-1.5 text-[11px] font-sans font-medium shadow-2xs transition-colors cursor-pointer text-rose-700 hover:bg-rose-50 min-h-[36px]"
+                className="shrink-0 flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-3 py-1.5 text-[11px] font-sans font-medium shadow-2xs transition-colors cursor-pointer text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/50 min-h-[36px]"
               >
                 <HelpCircle className="w-3.5 h-3.5 text-rose-500" />
                 <span>❓ هەڵە باوەکان</span>
@@ -1913,21 +1903,21 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
 
               <button
                 onClick={() => handleQuickPrompt(`یاسا و هاوکێشە سەرەکییەکانی پەیوەست بە بەندی ${activeChapter?.id || 1} چین؟`)}
-                className="shrink-0 flex items-center gap-1 bg-white border border-slate-200 rounded-full px-3 py-1.5 text-[11px] font-sans font-medium shadow-2xs transition-colors cursor-pointer text-indigo-700 hover:bg-indigo-50 min-h-[36px]"
+                className="shrink-0 flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-3 py-1.5 text-[11px] font-sans font-medium shadow-2xs transition-colors cursor-pointer text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 min-h-[36px]"
               >
-                <Brain className="w-3.5 h-3.5 text-indigo-500" />
+                <Brain className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
                 <span>🧠 هاوکێشە و یاساکان</span>
               </button>
             </div>
 
             {/* Live Voice Recording Status Badge */}
             {isListening && (
-              <div className="flex items-center justify-between bg-rose-50 border border-rose-200 text-rose-700 px-3.5 py-2 rounded-xl text-xs mb-2 shadow-xs">
+              <div className="flex items-center justify-between bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800/60 text-rose-700 dark:text-rose-300 px-3.5 py-2 rounded-xl text-xs mb-2 shadow-xs">
                 <div className="flex items-center gap-2 overflow-hidden">
                   <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping shrink-0" />
                   <span className="font-bold shrink-0">گوێ دەگرێت... بە کوردی قسە بکە</span>
                   {interimTranscript && (
-                    <span className="text-slate-700 bg-white/90 border border-rose-100 px-2 py-0.5 rounded text-[11px] truncate max-w-[200px] sm:max-w-md">
+                    <span className="text-slate-700 dark:text-slate-200 bg-white/90 dark:bg-slate-900 border border-rose-100 dark:border-rose-800 px-2 py-0.5 rounded text-[11px] truncate max-w-[200px] sm:max-w-md">
                       «{interimTranscript}»
                     </span>
                   )}
@@ -1935,21 +1925,21 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                 <button
                   type="button"
                   onClick={stopListening}
-                  className="shrink-0 flex items-center gap-1 text-[11px] font-bold text-rose-700 hover:text-rose-900 bg-white border border-rose-200 px-2.5 py-1 rounded-lg shadow-2xs cursor-pointer transition-colors"
+                  className="shrink-0 flex items-center gap-1 text-[11px] font-bold text-rose-700 dark:text-rose-300 hover:text-rose-900 bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-800 px-2.5 py-1 rounded-lg shadow-2xs cursor-pointer transition-colors"
                 >
-                  <Square className="w-3 h-3 fill-current text-rose-600" />
+                  <Square className="w-3 h-3 fill-current text-rose-600 dark:text-rose-400" />
                   <span>تەواوکردن</span>
                 </button>
               </div>
             )}
 
             {speechErrorToast && (
-              <div className="flex items-center justify-between bg-amber-50 border border-amber-200 text-amber-800 px-3.5 py-2 rounded-xl text-xs mb-2">
+              <div className="flex items-center justify-between bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800/60 text-amber-800 dark:text-amber-300 px-3.5 py-2 rounded-xl text-xs mb-2">
                 <span>{speechErrorToast}</span>
                 <button
                   type="button"
                   onClick={() => setSpeechErrorToast(null)}
-                  className="text-amber-600 hover:text-amber-800 font-bold px-1.5 cursor-pointer"
+                  className="text-amber-600 dark:text-amber-400 hover:text-amber-800 font-bold px-1.5 cursor-pointer"
                 >
                   ✕
                 </button>
@@ -1968,7 +1958,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
               <button
                 type="button"
                 onClick={() => setShowCameraModal(true)}
-                className="w-12 h-12 min-w-[48px] min-h-[48px] rounded-xl bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 flex items-center justify-center shrink-0 border border-slate-200 transition-colors cursor-pointer"
+                className="w-12 h-12 min-w-[48px] min-h-[48px] rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 hover:text-indigo-600 dark:hover:text-indigo-400 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
                 title="وێنەگرتن یان بارکردنی پرسیار"
                 aria-label="وێنەی پرسیار"
               >
@@ -1988,7 +1978,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                 className={`w-12 h-12 min-w-[48px] min-h-[48px] rounded-xl flex items-center justify-center shrink-0 border transition-all cursor-pointer ${
                   isListening
                     ? "bg-rose-500 hover:bg-rose-600 text-white border-rose-600 animate-pulse shadow-md shadow-rose-200"
-                    : "bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 border-slate-200"
+                    : "bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 hover:text-indigo-600 dark:hover:text-indigo-400 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
                 }`}
                 title={isListening ? "ڕاگرتنی تۆمارکردنی دەنگ" : "تۆمارکردنی دەنگ (قسەکردن بە زمانی کوردی)"}
                 aria-label="تۆمارکردنی دەنگی پرسیار"
@@ -2017,7 +2007,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                       ? "وەڵام یان تێڕوانینی خۆت بنووسە بۆ مامۆستا زانا (سوقراتی)..."
                       : "پرسیارت لەسەر ئەم بەندە بپرسە..."
                   }
-                  className="w-full resize-none rounded-xl border border-slate-300 px-4 py-2.5 text-base sm:text-sm font-sans text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-all min-h-[48px] max-h-32 leading-relaxed touch-manipulation"
+                  className="w-full resize-none rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-4 py-2.5 text-base sm:text-sm font-sans text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-all min-h-[48px] max-h-32 leading-relaxed touch-manipulation"
                   disabled={isLoading || isTrialExpired}
                   aria-label="دەقی پرسیار یان وەڵام"
                 />

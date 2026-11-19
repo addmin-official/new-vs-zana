@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   GraduationCap,
   Sparkles,
@@ -36,6 +36,10 @@ export const PedagogicalHubScreen: React.FC<PedagogicalHubScreenProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<PedagogyPillarTab>(initialTab);
   const [selectedGrade, setSelectedGrade] = useState<'all' | '9' | '10' | '11' | '12'>('12');
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
 
   const pillars = [
     {

@@ -1,5 +1,5 @@
 import React, { ReactNode, useState, useEffect } from "react";
-import { WifiOff, Wifi } from "lucide-react";
+import { WifiOff, Wifi, GraduationCap } from "lucide-react";
 import { Header } from "./Header.tsx";
 import { Sidebar, NavItemKey } from "./Sidebar.tsx";
 import { BottomNav } from "./BottomNav.tsx";
@@ -193,8 +193,17 @@ export function AppShell({
           >
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-2">
               <div className="flex items-center gap-2">
-                <span className="font-sans font-black text-xl text-indigo-600 dark:text-indigo-400">زانا</span>
-                <span className="font-sans font-bold text-sm text-slate-800 dark:text-slate-200">{t("common.appName")}</span>
+                <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-sm shadow-indigo-600/20 shrink-0">
+                  <GraduationCap className="w-5 h-5" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="font-sans font-bold text-base text-slate-900 dark:text-white leading-tight">
+                    {t("common.appName")}
+                  </span>
+                  <span className="font-sans text-[10px] text-indigo-600 dark:text-indigo-400 font-medium leading-tight">
+                    هاوڕێی زیرەکی فێربوونی تۆ
+                  </span>
+                </div>
               </div>
               <div className="flex items-center gap-1">
                 <SoundToggle className="!w-8 !h-8 !rounded-lg" />

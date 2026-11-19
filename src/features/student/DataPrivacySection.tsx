@@ -79,7 +79,7 @@ export function DataPrivacySection({ profile, masteryProfile }: DataPrivacySecti
         {/* Header */}
         <div className="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-2 justify-start">
-            <ShieldCheck className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0" />
+            <ShieldCheck className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0" />
             <div>
               <h3 className="font-sans font-bold text-sm text-slate-800 dark:text-slate-100">
                 بەکارهێنانی داتا و تایبەتمەندی (Data Usage &amp; Privacy)
@@ -95,7 +95,7 @@ export function DataPrivacySection({ profile, masteryProfile }: DataPrivacySecti
             onClick={refreshInventory}
             title="نوێکردنەوەی لیستی داتا"
             aria-label="نوێکردنەوەی لیستی داتا"
-            className="p-2 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer min-h-[40px] min-w-[40px] flex items-center justify-center"
+            className="p-2 rounded-lg text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer min-h-[40px] min-w-[40px] flex items-center justify-center"
           >
             <RefreshCw className="w-4 h-4" />
           </button>
@@ -123,7 +123,7 @@ export function DataPrivacySection({ profile, masteryProfile }: DataPrivacySecti
             <span className="block font-sans text-[10px] font-bold text-slate-500 dark:text-slate-400">
               کاشی کاتی
             </span>
-            <span className="font-mono font-bold text-sm text-blue-700 dark:text-blue-400">
+            <span className="font-mono font-bold text-sm text-indigo-700 dark:text-indigo-400">
               {inventory.cacheKeysCount} ({formatBytesKu(inventory.cacheBytes)})
             </span>
           </div>
@@ -136,7 +136,7 @@ export function DataPrivacySection({ profile, masteryProfile }: DataPrivacySecti
             className={`p-3 rounded-xl border text-xs font-sans flex items-start gap-2 ${
               statusMessage.type === "success"
                 ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200"
-                : "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200"
+                : "bg-indigo-50 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-800 text-indigo-800 dark:text-indigo-200"
             }`}
           >
             <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
@@ -195,7 +195,7 @@ export function DataPrivacySection({ profile, masteryProfile }: DataPrivacySecti
                       <button
                         type="button"
                         onClick={() => setExpandedCategory(isExpanded ? null : cat.id)}
-                        className="text-[11px] font-sans font-medium text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 shrink-0 min-h-[40px] px-2 cursor-pointer"
+                        className="text-[11px] font-sans font-medium text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 shrink-0 min-h-[40px] px-2 cursor-pointer"
                       >
                         <span>{isExpanded ? "شاردنەوە" : "کلیلەکان"}</span>
                         {isExpanded ? (
