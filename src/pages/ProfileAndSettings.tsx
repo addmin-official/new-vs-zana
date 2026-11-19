@@ -53,6 +53,7 @@ import { NotificationPreferences, DEFAULT_NOTIFICATION_PREFERENCES } from "../do
 import { useTranslation } from "../hooks/useTranslation.ts";
 import { DownloadManager } from "../components/DownloadManager.tsx";
 import { StudentGamificationCard } from "../components/StudentGamificationCard.tsx";
+import { UiUxSpecificationModal } from "../components/UiUxSpecificationModal.tsx";
 
 export interface ProfileAndSettingsProps {
   profile?: StudentProfile;
@@ -192,6 +193,7 @@ export function ProfileAndSettings({
   const [showSubModal, setShowSubModal] = useState(false);
   const [subStatus, setSubStatus] = useState<StudentSubscriptionStatus | null>(null);
   const [saveToast, setSaveToast] = useState<string | null>(null);
+  const [showUiSpecModal, setShowUiSpecModal] = useState(false);
 
   // Data Usage & Privacy state
   const [cacheMetrics, setCacheMetrics] = useState<CacheMetrics>(() => calculateLocalCacheMetrics());
@@ -341,26 +343,39 @@ export function ProfileAndSettings({
           </p>
         </div>
 
-        {/* Segmented 4 Tabs */}
-        <div className="flex flex-wrap bg-slate-100 p-1 rounded-xl shrink-0">
-          {[
-            { id: "profile", label: "پرۆفایل" },
-            { id: "preferences", label: "هەڵبژاردەکان" },
-            { id: "account", label: "هەژمار" },
-            { id: "privacy", label: "داتا و تایبەتمەندی" },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as typeof activeTab)}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-sans font-bold transition-all cursor-pointer ${
-                activeTab === tab.id
-                  ? "bg-white text-indigo-700 shadow-xs"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Segmented 4 Tabs */}
+          <div className="flex flex-wrap bg-slate-100 dark:bg-slate-800 p-1 rounded-xl shrink-0">
+            {[
+              { id: "profile", label: "پرۆفایل" },
+              { id: "preferences", label: "هەڵبژاردەکان" },
+              { id: "account", label: "هەژمار" },
+              { id: "privacy", label: "داتا و تایبەتمەندی" },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-sans font-bold transition-all cursor-pointer ${
+                  activeTab === tab.id
+                    ? "bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-400 shadow-xs"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* UI/UX Engineering Specification Button */}
+          <button
+            type="button"
+            onClick={() => setShowUiSpecModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-xs font-bold font-sans transition-colors cursor-pointer"
+            title="پیشاندانی نەخشەی تەواوی ستانداردەکان و UI/UX"
+          >
+            <FileText className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+            <span>نەخشەی UI/UX</span>
+          </button>
         </div>
       </div>
 
@@ -1578,6 +1593,12 @@ export function ProfileAndSettings({
         userId={(user as unknown as { uid?: string })?.uid || user?.id || studentProfile?.id || ""}
         userName={studentProfile?.name || user?.name || (user as unknown as { displayName?: string })?.displayName || ""}
         userEmail={user?.email || ""}
+      />
+
+      {/* UI/UX Specification Modal */}
+      <UiUxSpecificationModal
+        isOpen={showUiSpecModal}
+        onClose={() => setShowUiSpecModal(false)}
       />
     </div>
   );

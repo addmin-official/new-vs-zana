@@ -44,6 +44,7 @@ export const NAV_ITEMS: { key: NavItemKey; label: string; path: string }[] = [
   { key: "chat", label: "زانا", path: "/chat" },
   { key: "subjects", label: "بابەتەکان", path: "/subjects" },
   { key: "practice", label: "ڕاهێنان", path: "/practice" },
+  { key: "pedagogy", label: "تاقیگەی پێداگۆجی", path: "/pedagogy" },
   { key: "labs", label: "تاقیگە", path: "/labs" },
   { key: "assessment", label: "هەڵسەنگاندن", path: "/assessment" },
   { key: "plan", label: "پلان", path: "/plan" },

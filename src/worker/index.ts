@@ -112,6 +112,7 @@ export interface Env {
   VITE_FIREBASE_STORAGE_BUCKET?: string;
   VITE_FIREBASE_MESSAGING_SENDER_ID?: string;
   VITE_FIREBASE_APP_ID?: string;
+  VITE_FIREBASE_RECAPTCHA_SITE_KEY?: string;
   LEARNING_RECORDS_KV?: KVNamespace;
   RATE_LIMIT_KV?: KVNamespace;
   ZANA_CURRICULUM_BUCKET?: R2Bucket;
@@ -2278,6 +2279,12 @@ export default {
           });
         }
         try {
+          const now = Date.now();
+          // Auto-expire trials and active subscriptions that have passed their end date
+          await env.DB.prepare(
+            "UPDATE subscriptions SET status = 'expired', updated_at = ? WHERE status IN ('trial', 'active') AND trial_ends_at < ?"
+          ).bind(now, now).run().catch(() => {});
+
           let res: { results?: unknown[] } | null = null;
           try {
             res = await env.DB.prepare(

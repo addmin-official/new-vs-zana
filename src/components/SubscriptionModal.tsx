@@ -3,7 +3,6 @@ import {
   Sparkles,
   X,
   Lock,
-  ShieldCheck,
   Copy,
   Check,
   MessageCircle,

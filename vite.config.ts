@@ -74,6 +74,10 @@ export default defineConfig(({ mode }) => {
             },
           ],
         },
+        devOptions: {
+          enabled: true,
+          type: 'module',
+        },
       }),
       visualizer({
         filename: 'dist/client/stats.html',
@@ -153,6 +157,7 @@ export default defineConfig(({ mode }) => {
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      ...(process.env.DISABLE_HMR === 'true' ? { ws: false as const } : {}),
     },
   };
 });

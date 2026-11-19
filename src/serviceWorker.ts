@@ -72,9 +72,23 @@ class ServiceWorkerManager {
       return null;
     }
 
+    const isDev = Boolean(
+      typeof import.meta !== "undefined" &&
+        (import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV
+    );
+    const swUrl = isDev ? "/dev-sw.js?dev-sw" : "/sw.js";
+
     try {
-      const registration = await navigator.serviceWorker.register("/sw.js", {
+      // Ensure the service worker script exists and is served as JavaScript (not SPA text/html fallback)
+      const probe = await fetch(swUrl, { cache: "no-store" });
+      const contentType = probe.headers.get("content-type") || "";
+      if (!probe.ok || !/(?:javascript|ecmascript)/i.test(contentType)) {
+        return null;
+      }
+
+      const registration = await navigator.serviceWorker.register(swUrl, {
         scope: "/",
+        ...(isDev ? { type: "module" as const } : {}),
       });
 
       this.state = {

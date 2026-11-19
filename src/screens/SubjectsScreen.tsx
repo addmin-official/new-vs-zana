@@ -738,7 +738,7 @@ export function SubjectsScreen({ profile, onSelectSubject, onNavigate }: Subject
     }
 
     return list;
-  }, [studentGrade, studentStream, searchQuery]);
+  }, [studentGrade, searchQuery]);
 
   const handleOpenBook = (book: TextbookCardItem) => {
     setSelectedBookForModal(book);

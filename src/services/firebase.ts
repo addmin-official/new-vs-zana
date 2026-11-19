@@ -1,5 +1,13 @@
 import { initializeApp, getApp, getApps, FirebaseApp } from "firebase/app";
-import { getFirestore, initializeFirestore, connectFirestoreEmulator, enableIndexedDbPersistence, Firestore } from "firebase/firestore";
+import {
+  getFirestore,
+  initializeFirestore,
+  connectFirestoreEmulator,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  Firestore,
+  type FirestoreSettings,
+} from "firebase/firestore";
 import { getAuth, connectAuthEmulator, Auth, setPersistence, browserLocalPersistence } from "firebase/auth";
 import firebaseConfig, { isFirebaseConfigured } from "./firebaseConfig.ts";
 
@@ -37,25 +45,34 @@ export function getFirestoreDb(): Firestore | null {
   if (!app) return null;
 
   try {
-    _db = firebaseConfig.firestoreDatabaseId
-      ? initializeFirestore(app, {}, firebaseConfig.firestoreDatabaseId)
-      : getFirestore(app);
+    const usePersistentCache =
+      !isEmulatorEnabled() &&
+      typeof window !== "undefined" &&
+      typeof window.indexedDB !== "undefined";
+
+    const settings: FirestoreSettings = usePersistentCache
+      ? {
+          localCache: persistentLocalCache({
+            tabManager: persistentMultipleTabManager(),
+          }),
+        }
+      : {};
+
+    try {
+      _db = firebaseConfig.firestoreDatabaseId
+        ? initializeFirestore(app, settings, firebaseConfig.firestoreDatabaseId)
+        : initializeFirestore(app, settings);
+    } catch {
+      _db = firebaseConfig.firestoreDatabaseId
+        ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
+        : getFirestore(app);
+    }
 
     if (isEmulatorEnabled()) {
       try {
         connectFirestoreEmulator(_db, "127.0.0.1", 8080);
       } catch {
         // Emulator may already be connected
-      }
-    } else {
-      if (typeof window !== "undefined" && typeof window.indexedDB !== "undefined") {
-        enableIndexedDbPersistence(_db).catch((err: { code?: string }) => {
-          if (err?.code === "failed-precondition") {
-            console.warn("Firestore multi-tab persistence: active in primary tab.");
-          } else if (err?.code === "unimplemented") {
-            console.warn("Firestore persistence: IndexedDB not supported by browser.");
-          }
-        });
       }
     }
     return _db;

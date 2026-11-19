@@ -87,7 +87,7 @@ export function AdminDashboard({
 
   // Bootstrap Firestore on first admin load
   useEffect(() => {
-    import("../firebase/adminSetup.ts").then(({ bootstrapAdminFirestore }) => {
+    void import("../firebase/adminSetup.ts").then(({ bootstrapAdminFirestore }) => {
       bootstrapAdminFirestore().catch(console.warn);
     });
   }, []);

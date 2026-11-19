@@ -8,6 +8,7 @@ import {
   Calendar,
   Clock,
   Compass,
+  GraduationCap,
 } from "lucide-react";
 import { StudentProfile, SubjectKey } from "../features/student/studentTypes.ts";
 import { useStudentProfile } from "../features/student/useStudentProfile.ts";
@@ -47,6 +48,7 @@ export function Home({
   onNavigateToChat,
   onNavigateToSubjects,
   onNavigateToPlan,
+  onNavigateToPedagogy,
 }: HomeProps) {
   const { profile: hookProfile } = useStudentProfile();
   const studentProfile = propProfile || hookProfile;
@@ -369,6 +371,44 @@ export function Home({
           </div>
         )}
       </section>
+
+      {/* ═════════════════════════════════════════════════════════════ */}
+      {/* SECTION: PEDAGOGICAL EXCELLENCE HUB (5 GOLDEN PILLARS)         */}
+      {/* ═════════════════════════════════════════════════════════════ */}
+      {onNavigateToPedagogy && (
+        <section aria-labelledby="pedagogy-hub-title" className="space-y-3">
+          <div className="p-5 rounded-3xl bg-gradient-to-l from-indigo-900 via-slate-900 to-indigo-950 text-white border border-indigo-800/60 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 flex items-center justify-center shrink-0">
+                <GraduationCap className="w-6 h-6 text-indigo-400" aria-hidden="true" />
+              </div>
+              <div className="space-y-1 text-right">
+                <div className="flex items-center gap-2">
+                  <h2 id="pedagogy-hub-title" className="font-sans font-black text-base text-white">
+                    تاقیگەی نایابی پێداگۆجی (٥ پایەی زێڕینی فێربوون)
+                  </h2>
+                  <span className="text-[10px] font-bold text-amber-300 bg-amber-950/70 border border-amber-700/60 px-2 py-0.5 rounded-full">
+                    پۆلی ٩ - ١٢
+                  </span>
+                </div>
+                <p className="font-sans text-xs text-indigo-200/90 leading-relaxed max-w-xl">
+                  ستۆدیۆی فاینمان، دەستنیشانی مێتاکۆگنیتیڤ، ماتریکسی لایتنەر، دیبەیتی سۆکراتی، و هاوشێوەکاری تاقیکردنەوەی وەزاری سۆما.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={onNavigateToPedagogy}
+              className="w-full md:w-auto px-5 py-3 rounded-xl bg-indigo-500 hover:bg-indigo-400 active:scale-97 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-indigo-300 touch-manipulation"
+              aria-label="کردنەوەی تاقیگەی نایابی پێداگۆجی"
+            >
+              <span>چوونە تاقیگەی پێداگۆجی</span>
+              <ArrowLeft className="w-4 h-4 -rotate-180" aria-hidden="true" />
+            </button>
+          </div>
+        </section>
+      )}
 
       {/* ═════════════════════════════════════════════════════════════ */}
       {/* SECTION 4 — QUICK SUBJECT ACCESS (HORIZONTAL SCROLL)          */}

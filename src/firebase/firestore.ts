@@ -9,7 +9,6 @@ import {
   collection,
   DocumentReference,
   CollectionReference,
-  enableIndexedDbPersistence,
   getDoc,
   setDoc,
   query,
@@ -34,29 +33,13 @@ import {
 let persistenceInitialized = false;
 
 /**
- * Ensures offline persistence is initialized with comprehensive error handling.
+ * Offline persistence is configured at Firestore initialization time via
+ * FirestoreSettings.localCache (persistentLocalCache + persistentMultipleTabManager)
+ * in src/services/firebase.ts. Kept for backwards compatibility.
  */
-export async function initializeFirestorePersistence(db: Firestore): Promise<void> {
+export async function initializeFirestorePersistence(_db: Firestore): Promise<void> {
   if (persistenceInitialized) return;
-  if (typeof window === "undefined" || typeof window.indexedDB === "undefined") {
-    return;
-  }
-
-  try {
-    await enableIndexedDbPersistence(db);
-    persistenceInitialized = true;
-  } catch (err: unknown) {
-    const error = err as { code?: string };
-    if (error.code === "failed-precondition") {
-      // Multiple tabs open, persistence can only be enabled in one tab at a time.
-      console.warn("Firestore offline persistence: multiple tabs open, running persistence in primary tab.");
-    } else if (error.code === "unimplemented") {
-      // The current browser does not support all features required for persistence.
-      console.warn("Firestore offline persistence: browser does not support IndexedDB persistence.");
-    } else {
-      console.warn("Firestore offline persistence failed to initialize:", err);
-    }
-  }
+  persistenceInitialized = true;
 }
 
 /**
@@ -65,7 +48,7 @@ export async function initializeFirestorePersistence(db: Firestore): Promise<voi
 export function getActiveDb(): Firestore | null {
   const db = getFirestoreDb();
   if (db && !persistenceInitialized) {
-    void initializeFirestorePersistence(db);
+    persistenceInitialized = true;
   }
   return db;
 }

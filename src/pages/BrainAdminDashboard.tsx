@@ -18,7 +18,7 @@ import { LineChart } from "../components/charts/LineChart.tsx";
 import { HeatMap } from "../components/charts/HeatMap.tsx";
 import { useAppStore, UserRole } from "../store/appStore.ts";
 import { useAdminMetrics } from "../hooks/useAdminMetrics.ts";
-import { useAdminAnomalies, AnomalyDocument } from "../hooks/useAdminAnomalies.ts";
+import { useAdminAnomalies } from "../hooks/useAdminAnomalies.ts";
 import { useSystemHealth } from "../hooks/useSystemHealth.ts";
 
 export interface BrainAdminDashboardProps {
@@ -53,7 +53,7 @@ export function BrainAdminDashboard({
   // Live Firebase hooks
   const metrics = useAdminMetrics();
   const anomaliesState = useAdminAnomalies();
-  const healthData = useSystemHealth();
+  const _healthData = useSystemHealth();
 
   const displayAnomalies = anomaliesState.anomalies;
 

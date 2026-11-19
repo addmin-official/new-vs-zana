@@ -33,7 +33,6 @@ import {
  Phone,
  FileText,
  ExternalLink,
- Clock,
  AlertCircle,
 } from "lucide-react";
 import { InternalBrainService } from "../../core/brain/InternalBrainService";
@@ -1820,13 +1819,13 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
    <div className="bg-slate-900 border border-blue-900/40 rounded-xl p-3.5">
    <span className="text-[11px] font-bold text-blue-400 block">تاقیکردنەوە (Trial)</span>
    <span className="text-xl font-mono font-black text-blue-400">
-    {subscriptions.filter((s) => s.status === "trial").length}
+    {subscriptions.filter((s) => s.status === "trial" && Date.now() <= s.trial_ends_at).length}
    </span>
    </div>
    <div className="bg-slate-900 border border-rose-900/40 rounded-xl p-3.5">
    <span className="text-[11px] font-bold text-rose-400 block">بەسەرچوو (Expired)</span>
    <span className="text-xl font-mono font-black text-rose-400">
-    {subscriptions.filter((s) => s.status === "expired").length}
+    {subscriptions.filter((s) => s.status === "expired" || (s.status === "trial" && Date.now() > s.trial_ends_at)).length}
    </span>
    </div>
   </div>

@@ -39,9 +39,10 @@
 
         var origError = console.error;
         console.error = function() {
-          var first = arguments[0];
-          if (first && isViteWsError(first)) {
-            return;
+          for (var i = 0; i < arguments.length; i++) {
+            if (arguments[i] && isViteWsError(arguments[i])) {
+              return;
+            }
           }
           return origError.apply(console, arguments);
         };
