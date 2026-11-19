@@ -18,27 +18,21 @@ const isTest =
   nodeEnv.ALLOW_TEST_AUTH_MOCK === "true";
 
 export const FALLBACK_FIREBASE_CONFIG = {
-  apiKey: "AIzaSyDHR1wy42EGBH37K6w6yAUC9OEO6hX8ons",
-  authDomain: "gen-lang-client-0009572581.firebaseapp.com",
-  projectId: "gen-lang-client-0009572581",
-  storageBucket: "gen-lang-client-0009572581.firebasestorage.app",
-  messagingSenderId: "958839183835",
-  appId: "1:958839183835:web:80cec81bbb0227f7b82ffe",
-  measurementId: "G-RG8T98ZHBB",
-  firestoreDatabaseId: "ai-studio-zana-61fd6b5f-d052-40d1-8657-de471d642e8c",
-  oAuthClientId: "958839183835-3bc7tgfegi6ohldn6imvj7l9goombl6d.apps.googleusercontent.com",
-  recaptchaSiteKey: "AIzaSyDpcEo0LJdjOg_ATmnFdrwVMKAX_MSOLVE",
+  apiKey: "",
+  authDomain: "",
+  projectId: "",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: "",
+  measurementId: "",
+  firestoreDatabaseId: "(default)",
+  oAuthClientId: "",
+  recaptchaSiteKey: "",
 };
-
-const EXPIRED_LEGACY_KEYS = new Set<string>([
-  "AIzaSyD_u4I9xPn6dFoSnDTe9pyNMQwltDEpjN0",
-  "AIzaSyCE9MMzIC_o6dPDsrfYUlbZ8EMWAV6rdDI",
-]);
 
 const isUsableEnvValue = (val: string | undefined): val is string => {
   if (!val || !val.trim()) return false;
   if (val.includes("YOUR_") || val.includes("placeholder") || val.includes("FakeKey")) return false;
-  if (EXPIRED_LEGACY_KEYS.has(val.trim())) return false;
   return true;
 };
 
@@ -88,7 +82,6 @@ export const isFirebaseConfigured = (
   if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) return false;
   if (!projectId || typeof projectId !== "string" || !projectId.trim()) return false;
   if (apiKey.includes("FakeKey") || apiKey.includes("placeholder") || apiKey.includes("YOUR_")) return false;
-  if (EXPIRED_LEGACY_KEYS.has(apiKey.trim())) return false;
   if (projectId.includes("placeholder") || projectId.includes("YOUR_")) return false;
   return true;
 };
