@@ -57,8 +57,8 @@ export default defineConfig(({ mode }) => {
               },
             },
             {
-              // Cache API responses (NetworkFirst, 1 hour)
-              urlPattern: /^https?:\/\/.*\/api\/(?!chat|assessment|feedback).*/i,
+              // Cache API responses (NetworkFirst, 1 hour) - Exclude real-time chat, assessment, feedback, admin, and internal routes
+              urlPattern: /^https?:\/\/.*\/api\/(?!chat|assessment|feedback|admin|internal).*/i,
               handler: 'NetworkFirst',
               options: {
                 cacheName: 'api-responses-cache',

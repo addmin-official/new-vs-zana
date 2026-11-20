@@ -164,8 +164,8 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
  const [receiptActionMsg, setReceiptActionMsg] = useState<string | null>(null);
  const [copiedReceiptCode, setCopiedReceiptCode] = useState<string | null>(null);
 
- const loadSubscriptions = async () => {
-  setIsLoadingSubs(true);
+ const loadSubscriptions = async (silent = false) => {
+  if (!silent) setIsLoadingSubs(true);
   setSubActionMessage(null);
   try {
    const data = await getAdminSubscriptions();
@@ -175,7 +175,7 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
   } catch (err: unknown) {
    console.warn("[BrainAdminDashboard] Failed to load subscriptions:", err);
   } finally {
-   setIsLoadingSubs(false);
+   if (!silent) setIsLoadingSubs(false);
   }
  };
 
@@ -212,20 +212,25 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
  const [receiptsError, setReceiptsError] = useState<string | null>(null);
 
  const loadReceipts = async (silent = false) => {
-  if (!silent) setIsLoadingReceipts(true);
-  setReceiptsError(null);
+  if (!silent) {
+   setIsLoadingReceipts(true);
+   setReceiptsError(null);
+  }
   try {
    const data = await getAdminPaymentReceipts("all");
    if (data && Array.isArray(data.receipts)) {
     const sorted = [...data.receipts].sort((a, b) => Number(b.submitted_at) - Number(a.submitted_at));
     setReceipts(sorted);
+    setReceiptsError(null);
    } else {
     setReceipts([]);
    }
   } catch (err: unknown) {
    const msg = err instanceof Error ? err.message : "هەڵە لە بارکردنی پسوولەکان لە سێرڤەر";
    console.error("[BrainAdminDashboard] Failed to load receipts:", err);
-   setReceiptsError(msg);
+   if (!silent || receipts.length === 0) {
+    setReceiptsError(msg);
+   }
   } finally {
    if (!silent) setIsLoadingReceipts(false);
   }
@@ -241,7 +246,7 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
    }
    const res = await reviewPaymentReceipt(receiptId, action, reason);
    setReceiptActionMsg(res.message);
-   await Promise.all([loadReceipts(true), loadSubscriptions()]);
+   await Promise.all([loadReceipts(true), loadSubscriptions(true)]);
   } catch (err: unknown) {
    const msg = err instanceof Error ? err.message : String(err);
    alert(`هەڵە لە پێداچوونەوە: ${msg}`);
@@ -256,7 +261,7 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
 
    const pollTimer = setInterval(() => {
     void loadReceipts(true);
-    void loadSubscriptions();
+    void loadSubscriptions(true);
    }, 8000);
 
    return () => clearInterval(pollTimer);
@@ -1796,7 +1801,7 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
 
    <button
    type="button"
-   onClick={loadSubscriptions}
+   onClick={() => void loadSubscriptions()}
    disabled={isLoadingSubs}
    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition border border-slate-700 cursor-pointer disabled:opacity-50"
    >

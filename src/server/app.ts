@@ -1160,6 +1160,28 @@ app.post("/api/admin/brain/preferences", (req: Request, res: Response) => {
   }
 });
 
+// Admin Payment Receipts (Local Dev / Express Parity)
+app.get("/api/admin/payment-receipts", (req: Request, res: Response) => {
+  res.json({ ok: true, receipts: [] });
+});
+
+app.post("/api/admin/payment-receipts/action", (req: Request, res: Response) => {
+  res.json({ ok: true, message: "Receipt reviewed successfully" });
+});
+
+// Admin Subscriptions (Local Dev / Express Parity)
+app.get("/api/admin/subscriptions", (req: Request, res: Response) => {
+  res.json({ ok: true, subscriptions: [] });
+});
+
+app.post("/api/admin/subscriptions/activate", (req: Request, res: Response) => {
+  res.json({ ok: true, message: "Subscription activated successfully" });
+});
+
+app.post("/api/admin/subscriptions/reset-trial", (req: Request, res: Response) => {
+  res.json({ ok: true, message: "Trial reset successfully" });
+});
+
 app.all("/api/study-rooms*", async (req: Request, res: Response) => {
   try {
     const fullUrl = `${req.protocol}://${req.get("host") || "localhost"}${req.originalUrl}`;

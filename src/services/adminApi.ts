@@ -25,10 +25,30 @@ export async function adminFetch(url: string, options: RequestInit = {}): Promis
     }
   }
 
-  const res = await fetch(url, {
+  const fetchOptions: RequestInit = {
+    credentials: "same-origin",
     ...options,
     headers,
-  });
+  };
+
+  let res: Response;
+  try {
+    res = await fetch(url, fetchOptions);
+  } catch (netErr: unknown) {
+    const rawMsg = netErr instanceof Error ? netErr.message : String(netErr);
+    console.error(`[adminApi] Network fetch failure for ${url}:`, netErr);
+    if (
+      rawMsg.includes("Failed to fetch") ||
+      rawMsg.includes("NetworkError") ||
+      rawMsg.includes("Load failed") ||
+      rawMsg.includes("aborted")
+    ) {
+      throw new Error(
+        "پەیوەندی بە سێرڤەرەوە پچڕاوە یان دانیشتنی وێبگەڕ (Cloudflare Access Session) بەسەرچووە. تکایە ئینتەرنێت پشکنین بکە یان پەڕەکە نوێ (Refresh) بکەرەوە."
+      );
+    }
+    throw new Error(`هەڵەی پەیوەندی بە سێرڤەر: ${rawMsg}`);
+  }
 
   if (res.status === 403) {
     let detail = "دەستگەیشتن ڕەتکرایەوە. تەنها ئادمین دەتوانێت دەستی پێی بگات.";
@@ -132,7 +152,10 @@ export interface SubscriptionRecord {
 
 export async function getAdminSubscriptions(): Promise<{ ok: boolean; subscriptions: SubscriptionRecord[] }> {
   const res = await adminFetch("/api/admin/subscriptions");
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { detail?: string; error?: string };
+    throw new Error(data.detail || data.error || `HTTP ${res.status}`);
+  }
   return res.json();
 }
 
@@ -144,7 +167,10 @@ export async function activateUserSubscription(
     method: "POST",
     body: JSON.stringify({ userId, planId }),
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { detail?: string; error?: string };
+    throw new Error(data.detail || data.error || `HTTP ${res.status}`);
+  }
   return res.json();
 }
 
@@ -155,7 +181,10 @@ export async function resetUserTrial(
     method: "POST",
     body: JSON.stringify({ userId }),
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { detail?: string; error?: string };
+    throw new Error(data.detail || data.error || `HTTP ${res.status}`);
+  }
   return res.json();
 }
 
@@ -182,7 +211,10 @@ export async function getAdminPaymentReceipts(
 ): Promise<{ ok: boolean; receipts: PaymentReceiptRecord[] }> {
   const query = status && status !== "all" ? `?status=${status}` : "";
   const res = await adminFetch(`/api/admin/payment-receipts${query}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { detail?: string; error?: string };
+    throw new Error(data.detail || data.error || `HTTP ${res.status}`);
+  }
   return res.json();
 }
 
