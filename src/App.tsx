@@ -25,27 +25,28 @@ import {
 import { checkUserExists } from "./auth/userProfileService.ts";
 import { FeatureFlagProvider } from "./features/flags/index.ts";
 import type { PedagogyPillarTab } from "./screens/PedagogicalHubScreen.tsx";
+import { lazyWithRetry } from "./utils/lazyWithRetry.ts";
 
-// Lazy-loaded routes for code-splitting and performance (LCP/FCP < 2s)
-const Home = lazy(() => import("./pages/Home.tsx").then((m) => ({ default: m.Home })));
-const Chat = lazy(() => import("./pages/Chat.tsx").then((m) => ({ default: m.Chat })));
-const PracticeLab = lazy(() => import("./pages/PracticeLab.tsx").then((m) => ({ default: m.PracticeLab })));
-const VirtualScienceLab = lazy(() => import("./pages/VirtualScienceLab.tsx").then((m) => ({ default: m.VirtualScienceLab })));
-const AdaptiveAssessment = lazy(() => import("./pages/AdaptiveAssessment.tsx").then((m) => ({ default: m.AdaptiveAssessment })));
-const StudyPathManager = lazy(() => import("./pages/StudyPathManager.tsx").then((m) => ({ default: m.StudyPathManager })));
-const StudyRooms = lazy(() => import("./pages/StudyRooms.tsx").then((m) => ({ default: m.StudyRooms })));
-const ParentReport = lazy(() => import("./pages/ParentReport.tsx").then((m) => ({ default: m.ParentReport })));
-const ProfileAndSettings = lazy(() => import("./pages/ProfileAndSettings.tsx").then((m) => ({ default: m.ProfileAndSettings })));
-const SubjectsScreen = lazy(() => import("./screens/SubjectsScreen.tsx").then((m) => ({ default: m.SubjectsScreen })));
-const BrainAdminDashboard = lazy(() => import("./features/brain/BrainAdminDashboard.tsx").then((m) => ({ default: m.BrainAdminDashboard })));
-const AdminDashboard = lazy(() => import("./pages/AdminDashboard.tsx").then((m) => ({ default: m.AdminDashboard })));
-const AdminRoute = lazy(() => import("./auth/adminGuard.ts").then((m) => ({ default: m.AdminRoute })));
-const RegisterScreen = lazy(() => import("./pages/Register.tsx").then((m) => ({ default: m.Register })));
-const ForgotPasswordScreen = lazy(() => import("./screens/ForgotPasswordScreen.tsx").then((m) => ({ default: m.ForgotPasswordScreen })));
-const PedagogicalHubScreen = lazy(() => import("./screens/PedagogicalHubScreen.tsx"));
-const OnboardingScreen = lazy(() => import("./screens/OnboardingScreen.tsx").then((m) => ({ default: m.OnboardingScreen })));
-const LoginScreen = lazy(() => import("./pages/Login.tsx").then((m) => ({ default: m.Login })));
-const WelcomeScreen = lazy(() => import("./screens/WelcomeScreen.tsx").then((m) => ({ default: m.WelcomeScreen })));
+// Lazy-loaded routes with automatic retry and reload on new version deployments
+const Home = lazyWithRetry(() => import("./pages/Home.tsx").then((m) => ({ default: m.Home })));
+const Chat = lazyWithRetry(() => import("./pages/Chat.tsx").then((m) => ({ default: m.Chat })));
+const PracticeLab = lazyWithRetry(() => import("./pages/PracticeLab.tsx").then((m) => ({ default: m.PracticeLab })));
+const VirtualScienceLab = lazyWithRetry(() => import("./pages/VirtualScienceLab.tsx").then((m) => ({ default: m.VirtualScienceLab })));
+const AdaptiveAssessment = lazyWithRetry(() => import("./pages/AdaptiveAssessment.tsx").then((m) => ({ default: m.AdaptiveAssessment })));
+const StudyPathManager = lazyWithRetry(() => import("./pages/StudyPathManager.tsx").then((m) => ({ default: m.StudyPathManager })));
+const StudyRooms = lazyWithRetry(() => import("./pages/StudyRooms.tsx").then((m) => ({ default: m.StudyRooms })));
+const ParentReport = lazyWithRetry(() => import("./pages/ParentReport.tsx").then((m) => ({ default: m.ParentReport })));
+const ProfileAndSettings = lazyWithRetry(() => import("./pages/ProfileAndSettings.tsx").then((m) => ({ default: m.ProfileAndSettings })));
+const SubjectsScreen = lazyWithRetry(() => import("./screens/SubjectsScreen.tsx").then((m) => ({ default: m.SubjectsScreen })));
+const BrainAdminDashboard = lazyWithRetry(() => import("./features/brain/BrainAdminDashboard.tsx").then((m) => ({ default: m.BrainAdminDashboard })));
+const AdminDashboard = lazyWithRetry(() => import("./pages/AdminDashboard.tsx").then((m) => ({ default: m.AdminDashboard })));
+const AdminRoute = lazyWithRetry(() => import("./auth/adminGuard.ts").then((m) => ({ default: m.AdminRoute })));
+const RegisterScreen = lazyWithRetry(() => import("./pages/Register.tsx").then((m) => ({ default: m.Register })));
+const ForgotPasswordScreen = lazyWithRetry(() => import("./screens/ForgotPasswordScreen.tsx").then((m) => ({ default: m.ForgotPasswordScreen })));
+const PedagogicalHubScreen = lazyWithRetry(() => import("./screens/PedagogicalHubScreen.tsx"));
+const OnboardingScreen = lazyWithRetry(() => import("./screens/OnboardingScreen.tsx").then((m) => ({ default: m.OnboardingScreen })));
+const LoginScreen = lazyWithRetry(() => import("./pages/Login.tsx").then((m) => ({ default: m.Login })));
+const WelcomeScreen = lazyWithRetry(() => import("./screens/WelcomeScreen.tsx").then((m) => ({ default: m.WelcomeScreen })));
 
 function ScreenLoadingFallback() {
   return (

@@ -736,7 +736,9 @@ export default {
             const lastSegment = pathname.substring(pathname.lastIndexOf("/") + 1);
             const hasExtension = lastSegment.includes(".") && !lastSegment.endsWith(".");
             if (hasExtension) {
-              return new Response(JSON.stringify({ error: "فایلەکە نەدۆزرایەوە." }), { status: 404, headers: responseHeaders });
+              const noStoreHeaders = new Headers(responseHeaders);
+              noStoreHeaders.set("Cache-Control", "no-store, no-cache, must-revalidate");
+              return new Response(JSON.stringify({ error: "فایلەکە نەدۆزرایەوە." }), { status: 404, headers: noStoreHeaders });
             }
             const accept = request.headers.get("Accept") || "";
             if (accept.includes("application/json") && !accept.includes("text/html")) {
