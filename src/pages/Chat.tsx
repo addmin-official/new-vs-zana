@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   Send,
   BookOpen,
@@ -204,6 +204,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
   const [mobileChapterDrawer, setMobileChapterDrawer] = useState(false);
   const [isChapterSidebarOpen, setIsChapterSidebarOpen] = useState(true);
   const [isFocusMode, setIsFocusMode] = useState(false);
+  const [isInputFocused, setIsInputFocused] = useState(false);
 
   // ─── Feature 1: Dual View Switcher ────────────────────────────────────────
   const [viewMode, setViewMode] = useState<ViewMode>("tutor");
@@ -269,6 +270,15 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
     // User is near bottom if within 140px of the bottom
     isNearBottomRef.current = scrollHeight - scrollTop - clientHeight < 140;
   };
+
+  const scrollToBottom = useCallback((smooth = true) => {
+    if (!chatScrollContainerRef.current) return;
+    const container = chatScrollContainerRef.current;
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: smooth ? "smooth" : "auto",
+    });
+  }, []);
 
   // ─── Socratic Mode State ──────────────────────────────────────────────────
   const [socraticChainCount, setSocraticChainCount] = useState<number>(0);
@@ -369,9 +379,33 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
 
   useEffect(() => {
     if (isNearBottomRef.current) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      scrollToBottom(true);
     }
-  }, [chatMessages, isLoading, currentMode]);
+  }, [chatMessages, isLoading, currentMode, scrollToBottom]);
+
+  // Handle mobile visualViewport resize & prevent window-level scroll displacement
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.visualViewport) return;
+    const vv = window.visualViewport;
+    const handleViewportChange = () => {
+      // Prevent entire browser window scroll displacement on mobile
+      if (window.scrollY > 0) {
+        window.scrollTo(0, 0);
+      }
+      if (isNearBottomRef.current && chatScrollContainerRef.current) {
+        chatScrollContainerRef.current.scrollTo({
+          top: chatScrollContainerRef.current.scrollHeight,
+          behavior: "auto",
+        });
+      }
+    };
+    vv.addEventListener("resize", handleViewportChange);
+    vv.addEventListener("scroll", handleViewportChange);
+    return () => {
+      vv.removeEventListener("resize", handleViewportChange);
+      vv.removeEventListener("scroll", handleViewportChange);
+    };
+  }, []);
 
   const handleSwitchSubject = (subj: SubjectKey) => {
     setSelectedSubject(subj);
@@ -516,9 +550,11 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
         setIsStoreTrialExpired?.(true);
       }
     } finally {
-      setTimeout(() => {
-        textareaRef.current?.focus();
-      }, 50);
+      if (typeof window !== "undefined" && (window.innerWidth >= 768 || isInputFocused)) {
+        setTimeout(() => {
+          textareaRef.current?.focus();
+        }, 50);
+      }
     }
   };
 
@@ -701,34 +737,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
         />
       </div>
 
-      {/* 2. Mobile Chapter Bar / Selector */}
-      <div className="lg:hidden p-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shadow-2xs">
-        <button
-          onClick={() => setMobileChapterDrawer(true)}
-          className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 px-3 py-2 rounded-xl text-right font-sans cursor-pointer max-w-[80%]"
-        >
-          <BookOpen className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
-          <div className="truncate">
-            <span className="font-bold text-xs text-slate-900 dark:text-white block truncate">
-              {activeChapter ? `بەندی ${activeChapter.id}: ${activeChapter.title}` : "هەڵبژاردنی بەند"}
-            </span>
-            {activeChapter?.pages && (
-              <span className="text-[10px] text-slate-500 dark:text-slate-400 block truncate">
-                لاپەڕە {activeChapter.pages}
-              </span>
-            )}
-          </div>
-          <ChevronDown className="w-4 h-4 text-slate-400 shrink-0 mr-1" />
-        </button>
 
-        <button
-          onClick={() => setMobileChapterDrawer(true)}
-          className="p-2 text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 rounded-xl border border-indigo-200 dark:border-indigo-800/60 cursor-pointer text-xs font-sans font-bold flex items-center gap-1"
-        >
-          <Layers className="w-4 h-4" />
-          <span>بەندەکان</span>
-        </button>
-      </div>
 
       {/* 3. Mobile Chapter Drawer Overlay */}
       {mobileChapterDrawer && (
@@ -802,15 +811,23 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
 
               <div className="flex items-center gap-1.5 min-w-0">
                 <BookOpen className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
-                <h2 className="font-sans font-bold text-xs sm:text-sm text-slate-900 dark:text-white truncate max-w-[150px] sm:max-w-xs" title={activeChapter?.title}>
-                  {activeChapter
-                    ? `بەندی ${activeChapter.id}: ${activeChapter.title}`
-                    : currentSubject === "physics"
-                    ? "فیزیای پۆلی ١٢"
-                    : currentSubject === "chemistry"
-                    ? "کیمیای پۆلی ١٢"
-                    : "بیرکاری پۆلی ١٢"}
-                </h2>
+                <button
+                  type="button"
+                  onClick={() => setMobileChapterDrawer(true)}
+                  className="flex items-center gap-1 text-right font-sans font-bold text-xs sm:text-sm text-slate-900 dark:text-white truncate max-w-[150px] sm:max-w-xs hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer lg:cursor-default"
+                  title="هەڵبژاردنی بەند"
+                >
+                  <span className="truncate">
+                    {activeChapter
+                      ? `بەندی ${activeChapter.id}: ${activeChapter.title}`
+                      : currentSubject === "physics"
+                      ? "فیزیای پۆلی ١٢"
+                      : currentSubject === "chemistry"
+                      ? "کیمیای پۆلی ١٢"
+                      : "بیرکاری پۆلی ١٢"}
+                  </span>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0 lg:hidden" />
+                </button>
                 {activeChapter?.pages && (
                   <span className="hidden sm:inline font-sans text-[10px] text-slate-400 dark:text-slate-500 shrink-0">
                     (لاپەڕە {activeChapter.pages})
@@ -1153,7 +1170,8 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
           role="log"
           aria-live="polite"
           aria-label="پەیامەکانی مامۆستا زانا"
-          className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-3"
+          className="flex-1 overflow-y-auto overscroll-y-contain px-3 sm:px-6 py-3 space-y-3 w-full"
+          style={{ WebkitOverflowScrolling: "touch" }}
         >
 
           {/* ════════════════════════════════════════════════════════════════
@@ -1930,164 +1948,179 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
 
         {/* 6. Sticky Chat Input Area (Shown in Ask and Socratic modes) */}
         {viewMode === "tutor" && (currentMode === "ask" || currentMode === "socratic") && (
-          <div className="p-2 sm:p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-2xs shrink-0">
+          <div
+            className="p-2 sm:p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-2xs shrink-0"
+            style={{
+              paddingBottom: "max(env(safe-area-inset-bottom, 0px), 8px)",
+            }}
+          >
             <div className="max-w-5xl mx-auto w-full">
-              {/* ─── Feature 6: Quick Prompt Chips ──────────────────────── */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 no-scrollbar">
-              <button
-                onClick={() => handleQuickPrompt(`مامۆستا زانا، ڕاهێنانی وانەی بەندی ${activeChapter?.id || 1}م بۆ بکە`)}
-                className="shrink-0 flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-3 py-1.5 text-[11px] font-sans font-bold shadow-2xs transition-colors cursor-pointer text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 min-h-[36px]"
-              >
-                <Award className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                <span>🏆 ڕاهێنانی وانە</span>
-              </button>
+              {/* ─── Feature 6: Quick Prompt Chips (hidden while typing on mobile to save vertical space) ─── */}
+              <div className={`items-center gap-1.5 overflow-x-auto pb-1.5 no-scrollbar ${isInputFocused ? "hidden sm:flex" : "flex"}`}>
+                <button
+                  onClick={() => handleQuickPrompt(`مامۆستا زانا، ڕاهێنانی وانەی بەندی ${activeChapter?.id || 1}م بۆ بکە`)}
+                  className="shrink-0 flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-3 py-1.5 text-[11px] font-sans font-bold shadow-2xs transition-colors cursor-pointer text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 min-h-[36px]"
+                >
+                  <Award className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                  <span>🏆 ڕاهێنانی وانە</span>
+                </button>
 
-              <button
-                onClick={() => handleQuickPrompt(`مامۆستا زانا، تکایە چەمکە سەرەکییەکانی بەندی ${activeChapter?.id || 1}م بۆ ڕوون بکەرەوە بە شێوازی سوقراتی`)}
-                className="shrink-0 flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-3 py-1.5 text-[11px] font-sans font-medium shadow-2xs transition-colors cursor-pointer text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/50 min-h-[36px]"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                <span>✨ شیکردنەوەی سوقراتی</span>
-              </button>
+                <button
+                  onClick={() => handleQuickPrompt(`مامۆستا زانا، تکایە چەمکە سەرەکییەکانی بەندی ${activeChapter?.id || 1}م بۆ ڕوون بکەرەوە بە شێوازی سوقراتی`)}
+                  className="shrink-0 flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-3 py-1.5 text-[11px] font-sans font-medium shadow-2xs transition-colors cursor-pointer text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/50 min-h-[36px]"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                  <span>✨ شیکردنەوەی سوقراتی</span>
+                </button>
 
-              <button
-                onClick={() => handleQuickPrompt(`هەڵە تێگەیشتنە باوەکانی قوتابیان لەسەر بەندی ${activeChapter?.id || 1} چین؟`)}
-                className="shrink-0 flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-3 py-1.5 text-[11px] font-sans font-medium shadow-2xs transition-colors cursor-pointer text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/50 min-h-[36px]"
-              >
-                <HelpCircle className="w-3.5 h-3.5 text-rose-500" />
-                <span>❓ هەڵە باوەکان</span>
-              </button>
+                <button
+                  onClick={() => handleQuickPrompt(`هەڵە تێگەیشتنە باوەکانی قوتابیان لەسەر بەندی ${activeChapter?.id || 1} چین؟`)}
+                  className="shrink-0 flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-3 py-1.5 text-[11px] font-sans font-medium shadow-2xs transition-colors cursor-pointer text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/50 min-h-[36px]"
+                >
+                  <HelpCircle className="w-3.5 h-3.5 text-rose-500" />
+                  <span>❓ هەڵە باوەکان</span>
+                </button>
 
-              <button
-                onClick={() => handleQuickPrompt(`یاسا و هاوکێشە سەرەکییەکانی پەیوەست بە بەندی ${activeChapter?.id || 1} چین؟`)}
-                className="shrink-0 flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-3 py-1.5 text-[11px] font-sans font-medium shadow-2xs transition-colors cursor-pointer text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 min-h-[36px]"
-              >
-                <Brain className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
-                <span>🧠 هاوکێشە و یاساکان</span>
-              </button>
-            </div>
+                <button
+                  onClick={() => handleQuickPrompt(`یاسا و هاوکێشە سەرەکییەکانی پەیوەست بە بەندی ${activeChapter?.id || 1} چین؟`)}
+                  className="shrink-0 flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-3 py-1.5 text-[11px] font-sans font-medium shadow-2xs transition-colors cursor-pointer text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 min-h-[36px]"
+                >
+                  <Brain className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
+                  <span>🧠 هاوکێشە و یاساکان</span>
+                </button>
+              </div>
 
-            {/* Live Voice Recording Status Badge */}
-            {isListening && (
-              <div className="flex items-center justify-between bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800/60 text-rose-700 dark:text-rose-300 px-3.5 py-2 rounded-xl text-xs mb-2 shadow-xs">
-                <div className="flex items-center gap-2 overflow-hidden">
-                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping shrink-0" />
-                  <span className="font-bold shrink-0">گوێ دەگرێت... بە کوردی قسە بکە</span>
-                  {interimTranscript && (
-                    <span className="text-slate-700 dark:text-slate-200 bg-white/90 dark:bg-slate-900 border border-rose-100 dark:border-rose-800 px-2 py-0.5 rounded text-[11px] truncate max-w-[200px] sm:max-w-md">
-                      «{interimTranscript}»
-                    </span>
-                  )}
+              {/* Live Voice Recording Status Badge */}
+              {isListening && (
+                <div className="flex items-center justify-between bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800/60 text-rose-700 dark:text-rose-300 px-3.5 py-2 rounded-xl text-xs mb-2 shadow-xs">
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping shrink-0" />
+                    <span className="font-bold shrink-0">گوێ دەگرێت... بە کوردی قسە بکە</span>
+                    {interimTranscript && (
+                      <span className="text-slate-700 dark:text-slate-200 bg-white/90 dark:bg-slate-900 border border-rose-100 dark:border-rose-800 px-2 py-0.5 rounded text-[11px] truncate max-w-[200px] sm:max-w-md">
+                        «{interimTranscript}»
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={stopListening}
+                    className="shrink-0 flex items-center gap-1 text-[11px] font-bold text-rose-700 dark:text-rose-300 hover:text-rose-900 bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-800 px-2.5 py-1 rounded-lg shadow-2xs cursor-pointer transition-colors"
+                  >
+                    <Square className="w-3 h-3 fill-current text-rose-600 dark:text-rose-400" />
+                    <span>تەواوکردن</span>
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={stopListening}
-                  className="shrink-0 flex items-center gap-1 text-[11px] font-bold text-rose-700 dark:text-rose-300 hover:text-rose-900 bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-800 px-2.5 py-1 rounded-lg shadow-2xs cursor-pointer transition-colors"
-                >
-                  <Square className="w-3 h-3 fill-current text-rose-600 dark:text-rose-400" />
-                  <span>تەواوکردن</span>
-                </button>
-              </div>
-            )}
+              )}
 
-            {speechErrorToast && (
-              <div className="flex items-center justify-between bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800/60 text-amber-800 dark:text-amber-300 px-3.5 py-2 rounded-xl text-xs mb-2">
-                <span>{speechErrorToast}</span>
-                <button
-                  type="button"
-                  onClick={() => setSpeechErrorToast(null)}
-                  className="text-amber-600 dark:text-amber-400 hover:text-amber-800 font-bold px-1.5 cursor-pointer"
-                >
-                  ✕
-                </button>
-              </div>
-            )}
+              {speechErrorToast && (
+                <div className="flex items-center justify-between bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800/60 text-amber-800 dark:text-amber-300 px-3.5 py-2 rounded-xl text-xs mb-2">
+                  <span>{speechErrorToast}</span>
+                  <button
+                    type="button"
+                    onClick={() => setSpeechErrorToast(null)}
+                    className="text-amber-600 dark:text-amber-400 hover:text-amber-800 font-bold px-1.5 cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
 
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (isListening) stopListening();
-                void handleSend();
-              }}
-              className="flex items-end gap-2 max-w-4xl mx-auto"
-            >
-              {/* Camera Button */}
-              <button
-                type="button"
-                onClick={() => setShowCameraModal(true)}
-                className="w-12 h-12 min-w-[48px] min-h-[48px] rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 hover:text-indigo-600 dark:hover:text-indigo-400 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
-                title="وێنەگرتن یان بارکردنی پرسیار"
-                aria-label="وێنەی پرسیار"
-              >
-                <Camera className="w-5 h-5" />
-              </button>
-
-              {/* Voice-to-Text Microphone Button */}
-              <button
-                type="button"
-                onClick={() => {
-                  if (isListening) {
-                    stopListening();
-                  } else {
-                    startListening();
-                  }
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (isListening) stopListening();
+                  void handleSend();
                 }}
-                className={`w-12 h-12 min-w-[48px] min-h-[48px] rounded-xl flex items-center justify-center shrink-0 border transition-all cursor-pointer ${
-                  isListening
-                    ? "bg-rose-500 hover:bg-rose-600 text-white border-rose-600 animate-pulse shadow-md shadow-rose-200"
-                    : "bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 hover:text-indigo-600 dark:hover:text-indigo-400 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
-                }`}
-                title={isListening ? "ڕاگرتنی تۆمارکردنی دەنگ" : "تۆمارکردنی دەنگ (قسەکردن بە زمانی کوردی)"}
-                aria-label="تۆمارکردنی دەنگی پرسیار"
+                className="flex items-end gap-1.5 sm:gap-2 max-w-5xl mx-auto w-full"
               >
-                {isListening ? (
-                  <Square className="w-4 h-4 fill-current text-white" />
-                ) : (
-                  <Mic className="w-5 h-5" />
-                )}
-              </button>
+                {/* Camera Button */}
+                <button
+                  type="button"
+                  onClick={() => setShowCameraModal(true)}
+                  className="w-11 h-11 sm:w-12 sm:h-12 min-w-[44px] min-h-[44px] rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 hover:text-indigo-600 dark:hover:text-indigo-400 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
+                  title="وێنەگرتن یان بارکردنی پرسیار"
+                  aria-label="وێنەی پرسیار"
+                >
+                  <Camera className="w-5 h-5" />
+                </button>
 
-              <div className="flex-1 relative">
-                <textarea
-                  ref={textareaRef}
-                  value={inputContent}
-                  onChange={(e) => setInputContent(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  rows={1}
-                  inputMode="text"
-                  placeholder={
-                    isTrialExpired
-                      ? "تاقیکردنەوەی ٣ ڕۆژەکەت بەسەرچوو. تکایە بەشداری بکە..."
-                      : isListening
-                      ? "دەنگت تۆمار دەکرێت..."
-                      : currentMode === "socratic"
-                      ? "وەڵام یان تێڕوانینی خۆت بنووسە بۆ مامۆستا زانا (سوقراتی)..."
-                      : "پرسیارت لەسەر ئەم بەندە بپرسە..."
-                  }
-                  className="w-full resize-none rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-4 py-2.5 text-base sm:text-sm font-sans text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-all min-h-[48px] max-h-32 leading-relaxed touch-manipulation"
-                  disabled={isLoading || isTrialExpired}
-                  aria-label="دەقی پرسیار یان وەڵام"
-                />
-              </div>
+                {/* Voice-to-Text Microphone Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isListening) {
+                      stopListening();
+                    } else {
+                      startListening();
+                    }
+                  }}
+                  className={`w-11 h-11 sm:w-12 sm:h-12 min-w-[44px] min-h-[44px] rounded-xl flex items-center justify-center shrink-0 border transition-all cursor-pointer ${
+                    isListening
+                      ? "bg-rose-500 hover:bg-rose-600 text-white border-rose-600 animate-pulse shadow-md shadow-rose-200"
+                      : "bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 hover:text-indigo-600 dark:hover:text-indigo-400 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                  }`}
+                  title={isListening ? "ڕاگرتنی تۆمارکردنی دەنگ" : "تۆمارکردنی دەنگ (قسەکردن بە زمانی کوردی)"}
+                  aria-label="تۆمارکردنی دەنگی پرسیار"
+                >
+                  {isListening ? (
+                    <Square className="w-4 h-4 fill-current text-white" />
+                  ) : (
+                    <Mic className="w-5 h-5" />
+                  )}
+                </button>
 
-              <button
-                type="submit"
-                disabled={isLoading || isTrialExpired || (!inputContent.trim() && !isListening)}
-                className="w-12 h-12 min-w-[48px] min-h-[48px] rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white flex items-center justify-center shrink-0 shadow-xs transition-colors cursor-pointer"
-                aria-label={ku.chat.send}
-              >
-                {isLoading ? (
-                  <Spinner size="sm" className="!border-white !border-t-transparent" />
-                ) : (
-                  <Send className="w-5 h-5 -rotate-90 rtl:rotate-90" />
-                )}
-              </button>
+                <div className="flex-1 relative">
+                  <textarea
+                    ref={textareaRef}
+                    value={inputContent}
+                    onChange={(e) => setInputContent(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    onFocus={() => {
+                      setIsInputFocused(true);
+                      setTimeout(() => {
+                        scrollToBottom(true);
+                      }, 200);
+                    }}
+                    onBlur={() => {
+                      setIsInputFocused(false);
+                    }}
+                    rows={1}
+                    inputMode="text"
+                    placeholder={
+                      isTrialExpired
+                        ? "تاقیکردنەوەی ٣ ڕۆژەکەت بەسەرچوو. تکایە بەشداری بکە..."
+                        : isListening
+                        ? "دەنگت تۆمار دەکرێت..."
+                        : currentMode === "socratic"
+                        ? "وەڵام یان تێڕوانینی خۆت بنووسە بۆ مامۆستا زانا (سوقراتی)..."
+                        : "پرسیارت لەسەر ئەم بەندە بپرسە..."
+                    }
+                    className="w-full resize-none rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3.5 py-2.5 text-base sm:text-sm font-sans text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent transition-all min-h-[44px] sm:min-h-[48px] max-h-32 leading-relaxed touch-manipulation"
+                    disabled={isLoading || isTrialExpired}
+                    aria-label="دەقی پرسیار یان وەڵام"
+                  />
+                </div>
 
-              {/* Accessible Live Region for Screen Readers */}
-              <div className="sr-only" aria-live="polite" aria-busy={isLoading}>
-                {isLoading ? "مامۆستا زانا سەرقاڵی شیکردنەوە و ئامادەکردنی وەڵامە..." : ""}
-              </div>
-            </form>
+                <button
+                  type="submit"
+                  onMouseDown={(e) => e.preventDefault()}
+                  disabled={isLoading || isTrialExpired || (!inputContent.trim() && !isListening)}
+                  className="w-11 h-11 sm:w-12 sm:h-12 min-w-[44px] min-h-[44px] rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white flex items-center justify-center shrink-0 shadow-xs transition-colors cursor-pointer"
+                  aria-label={ku.chat.send}
+                >
+                  {isLoading ? (
+                    <Spinner size="sm" className="!border-white !border-t-transparent" />
+                  ) : (
+                    <Send className="w-5 h-5 -rotate-90 rtl:rotate-90" />
+                  )}
+                </button>
+
+                {/* Accessible Live Region for Screen Readers */}
+                <div className="sr-only" aria-live="polite" aria-busy={isLoading}>
+                  {isLoading ? "مامۆستا زانا سەرقاڵی شیکردنەوە و ئامادەکردنی وەڵامە..." : ""}
+                </div>
+              </form>
             </div>
           </div>
         )}

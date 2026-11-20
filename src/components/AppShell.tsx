@@ -257,8 +257,10 @@ export function AppShell({
         </main>
       </div>
 
-      {/* Bottom Nav for Mobile */}
-      <BottomNav activeTab={activeTab} onNavigate={handleNav} />
+      {/* Bottom Nav for Mobile - hidden in Chat to give 100% space to the tutor input and keyboard */}
+      {activeTab !== "chat" && (
+        <BottomNav activeTab={activeTab} onNavigate={handleNav} />
+      )}
     </div>
   );
 }
