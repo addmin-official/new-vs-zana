@@ -245,10 +245,12 @@ export function AppShell({
         <main
           id="main-content"
           tabIndex={-1}
-          className={`flex-1 min-h-0 flex flex-col min-w-0 md:pb-8 overflow-y-auto overscroll-y-contain focus:outline-none ${className}`}
+          className={`flex-1 min-h-0 flex flex-col min-w-0 ${
+            activeTab === "chat" ? "pb-0 overflow-hidden" : "md:pb-8 overflow-y-auto overscroll-y-contain"
+          } focus:outline-none ${className}`}
           style={{
             WebkitOverflowScrolling: "touch",
-            paddingBottom: "calc(5.25rem + env(safe-area-inset-bottom, 0px))",
+            paddingBottom: activeTab === "chat" ? 0 : "calc(5.25rem + env(safe-area-inset-bottom, 0px))",
           }}
         >
           {children}

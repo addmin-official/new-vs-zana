@@ -11,6 +11,8 @@ import {
   ExternalLink,
   Layers,
   Brain,
+  Copy,
+  Check,
 } from "lucide-react";
 import { ChatMessage } from "../services/storage.ts";
 
@@ -71,10 +73,19 @@ export const ChatBubble = React.memo(function ChatBubble({
   socraticStep,
 }: ChatBubbleProps) {
   const isUser = message.sender === "user";
+  const [isCopied, setIsCopied] = useState(false);
   const [expandedSteps, setExpandedSteps] = useState<Record<number, boolean>>({
     0: true,
     1: true,
   });
+
+  const handleCopy = () => {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      void navigator.clipboard.writeText(message.content);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    }
+  };
 
   const responseType = !isUser
     ? detectMultimodalType(message.content)
@@ -132,12 +143,12 @@ export const ChatBubble = React.memo(function ChatBubble({
           </div>
         )}
 
-        {/* Message Bubble Container */}
+        {/* Message Bubble Container - Expansive Terminal Width for AI Answers */}
         <div
-          className={`relative px-4 py-3 shadow-xs text-sm font-sans leading-relaxed break-words max-w-[92%] md:max-w-[82%] ${
+          className={`relative px-4 sm:px-6 py-3.5 sm:py-4 shadow-xs text-sm sm:text-[15px] font-sans leading-7 break-words ${
             isUser
-              ? "bg-indigo-600 text-white rounded-2xl rounded-br-none"
-              : "bg-white text-slate-800 border border-slate-200 rounded-2xl rounded-bl-none"
+              ? "max-w-[85%] md:max-w-[75%] bg-indigo-600 text-white rounded-2xl rounded-br-none"
+              : "w-full max-w-full sm:max-w-[96%] md:max-w-[95%] lg:max-w-[93%] bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-2xl rounded-bl-none shadow-xs"
           }`}
           style={{ unicodeBidi: "isolate" }}
         >
@@ -286,16 +297,40 @@ export const ChatBubble = React.memo(function ChatBubble({
             </div>
           )}
 
-          {/* Timestamp */}
-          {message.timestamp && (
-            <div
-              className={`text-[10px] mt-1.5 font-sans font-medium text-left ${
-                isUser ? "text-indigo-100" : "text-slate-500"
-              }`}
-            >
-              {message.timestamp}
-            </div>
-          )}
+          {/* Footer: Timestamp & Copy Button */}
+          <div className="flex items-center justify-between mt-2 pt-1 border-t border-slate-100 dark:border-slate-800/60">
+            {!isUser && (
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="inline-flex items-center gap-1 text-[11px] text-slate-400 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer py-0.5 px-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
+                title="لەبەرگرتنەوەی دەقی وەڵام"
+                aria-label="لەبەرگرتنەوەی وەڵام"
+              >
+                {isCopied ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-500" />
+                    <span className="text-emerald-600 dark:text-emerald-400 font-bold">لەبەرگیرایەوە</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>لەبەرگرتنەوە</span>
+                  </>
+                )}
+              </button>
+            )}
+
+            {message.timestamp && (
+              <div
+                className={`text-[10px] font-sans font-medium text-left mr-auto ${
+                  isUser ? "text-indigo-100" : "text-slate-400 dark:text-slate-400"
+                }`}
+              >
+                {message.timestamp}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

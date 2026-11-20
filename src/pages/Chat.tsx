@@ -24,6 +24,10 @@ import {
   Square,
   RotateCcw,
   ArrowLeftRight,
+  Maximize2,
+  Minimize2,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { ChapterSidebar } from "../components/ChapterSidebar.tsx";
 import { ChatBubble } from "../components/ChatBubble.tsx";
@@ -198,6 +202,8 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
   const [currentMode, setCurrentMode] = useState<WorkspaceMode>("ask");
   const [inputContent, setInputContent] = useState("");
   const [mobileChapterDrawer, setMobileChapterDrawer] = useState(false);
+  const [isChapterSidebarOpen, setIsChapterSidebarOpen] = useState(true);
+  const [isFocusMode, setIsFocusMode] = useState(false);
 
   // ─── Feature 1: Dual View Switcher ────────────────────────────────────────
   const [viewMode, setViewMode] = useState<ViewMode>("tutor");
@@ -674,13 +680,17 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
 
   return (
     <div className="flex-1 min-h-0 flex flex-col lg:flex-row h-full overflow-hidden bg-slate-50" dir="rtl">
-      {/* 1. Desktop Chapter Sidebar (280px) */}
-      <div className="hidden lg:block h-full">
+      {/* 1. Desktop Chapter Sidebar (Collapsible 280px) */}
+      <div
+        className={`hidden lg:block h-full transition-all duration-300 shrink-0 ${
+          isChapterSidebarOpen && !isFocusMode ? "w-[280px]" : "w-0 overflow-hidden"
+        }`}
+      >
         <ChapterSidebar
           chapters={chapters}
           activeChapterId={activeChapterId}
           onSelectChapter={handleSelectChapter}
-          className="h-full !w-[280px]"
+          className="h-full w-[280px]"
           subjectTitle={
             currentSubject === "physics"
               ? "فیزیای پۆلی ١٢"
@@ -759,15 +769,40 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
       )}
 
       {/* 4. Main Workspace Area */}
-      <div className="flex-1 flex flex-col h-full min-w-0 bg-slate-50 dark:bg-slate-950 relative">
-        {/* Lesson Header + Segmented Mode Control Tabs */}
-        <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-2xs">
-          {/* Top Title Bar */}
-          <div className="px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800">
-            <div className="flex items-center gap-2">
-              <BookOpen className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
-              <div>
-                <h2 className="font-sans font-bold text-sm text-slate-900 dark:text-white truncate">
+      <div
+        className={`flex-1 flex flex-col h-full min-w-0 bg-slate-50 dark:bg-slate-950 relative ${
+          isFocusMode ? "fixed inset-0 z-50 bg-slate-50 dark:bg-slate-950" : ""
+        }`}
+      >
+        {/* Lesson Header + Streamlined Controls Toolbar */}
+        <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-2xs shrink-0">
+          {/* Top Title Bar - Compact & Clean (~44px) */}
+          <div className="px-3 sm:px-5 py-2 flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800">
+            {/* Right side in RTL (Sidebar toggle + Title + Subject selector) */}
+            <div className="flex items-center gap-2 min-w-0">
+              {/* Desktop Sidebar Toggle Button */}
+              <button
+                type="button"
+                onClick={() => setIsChapterSidebarOpen((prev) => !prev)}
+                className="hidden lg:flex items-center gap-1 px-2 py-1 rounded-lg text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer text-xs font-bold shrink-0"
+                title={isChapterSidebarOpen ? "داخستنی بەندەکان بۆ فراوانکردنی تەرمینال" : "کردنەوەی لیستی بەندەکان"}
+              >
+                {isChapterSidebarOpen ? (
+                  <>
+                    <PanelLeftClose className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                    <span className="hidden xl:inline text-[11px]">شاردنەوەی بەندەکان</span>
+                  </>
+                ) : (
+                  <>
+                    <PanelLeftOpen className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                    <span className="hidden xl:inline text-[11px]">پیشاندانی بەندەکان</span>
+                  </>
+                )}
+              </button>
+
+              <div className="flex items-center gap-1.5 min-w-0">
+                <BookOpen className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                <h2 className="font-sans font-bold text-xs sm:text-sm text-slate-900 dark:text-white truncate max-w-[150px] sm:max-w-xs" title={activeChapter?.title}>
                   {activeChapter
                     ? `بەندی ${activeChapter.id}: ${activeChapter.title}`
                     : currentSubject === "physics"
@@ -777,85 +812,109 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                     : "بیرکاری پۆلی ١٢"}
                 </h2>
                 {activeChapter?.pages && (
-                  <p className="font-sans text-[10px] text-slate-500 dark:text-slate-400">
-                    لاپەڕە {activeChapter.pages} • پڕۆگرامی فەرمی وەزارەت
-                  </p>
+                  <span className="hidden sm:inline font-sans text-[10px] text-slate-400 dark:text-slate-500 shrink-0">
+                    (لاپەڕە {activeChapter.pages})
+                  </span>
                 )}
+              </div>
+
+              {/* Quick Subject Switcher Pills */}
+              <div className="hidden md:flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg shrink-0">
+                <button
+                  type="button"
+                  onClick={() => handleSwitchSubject("physics")}
+                  className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                    currentSubject === "physics"
+                      ? "bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-2xs"
+                      : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
+                  }`}
+                >
+                  ⚡ فیزیا
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSwitchSubject("chemistry")}
+                  className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                    currentSubject === "chemistry"
+                      ? "bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-2xs"
+                      : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
+                  }`}
+                >
+                  ⚗️ کیمیا
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSwitchSubject("math")}
+                  className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                    currentSubject === "math"
+                      ? "bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-2xs"
+                      : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
+                  }`}
+                >
+                  📐 بیرکاری
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSwitchSubject("english")}
+                  className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                    currentSubject === "english"
+                      ? "bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-2xs"
+                      : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
+                  }`}
+                >
+                  📚 ئینگلیزی
+                </button>
               </div>
             </div>
 
-            {/* Quick Subject Switcher Pills */}
-            <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+            {/* Left side in RTL (Focus Mode + Online Status + XP + Session tools) */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {/* Focus Mode / Full-Screen Terminal Toggle */}
               <button
                 type="button"
-                onClick={() => handleSwitchSubject("physics")}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  currentSubject === "physics"
-                    ? "bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-xs"
-                    : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
+                onClick={() => setIsFocusMode((prev) => !prev)}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-2xs ${
+                  isFocusMode
+                    ? "bg-indigo-600 text-white hover:bg-indigo-700 ring-2 ring-indigo-300 dark:ring-indigo-800"
+                    : "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200/80 dark:border-indigo-800/60"
                 }`}
+                title={isFocusMode ? "دەرچوون لە شاشەی تەواو" : "گەورەکردنی شاشە و تەرمینالی چات"}
+                aria-label="شاشەی تەواو"
               >
-                ⚡ فیزیا
+                {isFocusMode ? (
+                  <>
+                    <Minimize2 className="w-3.5 h-3.5" />
+                    <span>دەرچوون</span>
+                  </>
+                ) : (
+                  <>
+                    <Maximize2 className="w-3.5 h-3.5" />
+                    <span>شاشەی گەورە</span>
+                  </>
+                )}
               </button>
-              <button
-                type="button"
-                onClick={() => handleSwitchSubject("chemistry")}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  currentSubject === "chemistry"
-                    ? "bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-xs"
-                    : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
-                }`}
-              >
-                ⚗️ کیمیا
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSwitchSubject("math")}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  currentSubject === "math"
-                    ? "bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-xs"
-                    : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
-                }`}
-              >
-                📐 بیرکاری
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSwitchSubject("english")}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  currentSubject === "english"
-                    ? "bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-xs"
-                    : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
-                }`}
-              >
-                📚 ئینگلیزی
-              </button>
-            </div>
 
-            <div className="flex items-center gap-2">
               <div
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-sans font-bold border ${
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-sans font-bold border ${
                   serverHealth.isOnline
                     ? "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60"
                     : "bg-rose-50 dark:bg-rose-950/50 text-rose-800 dark:text-rose-300 border-rose-200 dark:border-rose-800/60"
                 }`}
-                title={serverHealth.isOnline ? `سێرڤەر کارایە (دواین پشکنین: ${serverHealth.latencyMs || "<50"}ms)` : "پەیوەندی لەگەڵ سێرڤەر نییە"}
+                title={serverHealth.isOnline ? `سێرڤەر کارایە (${serverHealth.latencyMs || "<50"}ms)` : "دەرھێڵ"}
               >
                 <span
-                  className={`w-2 h-2 rounded-full shrink-0 ${
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                     serverHealth.isOnline ? "bg-emerald-500" : "bg-rose-500"
                   }`}
                 />
-                <span>
-                  {serverHealth.isOnline ? "سەرهێڵ" : "دەرھێڵ"} • {activeSubjectMeta.label}
-                </span>
+                <span className="hidden sm:inline">{serverHealth.isOnline ? "سەرهێڵ" : "دەرھێڵ"}</span>
               </div>
 
               {onNavigateToSubjects && (
                 <button
                   type="button"
                   onClick={onNavigateToSubjects}
-                  className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-950 border border-indigo-200 dark:border-indigo-800/60 px-2.5 py-1 rounded-full transition shadow-2xs cursor-pointer"
+                  className="hidden sm:inline-flex items-center gap-1 text-[11px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-950 border border-indigo-200 dark:border-indigo-800/60 px-2 py-0.5 rounded-full transition shadow-2xs cursor-pointer"
                   title="گۆڕینی وانە بۆ وانەیەکی تر"
                 >
                   <span>گۆڕینی وانە</span>
@@ -863,7 +922,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                 </button>
               )}
 
-              <span className="text-[11px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/60 dark:border-indigo-800/60 px-2.5 py-0.5 rounded-full">
+              <span className="text-[11px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/60 dark:border-indigo-800/60 px-2 py-0.5 rounded-full hidden sm:inline">
                 {earnedXp > 0 ? `+${earnedXp} XP` : "مامۆستا زانا"}
               </span>
 
@@ -871,12 +930,12 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
               <button
                 type="button"
                 onClick={handleContinueLastSession}
-                className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-950/70 border border-amber-200 dark:border-amber-800/60 px-2.5 py-1 rounded-full transition shadow-2xs cursor-pointer"
+                className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-950/70 border border-amber-200 dark:border-amber-800/60 px-2 py-0.5 rounded-full transition shadow-2xs cursor-pointer"
                 title="بەردەوامبوون لە دانیشتنی پێشوو لەگەڵ زانا"
                 aria-label="بەردەوامبوون لە دانیشتنی پێشوو"
               >
                 <RotateCcw className="w-3 h-3 text-amber-600 dark:text-amber-400" />
-                <span>دانیشتنی پێشوو</span>
+                <span className="hidden sm:inline">دانیشتنی پێشوو</span>
               </button>
 
               {/* Clear chat history for this specific lesson */}
@@ -895,171 +954,168 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
             </div>
           </div>
 
-          {/* ─── Feature 1: Dual View Switcher ─────────────────────────────── */}
-          <div className="px-3 pt-3 pb-2">
-            <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl flex items-center gap-1">
+          {/* Unified Compact Segmented Mode Tabs (Height ~38px) */}
+          <div className="px-2 sm:px-4 py-1.5 flex items-center justify-between gap-1 overflow-x-auto no-scrollbar">
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-xl shrink-0">
               <button
-                onClick={() => setViewMode("tutor")}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl font-sans text-xs font-bold transition-all cursor-pointer min-h-[48px] ${
-                  viewMode === "tutor"
-                    ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-300 shadow-sm"
-                    : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-white"
+                type="button"
+                onClick={() => {
+                  setViewMode("tutor");
+                  setCurrentMode("ask");
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-sans text-xs font-bold transition-all cursor-pointer ${
+                  viewMode === "tutor" && currentMode === "ask"
+                    ? "bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-xs"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                 }`}
               >
-                <MessageSquare className="w-4 h-4 shrink-0" />
-                <span>{t("chat.tutorMode")}</span>
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span>پرسیارکردن</span>
               </button>
+
               <button
-                onClick={() => setViewMode("workspace")}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl font-sans text-xs font-bold transition-all cursor-pointer min-h-[48px] ${
-                  viewMode === "workspace"
-                    ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-300 shadow-sm"
-                    : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-white"
+                type="button"
+                onClick={() => {
+                  setViewMode("tutor");
+                  setCurrentMode("socratic");
+                  setSocraticChainCount(0);
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-sans text-xs font-bold transition-all cursor-pointer ${
+                  viewMode === "tutor" && currentMode === "socratic"
+                    ? "bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-xs ring-1 ring-indigo-200 dark:ring-indigo-800"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                 }`}
               >
-                <BookMarked className="w-4 h-4 shrink-0" />
-                <span>{t("chat.workspaceMode")}</span>
+                <Brain className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                <span>سوقراتی</span>
+                <span className="text-[9px] bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-200 px-1 py-0.2 rounded font-black">نوێ</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setViewMode("tutor");
+                  setCurrentMode("explain");
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-sans text-xs font-bold transition-all cursor-pointer ${
+                  viewMode === "tutor" && currentMode === "explain"
+                    ? "bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-xs"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>ڕوونکردنەوە</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setViewMode("tutor");
+                  setCurrentMode("practice");
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-sans text-xs font-bold transition-all cursor-pointer ${
+                  viewMode === "tutor" && currentMode === "practice"
+                    ? "bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-xs"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                }`}
+              >
+                <Award className="w-3.5 h-3.5" />
+                <span>ڕاهێنان</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setViewMode("workspace")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-sans text-xs font-bold transition-all cursor-pointer ${
+                  viewMode === "workspace"
+                    ? "bg-indigo-600 text-white shadow-xs"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                }`}
+              >
+                <BookMarked className="w-3.5 h-3.5" />
+                <span>هاوکێشە و مێزی کار</span>
+              </button>
+            </div>
+
+            {/* Mobile Subject Switcher */}
+            <div className="flex md:hidden items-center gap-1 shrink-0">
+              <button
+                type="button"
+                onClick={() => handleSwitchSubject(currentSubject === "physics" ? "chemistry" : currentSubject === "chemistry" ? "math" : "physics")}
+                className="px-2 py-1 rounded-lg text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400"
+              >
+                {activeSubjectMeta.icon} {activeSubjectMeta.label}
               </button>
             </div>
           </div>
 
-          {/* Segmented Mode Selector: Ask | Socratic | Explain | Practice  (only in tutor mode) */}
-          {viewMode === "tutor" && (
-            <>
-              <div className="grid grid-cols-4 text-center border-b border-slate-100 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setCurrentMode("ask")}
-                  className={`py-2.5 font-sans text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center justify-center gap-1.5 ${
-                    currentMode === "ask"
-                      ? "border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-indigo-50/30 dark:bg-indigo-950/30"
-                      : "border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                  }`}
-                  aria-label="پرسیارکردنی ڕاستەوخۆ"
-                >
-                  <HelpCircle className="w-4 h-4" />
-                  <span>پرسیارکردن</span>
-                </button>
+          {/* Socratic Mode Inline Tracker Bar (Only if socratic mode - sleek ~32px) */}
+          {viewMode === "tutor" && currentMode === "socratic" && (
+            <div className="bg-indigo-50/90 dark:bg-indigo-950/60 border-t border-indigo-200/70 dark:border-indigo-800/60 px-3 sm:px-5 py-1.5 flex flex-wrap items-center justify-between gap-2 text-xs font-sans">
+              <div className="flex items-center gap-2">
+                <Brain className="w-3.5 h-3.5 text-indigo-700 dark:text-indigo-400 shrink-0" />
+                <span className="font-bold text-[11px] text-indigo-900 dark:text-indigo-200">
+                  فێرکاری سوقراتی: مامۆستا بە ٤ پرسیاری هاندەر دەتگەیەنێتە وەڵام
+                </span>
+              </div>
 
+              <div className="flex items-center gap-2.5">
+                {/* 4-Step Chain Indicator */}
+                <div className="flex items-center gap-1 bg-white dark:bg-slate-900 px-2 py-0.5 rounded-md border border-indigo-200 dark:border-indigo-800 shadow-2xs">
+                  <span className="text-[10px] font-bold text-indigo-900 dark:text-indigo-200 ml-1">
+                    قۆناغ {socraticChainCount}/٤:
+                  </span>
+                  {[1, 2, 3, 4].map((step) => (
+                    <span
+                      key={step}
+                      className={`w-2 h-2 rounded-full transition-all ${
+                        step <= socraticChainCount
+                          ? "bg-indigo-600 ring-2 ring-indigo-200 dark:ring-indigo-900 scale-110"
+                          : "bg-indigo-200 dark:bg-indigo-900"
+                      }`}
+                      title={`هەنگاوی ${step} لە ٤`}
+                    />
+                  ))}
+                </div>
+
+                {/* Hints Used Counter */}
                 <button
                   type="button"
                   onClick={() => {
-                    setCurrentMode("socratic");
-                    setSocraticChainCount(0);
+                    const nextHintCount = hintsUsed + 1;
+                    setHintsUsed(nextHintCount);
+                    useAppStore.getState().addProgressScore(-2);
+                    void recordAttempt?.({
+                      conceptId: activeChapter?.title || currentSubject,
+                      conceptTitleKu: activeChapter?.title || currentSubject,
+                      isCorrect: true,
+                      responseTimeMs: 6000,
+                      difficulty: DifficultyLevel.STANDARD,
+                      questionText: "Socratic Hint Request",
+                      studentResponse: "داوای سەرەداو",
+                      hintUsed: true,
+                    });
+                    void handleSend("مامۆستا زانا، تکایە سەرەداوێک یان ڕێنماییەکم بدەرێ بۆ دۆزینەوەی وەڵامەکە.");
                   }}
-                  className={`py-2.5 font-sans text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center justify-center gap-1.5 ${
-                    currentMode === "socratic"
-                      ? "border-indigo-600 text-indigo-700 dark:text-indigo-300 bg-indigo-50/40 dark:bg-indigo-950/40"
-                      : "border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                  }`}
-                  aria-label="شێوازی فێرکاری سوقراتی"
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 dark:hover:bg-amber-950 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-800/60 font-bold text-[10px] transition cursor-pointer shadow-2xs"
+                  title="داوای سەرەداو"
+                  aria-label="داوای سەرەداو لە شێوازی سوقراتی"
                 >
-                  <Brain className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                  <span>سوقراتی</span>
-                  <span className="text-[9px] bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-200 px-1 py-0.5 rounded-md font-black">نوێ</span>
+                  <Lightbulb className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                  <span>سەرەداو ({hintsUsed})</span>
                 </button>
 
+                {/* Quick Direct Mode Toggle */}
                 <button
                   type="button"
-                  onClick={() => setCurrentMode("explain")}
-                  className={`py-2.5 font-sans text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center justify-center gap-1.5 ${
-                    currentMode === "explain"
-                      ? "border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-indigo-50/30 dark:bg-indigo-950/30"
-                      : "border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                  }`}
-                  aria-label="ڕوونکردنەوەی چەمک"
+                  onClick={() => setCurrentMode("ask")}
+                  className="text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-900 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700 transition cursor-pointer shadow-2xs"
+                  title="گۆڕین بۆ پرسیارکردنی ئاسایی"
                 >
-                  <FileText className="w-4 h-4" />
-                  <span>ڕوونکردنەوە</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setCurrentMode("practice")}
-                  className={`py-2.5 font-sans text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center justify-center gap-1.5 ${
-                    currentMode === "practice"
-                      ? "border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-indigo-50/30 dark:bg-indigo-950/30"
-                      : "border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                  }`}
-                  aria-label="ڕاهێنانی کارلێککارانە"
-                >
-                  <Award className="w-4 h-4" />
-                  <span>ڕاهێنان</span>
+                  وەڵامی ڕاستەوخۆ
                 </button>
               </div>
-
-              {/* Socratic Mode Interactive Tracker Bar */}
-              {currentMode === "socratic" && (
-                <div className="bg-indigo-50/90 dark:bg-indigo-950/50 border-b border-indigo-200/70 dark:border-indigo-800/60 px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs font-sans animate-in fade-in">
-                  <div className="flex items-center gap-2">
-                    <Brain className="w-4 h-4 text-indigo-700 dark:text-indigo-400 shrink-0" />
-                    <span className="font-black text-indigo-900 dark:text-indigo-200">
-                      شێوازی فێرکاری سوقراتی:
-                    </span>
-                    <span className="text-indigo-700 dark:text-indigo-300 text-[11px] hidden md:inline">
-                      مامۆستا وەڵامی ڕاستەوخۆ نادات، بە ٤ پرسیاری هاندەر دەتگەیەنێتە وەڵام.
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    {/* 4-Step Chain Indicator */}
-                    <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800 shadow-2xs">
-                      <span className="text-[11px] font-bold text-indigo-900 dark:text-indigo-200 ml-1">
-                        قۆناغ {socraticChainCount} لە ٤:
-                      </span>
-                      {[1, 2, 3, 4].map((step) => (
-                        <span
-                          key={step}
-                          className={`w-2.5 h-2.5 rounded-full transition-all ${
-                            step <= socraticChainCount
-                              ? "bg-indigo-600 ring-2 ring-indigo-200 dark:ring-indigo-900 scale-110"
-                              : "bg-indigo-200 dark:bg-indigo-900"
-                          }`}
-                          title={`هەنگاوی ${step} لە ٤`}
-                        />
-                      ))}
-                    </div>
-
-                    {/* Hints Used Counter */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextHintCount = hintsUsed + 1;
-                        setHintsUsed(nextHintCount);
-                        useAppStore.getState().addProgressScore(-2);
-                        void recordAttempt?.({
-                          conceptId: activeChapter?.title || currentSubject,
-                          conceptTitleKu: activeChapter?.title || currentSubject,
-                          isCorrect: true,
-                          responseTimeMs: 6000,
-                          difficulty: DifficultyLevel.STANDARD,
-                          questionText: "Socratic Hint Request",
-                          studentResponse: "داوای سەرەداو",
-                          hintUsed: true,
-                        });
-                        void handleSend("مامۆستا زانا، تکایە سەرەداوێک یان ڕێنماییەکم بدەرێ بۆ دۆزینەوەی وەڵامەکە.");
-                      }}
-                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 dark:hover:bg-amber-950 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-800/60 font-bold text-[11px] transition cursor-pointer shadow-2xs"
-                      title="داوای سەرەداو (کاریگەری لەسەر نمرەی زیرەکی دەبێت)"
-                      aria-label="داوای سەرەداو لە شێوازی سوقراتی"
-                    >
-                      <Lightbulb className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                      <span>داوای سەرەداو ({hintsUsed})</span>
-                    </button>
-
-                    {/* Quick Direct Mode Toggle */}
-                    <button
-                      type="button"
-                      onClick={() => setCurrentMode("ask")}
-                      className="text-[11px] font-bold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 transition cursor-pointer shadow-2xs"
-                      title="گۆڕین بۆ پرسیارکردنی ئاسایی"
-                    >
-                      گۆڕین بۆ وەڵامی ڕاستەوخۆ
-                    </button>
-                  </div>
-                </div>
-              )}
-            </>
+            </div>
           )}
 
           {/* ─── Feature 5: Concept Visualizer Bar (workspace mode) ──────── */}
@@ -1561,7 +1617,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
             <>
               {/* MODE 1 & 2: Socratic / Direct Ask (Chat) */}
               {(currentMode === "ask" || currentMode === "socratic") && (
-                <>
+                <div className="w-full max-w-5xl mx-auto space-y-3">
                   {/* Session Memory Context Banner */}
                   {sessionConcepts.length > 0 && (
                     <div className="bg-slate-100/70 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl px-3.5 py-1.5 flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-300 font-sans">
@@ -1661,7 +1717,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                   </div>
 
                   <div ref={messagesEndRef} />
-                </>
+                </div>
               )}
 
               {/* MODE 2: Rich Educational Explain */}
@@ -1874,9 +1930,10 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
 
         {/* 6. Sticky Chat Input Area (Shown in Ask and Socratic modes) */}
         {viewMode === "tutor" && (currentMode === "ask" || currentMode === "socratic") && (
-          <div className="p-3 sm:p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-2xs">
-            {/* ─── Feature 6: Quick Prompt Chips ──────────────────────── */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-2 no-scrollbar">
+          <div className="p-2 sm:p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shadow-2xs shrink-0">
+            <div className="max-w-5xl mx-auto w-full">
+              {/* ─── Feature 6: Quick Prompt Chips ──────────────────────── */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 no-scrollbar">
               <button
                 onClick={() => handleQuickPrompt(`مامۆستا زانا، ڕاهێنانی وانەی بەندی ${activeChapter?.id || 1}م بۆ بکە`)}
                 className="shrink-0 flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-3 py-1.5 text-[11px] font-sans font-bold shadow-2xs transition-colors cursor-pointer text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 min-h-[36px]"
@@ -2031,6 +2088,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                 {isLoading ? "مامۆستا زانا سەرقاڵی شیکردنەوە و ئامادەکردنی وەڵامە..." : ""}
               </div>
             </form>
+            </div>
           </div>
         )}
       </div>
