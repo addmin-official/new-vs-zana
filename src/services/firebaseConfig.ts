@@ -1,21 +1,26 @@
 // Firebase configuration — compatible with both browser (Vite) and Node (tests)
 
-// Safe access to import.meta.env (only available in Vite/browser)
-const viteEnv: Record<string, string | undefined> =
-  typeof import.meta !== "undefined" && import.meta.env
-    ? (import.meta.env as Record<string, string | undefined>)
-    : {};
+// Helper to sanitize and validate values
+const isUsableEnvValue = (val: unknown): val is string => {
+  if (typeof val !== "string") return false;
+  const trimmed = val.trim();
+  if (!trimmed) return false;
+  if (trimmed.includes("YOUR_") || trimmed.includes("placeholder") || trimmed.includes("FakeKey")) return false;
+  return true;
+};
 
-// Safe access to process.env (available in Node/tests)
-const nodeEnv: Record<string, string | undefined> =
-  typeof process !== "undefined" && process.env
-    ? (process.env as Record<string, string | undefined>)
-    : {};
-
-const isTest =
-  nodeEnv.NODE_ENV === "test" ||
-  nodeEnv.ZANA_ENV === "test" ||
-  nodeEnv.ALLOW_TEST_AUTH_MOCK === "true";
+const readConfigValue = (viteVal: unknown, nodeKey: string, fallback: string = ""): string => {
+  if (isUsableEnvValue(viteVal)) {
+    return viteVal.trim();
+  }
+  if (typeof process !== "undefined" && process.env) {
+    const nodeVal = process.env[nodeKey];
+    if (isUsableEnvValue(nodeVal)) {
+      return nodeVal.trim();
+    }
+  }
+  return fallback;
+};
 
 export const FALLBACK_FIREBASE_CONFIG = {
   apiKey: "",
@@ -30,48 +35,58 @@ export const FALLBACK_FIREBASE_CONFIG = {
   recaptchaSiteKey: "",
 };
 
-const isUsableEnvValue = (val: string | undefined): val is string => {
-  if (!val || !val.trim()) return false;
-  if (val.includes("YOUR_") || val.includes("placeholder") || val.includes("FakeKey")) return false;
-  return true;
-};
-
-// Helper: read from Vite env first, then Node env, then canonical fallback
-const readEnv = (
-  key: string,
-  fallbackKey?: keyof typeof FALLBACK_FIREBASE_CONFIG,
-  aliasKeys: string[] = []
-): string => {
-  const candidates = [
-    viteEnv[key],
-    nodeEnv[key],
-    ...aliasKeys.flatMap((alias) => [viteEnv[alias], nodeEnv[alias]]),
-  ];
-  for (const val of candidates) {
-    if (isUsableEnvValue(val)) {
-      return val.trim();
-    }
-  }
-  const rawPrimary = viteEnv[key] || nodeEnv[key];
-  if (isTest && !rawPrimary) {
-    return "";
-  }
-  return fallbackKey ? FALLBACK_FIREBASE_CONFIG[fallbackKey] : "";
-};
-
 export const firebaseConfig = {
-  apiKey: readEnv("VITE_FIREBASE_API_KEY", "apiKey"),
-  authDomain: readEnv("VITE_FIREBASE_AUTH_DOMAIN", "authDomain"),
-  projectId: readEnv("VITE_FIREBASE_PROJECT_ID", "projectId"),
-  storageBucket: readEnv("VITE_FIREBASE_STORAGE_BUCKET", "storageBucket"),
-  messagingSenderId: readEnv("VITE_FIREBASE_MESSAGING_SENDER_ID", "messagingSenderId"),
-  appId: readEnv("VITE_FIREBASE_APP_ID", "appId"),
-  measurementId: readEnv("VITE_FIREBASE_MEASUREMENT_ID", "measurementId"),
-  firestoreDatabaseId: readEnv("VITE_FIREBASE_DATABASE_ID", "firestoreDatabaseId"),
-  oAuthClientId: readEnv("VITE_FIREBASE_OAUTH_CLIENT_ID", "oAuthClientId"),
-  recaptchaSiteKey: readEnv("VITE_FIREBASE_RECAPTCHA_SITE_KEY", "recaptchaSiteKey", [
-    "VITE_FIREBASE_recaptcha_Site_Key",
-  ]),
+  apiKey: readConfigValue(
+    typeof import.meta !== "undefined" && import.meta.env ? import.meta.env.VITE_FIREBASE_API_KEY : undefined,
+    "VITE_FIREBASE_API_KEY",
+    FALLBACK_FIREBASE_CONFIG.apiKey
+  ),
+  authDomain: readConfigValue(
+    typeof import.meta !== "undefined" && import.meta.env ? import.meta.env.VITE_FIREBASE_AUTH_DOMAIN : undefined,
+    "VITE_FIREBASE_AUTH_DOMAIN",
+    FALLBACK_FIREBASE_CONFIG.authDomain
+  ),
+  projectId: readConfigValue(
+    typeof import.meta !== "undefined" && import.meta.env ? import.meta.env.VITE_FIREBASE_PROJECT_ID : undefined,
+    "VITE_FIREBASE_PROJECT_ID",
+    FALLBACK_FIREBASE_CONFIG.projectId
+  ),
+  storageBucket: readConfigValue(
+    typeof import.meta !== "undefined" && import.meta.env ? import.meta.env.VITE_FIREBASE_STORAGE_BUCKET : undefined,
+    "VITE_FIREBASE_STORAGE_BUCKET",
+    FALLBACK_FIREBASE_CONFIG.storageBucket
+  ),
+  messagingSenderId: readConfigValue(
+    typeof import.meta !== "undefined" && import.meta.env ? import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID : undefined,
+    "VITE_FIREBASE_MESSAGING_SENDER_ID",
+    FALLBACK_FIREBASE_CONFIG.messagingSenderId
+  ),
+  appId: readConfigValue(
+    typeof import.meta !== "undefined" && import.meta.env ? import.meta.env.VITE_FIREBASE_APP_ID : undefined,
+    "VITE_FIREBASE_APP_ID",
+    FALLBACK_FIREBASE_CONFIG.appId
+  ),
+  measurementId: readConfigValue(
+    typeof import.meta !== "undefined" && import.meta.env ? import.meta.env.VITE_FIREBASE_MEASUREMENT_ID : undefined,
+    "VITE_FIREBASE_MEASUREMENT_ID",
+    FALLBACK_FIREBASE_CONFIG.measurementId
+  ),
+  firestoreDatabaseId:
+    readConfigValue(
+      typeof import.meta !== "undefined" && import.meta.env ? import.meta.env.VITE_FIREBASE_DATABASE_ID : undefined,
+      "VITE_FIREBASE_DATABASE_ID",
+      FALLBACK_FIREBASE_CONFIG.firestoreDatabaseId
+    ) || "default",
+  oAuthClientId: readConfigValue(
+    typeof import.meta !== "undefined" && import.meta.env ? import.meta.env.VITE_FIREBASE_OAUTH_CLIENT_ID : undefined,
+    "VITE_FIREBASE_OAUTH_CLIENT_ID",
+    FALLBACK_FIREBASE_CONFIG.oAuthClientId
+  ),
+  recaptchaSiteKey: readConfigValue(
+    typeof import.meta !== "undefined" && import.meta.env ? import.meta.env.VITE_FIREBASE_RECAPTCHA_SITE_KEY : undefined,
+    "VITE_FIREBASE_RECAPTCHA_SITE_KEY",
+    FALLBACK_FIREBASE_CONFIG.recaptchaSiteKey
+  ),
 };
 
 export const isFirebaseConfigured = (
