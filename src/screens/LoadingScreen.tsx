@@ -4,17 +4,21 @@ interface LoadingScreenProps {
   message?: string;
   isTimedOut?: boolean;
   onRetry?: () => void;
+  isExiting?: boolean;
 }
 
 export function LoadingScreen({
   message = "چاوەڕێبکە...",
   isTimedOut = false,
   onRetry,
+  isExiting = false,
 }: LoadingScreenProps) {
   return (
     <div
       dir="rtl"
-      className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4 font-sans relative overflow-hidden"
+      className={`min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4 font-sans relative overflow-hidden transition-all duration-300 ease-out ${
+        isExiting ? "opacity-0 scale-95 pointer-events-none" : "opacity-100 scale-100"
+      }`}
     >
       {/* Background Glow */}
       <div className="absolute top-1/3 -right-24 w-72 h-72 bg-indigo-600/15 rounded-full blur-3xl pointer-events-none" />

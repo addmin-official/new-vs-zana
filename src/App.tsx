@@ -4,7 +4,8 @@ import { Sparkles } from "lucide-react";
 import { AppShell } from "./components/AppShell.tsx";
 import { LoadingScreen } from "./screens/LoadingScreen.tsx";
 import { useStudentProfile } from "./features/student/useStudentProfile.ts";
-import { SubjectKey } from "./features/student/studentTypes.ts";
+import { SubjectKey, StudentProfile } from "./features/student/studentTypes.ts";
+import { getStudentProfile } from "./features/student/studentStorage.ts";
 import { getFirebaseAuth, isFirebaseConfigured } from "./services/firebase.ts";
 import { getCurrentUser, logoutUser, subscribeToAuthChanges } from "./services/authService.ts";
 import { useAppStore } from "./store/appStore.ts";
@@ -151,7 +152,7 @@ export default function App() {
   const { profile, updateProfile, completeOnboarding, resetProfileOnly } = useStudentProfile();
   usePerformanceMonitor();
 
-  // Authentication State
+  // Authentication & Initialization State
   const [currentUser, setCurrentUser] = useState<User | null>(() => getCurrentUser());
   const [authLoading, setAuthLoading] = useState<boolean>(() => {
     if (!isFirebaseConfigured()) return false;
@@ -159,6 +160,9 @@ export default function App() {
     if (!auth) return false;
     return auth.currentUser === null;
   });
+  const [loadingMessage, setLoadingMessage] = useState<string>("چاوەڕێبکە... پشکنینی ناسنامە");
+  const [isExitingLoading, setIsExitingLoading] = useState<boolean>(false);
+  const [activeProfile, setActiveProfile] = useState<StudentProfile | null>(() => getStudentProfile());
   const [authTimedOut, setAuthTimedOut] = useState(false);
   const [sessionRecoveryNotice, setSessionRecoveryNotice] = useState<SessionRecoveryData | null>(
     () => getSessionRecovery()
@@ -180,6 +184,9 @@ export default function App() {
     }
     return false;
   });
+
+  // Effective student profile (prioritizes directly verified profile to prevent flicker)
+  const effectiveProfile = activeProfile || profile;
 
   // Genuinely authenticated permanent user (Email or Google account)
   const isPermanentUser = Boolean(currentUser && !currentUser.isAnonymous && currentUser.email);
@@ -225,7 +232,6 @@ export default function App() {
     if (authLoading) {
       timer = setTimeout(() => {
         setAuthTimedOut(true);
-        setAuthLoading(false);
       }, 10000);
     }
     return () => {
@@ -233,42 +239,72 @@ export default function App() {
     };
   }, [authLoading]);
 
-  // Auth State Listeners & Returning User Auto-Detection
+  // Auth State Listeners & Returning User Auto-Detection with Smooth Transition
   useEffect(() => {
+    let isMounted = true;
+
+    const smoothFinishLoading = () => {
+      if (!isMounted) return;
+      setIsExitingLoading(true);
+      setTimeout(() => {
+        if (!isMounted) return;
+        setAuthLoading(false);
+        setIsExitingLoading(false);
+      }, 250);
+    };
+
     const unsubCustom = subscribeToAuthChanges((u) => {
+      if (!isMounted) return;
       setCurrentUser(u);
-      setAuthLoading(false);
       setAuthTimedOut(false);
+      if (!u) {
+        smoothFinishLoading();
+      }
     });
 
     const auth = getFirebaseAuth();
     let unsubFirebase = () => {};
     if (auth) {
       unsubFirebase = onAuthStateChanged(auth, async (u) => {
+        if (!isMounted) return;
         const effectiveUser = u || getCurrentUser();
         setCurrentUser(effectiveUser);
-        setAuthLoading(false);
         setAuthTimedOut(false);
 
         // Returning user detection: load Firestore profile without forcing re-registration
         if (effectiveUser && !effectiveUser.isAnonymous) {
+          setLoadingMessage("چاوەڕێبکە... ئامادەکردنی پرۆفایل");
           try {
             const check = await checkUserExists(effectiveUser.uid);
+            if (!isMounted) return;
             if (check.exists && check.profile) {
+              setActiveProfile(check.profile);
               setIsForcedOnboarding(false);
               const rec = getSessionRecovery();
               if (rec) {
                 setSessionRecoveryNotice(rec);
+                if (typeof window !== "undefined") {
+                  const currentPath = window.location.pathname.replace(/\/+$/, "") || "/";
+                  if (currentPath === "/" || currentPath === "/home") {
+                    setActiveTabState(resolveTabFromPath(rec.lastRoute));
+                  }
+                }
               }
+            } else if (check.isNewUser) {
+              setIsForcedOnboarding(true);
             }
           } catch (e) {
             console.warn("Returning user profile check failed:", e);
           }
         }
+        smoothFinishLoading();
       });
+    } else {
+      smoothFinishLoading();
     }
 
     return () => {
+      isMounted = false;
       unsubCustom();
       unsubFirebase();
     };
@@ -277,9 +313,9 @@ export default function App() {
   // Save session recovery position as student studies
   useEffect(() => {
     if (activeTab && activeTab !== "admin") {
-      saveSessionPosition(activeTab, profile?.activeSubject || useAppStore.getState().user.activeSubject);
+      saveSessionPosition(activeTab, effectiveProfile?.activeSubject || useAppStore.getState().user.activeSubject);
     }
-  }, [activeTab, profile?.activeSubject]);
+  }, [activeTab, effectiveProfile?.activeSubject]);
 
   // Listen to popstate for browser history navigation
   useEffect(() => {
@@ -312,32 +348,32 @@ export default function App() {
 
   // Synchronize authenticated student profile with global app store
   useEffect(() => {
-    if (profile && profile.onboardingCompleted) {
+    if (effectiveProfile && effectiveProfile.onboardingCompleted) {
       const curUser = useAppStore.getState().user;
       if (
-        curUser.id !== profile.id ||
-        curUser.name !== profile.name ||
-        curUser.grade !== profile.grade ||
-        curUser.stream !== profile.stream ||
-        curUser.activeSubject !== profile.activeSubject
+        curUser.id !== effectiveProfile.id ||
+        curUser.name !== effectiveProfile.name ||
+        curUser.grade !== effectiveProfile.grade ||
+        curUser.stream !== effectiveProfile.stream ||
+        curUser.activeSubject !== effectiveProfile.activeSubject
       ) {
         useAppStore.setState({
           user: {
             ...curUser,
-            id: profile.id,
-            name: profile.name,
-            grade: profile.grade,
-            stream: profile.stream as "scientific" | "literary" | "general",
-            activeSubject: profile.activeSubject,
+            id: effectiveProfile.id,
+            name: effectiveProfile.name,
+            grade: effectiveProfile.grade,
+            stream: effectiveProfile.stream as "scientific" | "literary" | "general",
+            activeSubject: effectiveProfile.activeSubject,
             email: currentUser?.email || curUser.email || "",
           },
         });
-        if (profile.activeSubject) {
-          void useAppStore.getState().fetchChapters(profile.activeSubject);
+        if (effectiveProfile.activeSubject) {
+          void useAppStore.getState().fetchChapters(effectiveProfile.activeSubject);
         }
       }
     }
-  }, [profile, currentUser]);
+  }, [effectiveProfile, currentUser]);
 
   // Admin secret keyboard shortcut (Ctrl + Shift + B)
   useEffect(() => {
@@ -377,6 +413,7 @@ export default function App() {
     // Note: Do NOT delete the persistent student profile from disk on logout!
     // This allows returning users to log back in without having to re-register.
     resetProfileOnly();
+    setActiveProfile(null);
     useAppStore.getState().logout();
     setCurrentUser(null);
     if (typeof window !== "undefined") {
@@ -397,6 +434,7 @@ export default function App() {
     stream?: string
   ) => {
     const newProf = completeOnboarding(name, grade, subject, level, stream);
+    setActiveProfile(newProf);
     setIsForcedOnboarding(false);
     const curProgress = useAppStore.getState().userProgress;
     useAppStore.setState({
@@ -416,6 +454,7 @@ export default function App() {
 
   const handleSelectSubject = (subjectId: SubjectKey) => {
     updateProfile({ activeSubject: subjectId });
+    setActiveProfile((prev: StudentProfile | null) => (prev ? { ...prev, activeSubject: subjectId } : null));
     useAppStore.getState().setActiveSubject(subjectId);
   };
 
@@ -428,20 +467,24 @@ export default function App() {
     setActiveTab("home");
   };
 
-  // 1. Initial Authentication Loading State
+  // 1. Initial Authentication & Profile Initialization Loading State
   if (authLoading) {
     return (
       <LoadingScreen
-        message="چاوەڕێبکە... پشکنینی ناسنامە"
+        message={loadingMessage}
         isTimedOut={authTimedOut}
+        isExiting={isExitingLoading}
         onRetry={() => {
           setAuthTimedOut(false);
           setAuthLoading(true);
+          setLoadingMessage("چاوەڕێبکە... پشکنینی ناسنامە");
           const auth = getFirebaseAuth();
           if (auth) {
             setCurrentUser(auth.currentUser);
           }
-          setAuthLoading(false);
+          setTimeout(() => {
+            setAuthLoading(false);
+          }, 300);
         }}
       />
     );
@@ -558,7 +601,7 @@ export default function App() {
   }
 
   // 4. Authenticated Student Onboarding Flow
-  if (!profile.onboardingCompleted || isForcedOnboarding) {
+  if (!effectiveProfile.onboardingCompleted || isForcedOnboarding) {
     return (
       <div className="min-h-screen w-full bg-slate-50 dark:bg-slate-950 flex flex-col items-center py-4 sm:py-8 px-2 sm:px-4 overflow-y-auto overflow-x-hidden transition-colors duration-300">
         <ErrorBoundary>
@@ -581,7 +624,7 @@ export default function App() {
       case "home":
         return (
           <Home
-            profile={profile}
+            profile={effectiveProfile}
             onNavigateToChat={(subject) => {
               if (subject) handleSelectSubject(subject as SubjectKey);
               setActiveTab("chat");
@@ -602,7 +645,7 @@ export default function App() {
       case "chat":
         return (
           <Chat
-            profile={profile}
+            profile={effectiveProfile}
             onSelectSubject={handleSelectSubject}
             onNavigateToSubjects={() => setActiveTab("subjects")}
           />
@@ -610,7 +653,7 @@ export default function App() {
       case "subjects":
         return (
           <SubjectsScreen
-            profile={profile}
+            profile={effectiveProfile}
             onSelectSubject={handleSelectSubject}
             onNavigate={(tab) => {
               if (tab === "chat") setActiveTab("chat");
@@ -661,7 +704,7 @@ export default function App() {
       case "rooms":
         return <StudyRooms />;
       case "report":
-        return <ParentReport profile={profile} />;
+        return <ParentReport profile={effectiveProfile} />;
       case "admin":
         return (
           <AdminRoute fallbackRedirect="/home">
@@ -675,7 +718,7 @@ export default function App() {
       case "settings":
         return (
           <ProfileAndSettings
-            profile={profile}
+            profile={effectiveProfile}
             isPermanentUser={isPermanentUser}
             onUpdateProfile={updateProfile}
             onNavigateToLogin={() => navigateAuth("login")}
@@ -686,7 +729,7 @@ export default function App() {
       default:
         return (
           <Home
-            profile={profile}
+            profile={effectiveProfile}
             onNavigateToChat={(subject) => {
               if (subject) handleSelectSubject(subject as SubjectKey);
               setActiveTab("chat");
@@ -728,66 +771,68 @@ export default function App() {
   return (
     <FeatureFlagProvider userId={currentUser?.uid}>
       <OfflineBanner />
-      <AppShell
-        activeTab={activeTab}
-        onTabChange={(tab) => {
-          setIsBrainActive(false);
-          setActiveTab(tab);
-        }}
-        onPrefetch={prefetchTab}
-        pageTitle={pageTitle}
-        isPermanentUser={isPermanentUser}
-        onNavigateToLogin={() => navigateAuth("login")}
-        onNavigateToRegister={() => navigateAuth("register")}
-        onLogout={handleLogout}
-      >
-        <ErrorBoundary>
-          {sessionRecoveryNotice && (
-            <div className="mb-4 p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-950/70 border border-indigo-200 dark:border-indigo-500/30 text-slate-900 dark:text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm animate-in fade-in duration-200">
-              <div className="flex items-center gap-3">
-                <span className="w-9 h-9 rounded-xl bg-indigo-100 dark:bg-indigo-600/30 border border-indigo-200 dark:border-indigo-500/40 flex items-center justify-center text-indigo-600 dark:text-indigo-300 shrink-0">
-                  <Sparkles className="w-5 h-5" />
-                </span>
-                <div>
-                  <h4 className="text-xs font-bold text-slate-900 dark:text-white">
-                    بەخێربێیتەوە! دواجار لە {getSubjectKurdishName(sessionRecoveryNotice.lastSubject)} بوویت
-                  </h4>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    دەتوانیت ڕاستەوخۆ لەو وانەیەی کە لێی وەستابوویت بەردەوام بیت.
-                  </p>
+      <div className="animate-in fade-in duration-300 ease-out">
+        <AppShell
+          activeTab={activeTab}
+          onTabChange={(tab) => {
+            setIsBrainActive(false);
+            setActiveTab(tab);
+          }}
+          onPrefetch={prefetchTab}
+          pageTitle={pageTitle}
+          isPermanentUser={isPermanentUser}
+          onNavigateToLogin={() => navigateAuth("login")}
+          onNavigateToRegister={() => navigateAuth("register")}
+          onLogout={handleLogout}
+        >
+          <ErrorBoundary>
+            {sessionRecoveryNotice && (
+              <div className="mb-4 p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-950/70 border border-indigo-200 dark:border-indigo-500/30 text-slate-900 dark:text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm animate-in fade-in duration-200">
+                <div className="flex items-center gap-3">
+                  <span className="w-9 h-9 rounded-xl bg-indigo-100 dark:bg-indigo-600/30 border border-indigo-200 dark:border-indigo-500/40 flex items-center justify-center text-indigo-600 dark:text-indigo-300 shrink-0">
+                    <Sparkles className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                      بەخێربێیتەوە! دواجار لە {getSubjectKurdishName(sessionRecoveryNotice.lastSubject)} بوویت
+                    </h4>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      دەتوانیت ڕاستەوخۆ لەو وانەیەی کە لێی وەستابوویت بەردەوام بیت.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 self-end sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const target = resolveTabFromPath(sessionRecoveryNotice.lastRoute);
+                      setActiveTab(target);
+                      clearSessionRecovery();
+                      setSessionRecoveryNotice(null);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition cursor-pointer"
+                  >
+                    بەردەوام بە
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      clearSessionRecovery();
+                      setSessionRecoveryNotice(null);
+                    }}
+                    className="px-2.5 py-2 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white text-xs transition cursor-pointer"
+                  >
+                    ✕
+                  </button>
                 </div>
               </div>
-              <div className="flex items-center gap-2 self-end sm:self-auto">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const target = resolveTabFromPath(sessionRecoveryNotice.lastRoute);
-                    setActiveTab(target);
-                    clearSessionRecovery();
-                    setSessionRecoveryNotice(null);
-                  }}
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition cursor-pointer"
-                >
-                  بەردەوام بە
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    clearSessionRecovery();
-                    setSessionRecoveryNotice(null);
-                  }}
-                  className="px-2.5 py-2 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white text-xs transition cursor-pointer"
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-          )}
-          <Suspense fallback={<ScreenLoadingFallback />}>
-            {renderScreen()}
-          </Suspense>
-        </ErrorBoundary>
-      </AppShell>
+            )}
+            <Suspense fallback={<ScreenLoadingFallback />}>
+              {renderScreen()}
+            </Suspense>
+          </ErrorBoundary>
+        </AppShell>
+      </div>
       <PwaInstallPrompt />
       {import.meta.env.DEV && (
         <DevQuickToolbar
