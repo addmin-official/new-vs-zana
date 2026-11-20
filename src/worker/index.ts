@@ -2525,7 +2525,7 @@ export default {
                 : now;
             const endsAt = currentEndsAt + durationMs;
 
-            // 🚨 ATOMIC BATCH EXECUTION: Update receipt, upsert subscription, and create notification together
+            // 🚨 ATOMIC BATCH EXECUTION: Update receipt and upsert subscription
             const updateReceiptStmt = env.DB.prepare(
               "UPDATE payment_receipts SET status = 'approved', reviewed_at = ?, reviewed_by = ? WHERE id = ? AND status = 'pending'"
             ).bind(now, adminEmail, receiptId);
@@ -2540,20 +2540,9 @@ export default {
                  updated_at = excluded.updated_at`
             ).bind(receipt.user_id, now, endsAt, planId, now);
 
-            const notifId = `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-            const planTitleKu = planId === "yearly" ? "ساڵانە" : "مانگانە";
-            const notifStmt = env.DB.prepare(
-              `INSERT INTO notifications (id, student_id, type, title, message, is_read, created_at)
-               VALUES (?, ?, 'subscription', 'بەشداریکردنت کارا کرا! 🎉', ?, 0, datetime('now'))`
-            ).bind(
-              notifId,
-              receipt.user_id,
-              `هەژمارەکەت لە زانا بۆ پلانی (${planTitleKu}) بە سەرکەوتوویی تا ${new Date(endsAt).toLocaleDateString("en-GB")} ئەکتیڤ کرا. پیرۆزە!`
-            );
-
-            // Execute atomic batch if supported, or sequentially
+            // Execute atomic batch for receipt update + subscription upsert
             if (typeof env.DB.batch === "function") {
-              const batchResults = await env.DB.batch([updateReceiptStmt, upsertSubStmt, notifStmt]);
+              const batchResults = await env.DB.batch([updateReceiptStmt, upsertSubStmt]);
               const receiptMeta = (batchResults[0] as { meta?: { changes?: number } } | undefined)?.meta;
               if (receiptMeta && typeof receiptMeta.changes === "number" && receiptMeta.changes === 0) {
                 return new Response(
@@ -2576,7 +2565,26 @@ export default {
                 );
               }
               await upsertSubStmt.run();
-              await notifStmt.run();
+            }
+
+            // In-app student notification (schema-compliant, non-blocking for approval)
+            try {
+              const notifId = `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+              const planTitleKu = planId === "yearly" ? "ساڵانە" : "مانگانە";
+              const dedupKey = `sub_approved_${receipt.user_id}_${receiptId}`;
+              await env.DB.prepare(
+                `INSERT OR IGNORE INTO notifications
+                 (id, student_id, type, title, message, action_label, action_url, created_at, read_at, priority, deduplication_key, expires_at)
+                 VALUES (?, ?, 'subscription', 'بەشداریکردنت کارا کرا! 🎉', ?, NULL, NULL, ?, NULL, 'high', ?, NULL)`
+              ).bind(
+                notifId,
+                receipt.user_id,
+                `هەژمارەکەت لە زانا بۆ پلانی (${planTitleKu}) بە سەرکەوتوویی تا ${new Date(endsAt).toLocaleDateString("en-GB")} ئەکتیڤ کرا. پیرۆزە!`,
+                now,
+                dedupKey
+              ).run();
+            } catch (notifErr) {
+              console.warn("[Worker] Non-blocking in-app notification failure:", notifErr);
             }
 
             return new Response(

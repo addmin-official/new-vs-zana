@@ -138,8 +138,10 @@ function createMockD1Database() {
           }
         }
 
-        if (sql.includes("INSERT INTO notifications")) {
-          const [id, student_id, message] = [boundParams[0], boundParams[1], boundParams[2]];
+        if (sql.includes("notifications")) {
+          const id = boundParams[0];
+          const student_id = boundParams[1];
+          const message = boundParams[2] || boundParams[3] || "";
           store.notifications.push({
             id: String(id),
             student_id: String(student_id),
