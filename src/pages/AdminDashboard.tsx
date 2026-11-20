@@ -105,6 +105,7 @@ export function AdminDashboard({
   const [isBroadcasting, setIsBroadcasting] = useState(false);
   const systemAudit = useSystemAuditLogs();
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
 
   const { flags } = useFeatureFlagsContext();
   const [localFlags, setLocalFlags] = useState<Record<FeatureFlagName, boolean>>(flags);
@@ -1017,26 +1018,72 @@ export function AdminDashboard({
                 </div>
               ) : (
                 <div className="divide-y divide-slate-800 border border-slate-800 rounded-xl overflow-hidden font-mono text-xs">
-                  {systemAudit.logs.map((log) => (
-                    <div key={log.id} className="p-3 bg-slate-900/50 flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2.5">
-                        <span
-                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                            log.status === "CRITICAL"
-                              ? "bg-rose-950 text-rose-400 border border-rose-800"
-                              : log.status === "WARNING"
-                              ? "bg-amber-950 text-amber-400 border border-amber-800"
-                              : "bg-slate-800 text-slate-400"
-                          }`}
+                  {systemAudit.logs.map((log) => {
+                    const isExpanded = expandedLogId === log.id;
+                    return (
+                      <div key={log.id} className="bg-slate-900/50 hover:bg-slate-800/40 transition">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
+                          className="w-full p-3 text-right flex items-center justify-between gap-3 cursor-pointer"
                         >
-                          {log.status}
-                        </span>
-                        <span className="text-white font-bold">{log.type}</span>
-                        <span className="text-slate-400 hidden sm:inline">{log.path}</span>
+                          <div className="flex items-center gap-2.5 flex-wrap">
+                            <span
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                log.status === "CRITICAL"
+                                  ? "bg-rose-950 text-rose-400 border border-rose-800"
+                                  : log.status === "WARNING"
+                                  ? "bg-amber-950 text-amber-400 border border-amber-800"
+                                  : "bg-slate-800 text-slate-400"
+                              }`}
+                            >
+                              {log.status}
+                            </span>
+                            <span className="text-white font-bold">{log.type}</span>
+                            <span className="text-slate-400 font-sans text-[11px] bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700/60">
+                              {log.path}
+                            </span>
+                            {log.message && (
+                              <span className="text-slate-300 font-sans text-xs truncate max-w-[240px] sm:max-w-sm">
+                                {log.message}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-slate-500 text-[11px] shrink-0 font-sans">{log.timestamp}</span>
+                        </button>
+
+                        {isExpanded && (
+                          <div className="p-3.5 bg-slate-950/70 border-t border-slate-800 space-y-2 text-xs font-sans">
+                            {log.message && (
+                              <div>
+                                <span className="text-slate-400 font-bold block text-[11px]">دەقی هەڵە (Error Message):</span>
+                                <p className="text-rose-300 bg-rose-950/30 p-2 rounded-lg border border-rose-900/40 font-mono mt-1 break-all">
+                                  {log.message}
+                                </p>
+                              </div>
+                            )}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-400 font-mono pt-1">
+                              <div>ناسنامەی تۆمار (Log ID): <span className="text-slate-300">{log.id}</span></div>
+                              <div>ڕێڕەو (Route): <span className="text-indigo-400">{log.path}</span></div>
+                              {log.userAgent && (
+                                <div className="sm:col-span-2 truncate">
+                                  ئامێر/وێبگەڕ: <span className="text-slate-300">{log.userAgent}</span>
+                                </div>
+                              )}
+                            </div>
+                            {log.componentStack && (
+                              <div className="pt-1">
+                                <span className="text-slate-400 font-bold block text-[11px]">Component Stack:</span>
+                                <pre className="text-[10px] text-slate-400 bg-slate-900 p-2 rounded-lg border border-slate-800 overflow-x-auto max-h-32 mt-1 whitespace-pre-wrap">
+                                  {log.componentStack}
+                                </pre>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <span className="text-slate-500 text-[11px]">{log.timestamp}</span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

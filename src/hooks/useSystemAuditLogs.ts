@@ -16,6 +16,9 @@ export interface SystemAuditLogItem {
   path: string;
   timestamp: string;
   status: "CRITICAL" | "WARNING" | "INFO";
+  message?: string;
+  componentStack?: string;
+  userAgent?: string;
   details?: Record<string, unknown>;
 }
 
@@ -62,20 +65,36 @@ export function useSystemAuditLogs() {
                 }
               }
 
-              const typeStr = String(data.type || "SYSTEM_EVENT");
+              const typeStr = String(data.type || data.name || (data.message ? "CLIENT_ERROR" : "SYSTEM_EVENT"));
+              const pathStr = String(data.path || data.route || data.endpoint || "/");
+              const messageStr = data.message ? String(data.message) : undefined;
+
               let status: "CRITICAL" | "WARNING" | "INFO" = "INFO";
-              if (typeStr.includes("UNAUTHORIZED") || typeStr.includes("SECURITY") || typeStr.includes("FAIL")) {
+              if (
+                typeStr.includes("UNAUTHORIZED") ||
+                typeStr.includes("SECURITY") ||
+                typeStr.includes("FAIL") ||
+                typeStr.includes("Error") ||
+                typeStr.includes("ERROR")
+              ) {
                 status = "CRITICAL";
-              } else if (typeStr.includes("TIMEOUT") || typeStr.includes("FALLBACK") || typeStr.includes("WARN")) {
+              } else if (
+                typeStr.includes("TIMEOUT") ||
+                typeStr.includes("FALLBACK") ||
+                typeStr.includes("WARN")
+              ) {
                 status = "WARNING";
               }
 
               return {
                 id: docSnap.id,
                 type: typeStr,
-                path: String(data.path || data.endpoint || "/"),
+                path: pathStr,
                 timestamp: formattedTime,
                 status,
+                message: messageStr,
+                componentStack: typeof data.componentStack === "string" ? data.componentStack : undefined,
+                userAgent: typeof data.userAgent === "string" ? data.userAgent : undefined,
                 details: data,
               };
             });

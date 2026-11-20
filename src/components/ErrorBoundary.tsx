@@ -30,9 +30,11 @@ async function logAppError(error: Error, errorInfo?: ErrorInfo, route?: string) 
     if (!db) return;
 
     await addDoc(collection(db, "errors"), {
+      type: "CLIENT_ERROR",
       message: error.message || "Unknown client error",
       name: error.name || "Error",
-      route: route || (typeof window !== "undefined" ? window.location.pathname : "unknown"),
+      path: route || (typeof window !== "undefined" ? window.location.pathname : "/"),
+      route: route || (typeof window !== "undefined" ? window.location.pathname : "/"),
       timestamp: serverTimestamp(),
       userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "unknown",
       componentStack: errorInfo?.componentStack?.slice(0, 1000) || null,
