@@ -2,6 +2,13 @@ import { getFirebaseAuth } from "./firebase.ts";
 
 export async function adminFetch(url: string, options: RequestInit = {}): Promise<Response> {
   const auth = getFirebaseAuth();
+  if (auth && typeof auth.authStateReady === "function" && !auth.currentUser) {
+    try {
+      await auth.authStateReady();
+    } catch {
+      // ignore
+    }
+  }
   const user = auth?.currentUser;
 
   const headers = new Headers(options.headers || {});
@@ -24,7 +31,17 @@ export async function adminFetch(url: string, options: RequestInit = {}): Promis
   });
 
   if (res.status === 403) {
-    throw new Error("دەستگەیشتن ڕەتکرایەوە. تەنها ئادمین دەتوانێت دەستی پێی بگات.");
+    let detail = "دەستگەیشتن ڕەتکرایەوە. تەنها ئادمین دەتوانێت دەستی پێی بگات.";
+    try {
+      const clone = res.clone();
+      const data = (await clone.json()) as { detail?: string; error?: string };
+      if (data && (data.detail || data.error)) {
+        detail = data.detail || data.error || detail;
+      }
+    } catch {
+      // ignore JSON parse error
+    }
+    throw new Error(detail);
   }
 
   return res;
@@ -179,8 +196,8 @@ export async function reviewPaymentReceipt(
     body: JSON.stringify({ receiptId, action, rejectionReason }),
   });
   if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.error || `HTTP ${res.status}`);
+    const data = (await res.json().catch(() => ({}))) as { detail?: string; error?: string };
+    throw new Error(data.detail || data.error || `HTTP ${res.status}`);
   }
   return res.json();
 }

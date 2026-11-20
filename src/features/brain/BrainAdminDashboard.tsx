@@ -439,7 +439,8 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
  const handleSecondaryApprove = async () => {
   if (!activePlan) return;
   const currentUid = adminInfo.uid || brain.getCurrentUser().id;
-  if (activePlan.dualApproval?.primaryApproverId && activePlan.dualApproval.primaryApproverId === currentUid) {
+  const isRootAdmin = adminInfo.email?.toLowerCase() === "addmin.official.idg@gmail.com";
+  if (!isRootAdmin && activePlan.dualApproval?.primaryApproverId && activePlan.dualApproval.primaryApproverId === currentUid) {
     showNotification("error", "سەرپێچی پەسەندکردنی دوو-قۆناغی: ناکرێت هەمان بەکارهێنەر واژۆی دووەم بکات.");
     return;
   }

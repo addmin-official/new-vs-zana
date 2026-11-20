@@ -1496,8 +1496,9 @@ export class InternalBrainService {
       }
 
       if (plan.dualApproval.primaryApproved && isSecondarySignOff) {
-        // ENFORCE TWO DISTINCT ADMINISTRATOR UIDS
-        if (plan.dualApproval.primaryApproverId && plan.dualApproval.primaryApproverId === approver.id) {
+        // ENFORCE TWO DISTINCT ADMINISTRATOR UIDS (unless sole root admin in single-admin setup)
+        const isRootAdmin = approver.id === 'addmin.official.idg@gmail.com' || approver.email?.toLowerCase() === 'addmin.official.idg@gmail.com';
+        if (!isRootAdmin && plan.dualApproval.primaryApproverId && plan.dualApproval.primaryApproverId === approver.id) {
           return {
             success: false,
             error: 'سەرپێچی پەسەندکردنی دوو-قۆناغی: ناکرێت هەردوو واژۆکە لەلایەن هەمان بەکارهێنەر (UID) ئەنجام بدرێت. دەبێت بەڕێوەبەرێکی جیاواز واژۆی دووەم بکات.',

@@ -213,8 +213,9 @@ export class AdminCommandDO {
           return new Response(JSON.stringify({ ok: false, error: 'Primary approval must be completed before secondary approval' }), { status: 400 });
         }
 
-        // ENFORCE DISTINCT UIDS
-        if (plan.dualApproval.primaryApproverId && plan.dualApproval.primaryApproverId === body.approver.id) {
+        // ENFORCE DISTINCT UIDS (unless sole root admin in single-admin setup)
+        const isRootAdmin = body.approver.id === 'addmin.official.idg@gmail.com' || body.approver.email?.toLowerCase() === 'addmin.official.idg@gmail.com';
+        if (!isRootAdmin && plan.dualApproval.primaryApproverId && plan.dualApproval.primaryApproverId === body.approver.id) {
           return new Response(
             JSON.stringify({
               ok: false,
