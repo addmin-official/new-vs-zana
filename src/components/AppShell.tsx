@@ -7,7 +7,8 @@ import { Toast } from "./Toast.tsx";
 import { useAppStore } from "../store/appStore.ts";
 import { NotificationCenter } from "./NotificationCenter.tsx";
 import { AchievementToast } from "./AchievementToast.tsx";
-import { notificationService } from "../services/notificationService.ts";
+import { notificationEngine } from "../notifications/notificationEngine.ts";
+import { getFirebaseAuth } from "../services/firebase.ts";
 import { useTranslation } from "../hooks/useTranslation.ts";
 import { SoundToggle } from "./SoundToggle.tsx";
 import { ThemeToggle } from "./ThemeToggle.tsx";
@@ -21,6 +22,7 @@ export interface AppShellProps {
   pageTitle?: string;
   className?: string;
   isPermanentUser?: boolean;
+  userId?: string;
   onNavigateToLogin?: () => void;
   onNavigateToRegister?: () => void;
   onLogout?: () => void;
@@ -34,6 +36,7 @@ export function AppShell({
   pageTitle,
   className = "",
   isPermanentUser,
+  userId: propUserId,
   onNavigateToLogin,
   onNavigateToRegister: _onNavigateToRegister,
   onLogout,
@@ -42,6 +45,12 @@ export function AppShell({
   const user = useAppStore((state) => state.user);
   const notifications = useAppStore((state) => state.notifications);
   const removeNotification = useAppStore((state) => state.removeNotification);
+
+  const effectiveUserId =
+    propUserId ||
+    (typeof window !== "undefined" ? getFirebaseAuth()?.currentUser?.uid : null) ||
+    user?.id ||
+    "default-guest";
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
@@ -52,10 +61,18 @@ export function AppShell({
   const [showRestoredNotice, setShowRestoredNotice] = useState(false);
 
   useEffect(() => {
-    notificationService.getNotifications(true).then((res) => {
-      setUnreadNotificationsCount(res.unreadCount);
-    }).catch(() => {});
-  }, []);
+    notificationEngine.initialize(effectiveUserId);
+    void notificationEngine.getUnreadCount(effectiveUserId).then((count) => {
+      setUnreadNotificationsCount(count);
+    });
+
+    const unsubscribe = notificationEngine.subscribe((list) => {
+      const unread = list.filter((n) => !n.isRead).length;
+      setUnreadNotificationsCount(unread);
+    });
+
+    return unsubscribe;
+  }, [effectiveUserId]);
 
   useEffect(() => {
     const handleOnline = () => {
@@ -165,6 +182,7 @@ export function AppShell({
         onClose={() => setIsNotificationCenterOpen(false)}
         unreadCount={unreadNotificationsCount}
         onUnreadCountChange={setUnreadNotificationsCount}
+        userId={effectiveUserId}
         onNavigateToAction={(url) => {
           setIsNotificationCenterOpen(false);
           if (url.startsWith("/plan")) handleNav("plan");

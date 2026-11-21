@@ -1,6 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { Sparkles } from "lucide-react";
 import { AppShell } from "./components/AppShell.tsx";
 import { LoadingScreen } from "./screens/LoadingScreen.tsx";
 import { useStudentProfile } from "./features/student/useStudentProfile.ts";
@@ -18,8 +17,6 @@ import { ErrorBoundary } from "./client/components/common/ErrorBoundary.tsx";
 import {
   saveSessionPosition,
   getSessionRecovery,
-  clearSessionRecovery,
-  getSubjectKurdishName,
   triggerSessionRecoveryNotification,
   SessionRecoveryData,
 } from "./auth/sessionRecovery.ts";
@@ -166,9 +163,6 @@ export default function App() {
   const [isExitingLoading, setIsExitingLoading] = useState<boolean>(false);
   const [activeProfile, setActiveProfile] = useState<StudentProfile | null>(() => getStudentProfile());
   const [authTimedOut, setAuthTimedOut] = useState(false);
-  const [sessionRecoveryNotice, setSessionRecoveryNotice] = useState<SessionRecoveryData | null>(
-    () => getSessionRecovery()
-  );
   const [authScreen, setAuthScreen] = useState<"welcome" | "login" | "register" | "forgot-password">(() => {
     if (typeof window !== "undefined") {
       const p = window.location.pathname.replace(/\/+$/, "");
@@ -288,7 +282,6 @@ export default function App() {
                 lastSubject: check.profile.activeSubject || "chemistry",
                 timestamp: Date.now(),
               };
-              setSessionRecoveryNotice(targetRec);
               void triggerSessionRecoveryNotification(effectiveUser.uid, targetRec);
               if (rec && typeof window !== "undefined") {
                 const currentPath = window.location.pathname.replace(/\/+$/, "") || "/";
@@ -322,6 +315,15 @@ export default function App() {
       saveSessionPosition(activeTab, effectiveProfile?.activeSubject || useAppStore.getState().user.activeSubject);
     }
   }, [activeTab, effectiveProfile?.activeSubject]);
+
+  // Trigger returning student recovery notification on initial load if session exists
+  useEffect(() => {
+    const rec = getSessionRecovery();
+    if (rec) {
+      const uid = currentUser?.uid || effectiveProfile?.id || "default-guest";
+      void triggerSessionRecoveryNotification(uid, rec);
+    }
+  }, [currentUser?.uid, effectiveProfile?.id]);
 
   // Listen to popstate for browser history navigation
   useEffect(() => {
@@ -575,7 +577,6 @@ export default function App() {
                   lastSubject: effectiveProfile?.activeSubject || "chemistry",
                   timestamp: Date.now(),
                 };
-                setSessionRecoveryNotice(targetRec);
                 const uid = currentUser?.uid || effectiveProfile?.id || useAppStore.getState().user.id;
                 if (uid) {
                   void triggerSessionRecoveryNotification(uid, targetRec);
@@ -796,52 +797,12 @@ export default function App() {
           onPrefetch={prefetchTab}
           pageTitle={pageTitle}
           isPermanentUser={isPermanentUser}
+          userId={currentUser?.uid || effectiveProfile?.id}
           onNavigateToLogin={() => navigateAuth("login")}
           onNavigateToRegister={() => navigateAuth("register")}
           onLogout={handleLogout}
         >
           <ErrorBoundary>
-            {sessionRecoveryNotice && (
-              <div className="mb-4 p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-950/70 border border-indigo-200 dark:border-indigo-500/30 text-slate-900 dark:text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm animate-in fade-in duration-200">
-                <div className="flex items-center gap-3">
-                  <span className="w-9 h-9 rounded-xl bg-indigo-100 dark:bg-indigo-600/30 border border-indigo-200 dark:border-indigo-500/40 flex items-center justify-center text-indigo-600 dark:text-indigo-300 shrink-0">
-                    <Sparkles className="w-5 h-5" />
-                  </span>
-                  <div>
-                    <h4 className="text-xs font-bold text-slate-900 dark:text-white">
-                      بەخێربێیتەوە! دواجار لە {getSubjectKurdishName(sessionRecoveryNotice.lastSubject)} بوویت
-                    </h4>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                      دەتوانیت ڕاستەوخۆ لەو وانەیەی کە لێی وەستابوویت بەردەوام بیت.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 self-end sm:self-auto">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const target = resolveTabFromPath(sessionRecoveryNotice.lastRoute);
-                      setActiveTab(target);
-                      clearSessionRecovery();
-                      setSessionRecoveryNotice(null);
-                    }}
-                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition cursor-pointer"
-                  >
-                    بەردەوام بە
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      clearSessionRecovery();
-                      setSessionRecoveryNotice(null);
-                    }}
-                    className="px-2.5 py-2 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white text-xs transition cursor-pointer"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </div>
-            )}
             <Suspense fallback={<ScreenLoadingFallback />}>
               {renderScreen()}
             </Suspense>

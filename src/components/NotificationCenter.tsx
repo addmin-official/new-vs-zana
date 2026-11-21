@@ -19,6 +19,7 @@ import {
   formatKurdishTimestamp,
 } from "../notifications/notificationEngine.ts";
 import { useAppStore } from "../store/appStore.ts";
+import { getFirebaseAuth } from "../services/firebase.ts";
 
 export interface NotificationCenterProps {
   isOpen?: boolean;
@@ -78,7 +79,13 @@ export function NotificationCenter({
   className = "",
 }: NotificationCenterProps) {
   const storeUser = useAppStore((state) => state.user);
-  const activeUserId = propUserId || storeUser?.id || "default-guest";
+  const authUser = typeof window !== "undefined" ? getFirebaseAuth()?.currentUser : null;
+  const activeUserId =
+    propUserId ||
+    authUser?.uid ||
+    (storeUser as unknown as { uid?: string })?.uid ||
+    storeUser?.id ||
+    "default-guest";
 
   const [internalIsOpen, setInternalIsOpen] = useState(false);
   const isDrawerOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen;
@@ -112,6 +119,15 @@ export function NotificationCenter({
 
     return unsubscribe;
   }, [activeUserId]);
+
+  // Refresh notifications whenever drawer is opened
+  useEffect(() => {
+    if (isDrawerOpen) {
+      void notificationEngine.getNotifications(activeUserId).then((list) => {
+        setNotifications(list);
+      });
+    }
+  }, [isDrawerOpen, activeUserId]);
 
   const displayedNotifications = useMemo(() => {
     let list = notifications;

@@ -157,13 +157,42 @@ export class NotificationEngine {
    * Fetch in-app notifications with local-first cache
    */
   public async getNotifications(userId: string, filterUnread = false): Promise<InAppNotification[]> {
+    const effectiveId = userId || "default-guest";
     let list: InAppNotification[] = [];
 
     if (typeof window !== "undefined") {
       try {
-        const cached = localStorage.getItem(getStorageKey(userId));
+        const cached = localStorage.getItem(getStorageKey(effectiveId));
         if (cached) {
           list = JSON.parse(cached) as InAppNotification[];
+        }
+
+        // Also merge guest notifications if authenticated so pre-login notifications are never missed
+        if (effectiveId !== "default-guest") {
+          const guestCached = localStorage.getItem(getStorageKey("default-guest"));
+          if (guestCached) {
+            const guestList = JSON.parse(guestCached) as InAppNotification[];
+            const existingIds = new Set(list.map((n) => n.id));
+            const existingTitles = new Set(list.map((n) => n.title));
+            for (const item of guestList) {
+              if (!existingIds.has(item.id) && !existingTitles.has(item.title)) {
+                list.push({ ...item, userId: effectiveId });
+              }
+            }
+          }
+        }
+
+        // Also merge system broadcast notifications if any
+        const broadcastCached = localStorage.getItem(getStorageKey("all_broadcast"));
+        if (broadcastCached) {
+          const broadcastList = JSON.parse(broadcastCached) as InAppNotification[];
+          const existingIds = new Set(list.map((n) => n.id));
+          const existingTitles = new Set(list.map((n) => n.title));
+          for (const item of broadcastList) {
+            if (!existingIds.has(item.id) && !existingTitles.has(item.title)) {
+              list.push({ ...item, userId: effectiveId });
+            }
+          }
         }
       } catch {
         // Fallback
@@ -173,8 +202,8 @@ export class NotificationEngine {
     if (list.length === 0) {
       try {
         const db = getFirestoreDb();
-        if (db && userId) {
-          const colRef = collection(db, "users", userId, "notifications");
+        if (db && effectiveId && effectiveId !== "default-guest") {
+          const colRef = collection(db, "users", effectiveId, "notifications");
           const snap = await getDocs(colRef);
           snap.forEach((d) => {
             const item = d.data() as InAppNotification;
@@ -183,12 +212,14 @@ export class NotificationEngine {
             }
           });
           list.sort((a, b) => b.createdAt - a.createdAt);
-          this.saveLocal(userId, list);
+          this.saveLocal(effectiveId, list);
         }
       } catch {
         // Fallback
       }
     }
+
+    list.sort((a, b) => b.createdAt - a.createdAt);
 
     if (filterUnread) {
       return list.filter((n) => !n.isRead);
@@ -221,6 +252,8 @@ export class NotificationEngine {
       force?: boolean;
     }
   ): Promise<InAppNotification | null> {
+    const effectiveId = userId || "default-guest";
+
     // If quiet hours and it's a study reminder, skip (unless in test or forced)
     if (
       params.type === "study_reminder" &&
@@ -231,11 +264,11 @@ export class NotificationEngine {
       return null;
     }
 
-    const currentList = await this.getNotifications(userId);
+    const currentList = await this.getNotifications(effectiveId);
 
     const newNotification: InAppNotification = {
       id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      userId,
+      userId: effectiveId,
       type: params.type,
       title: params.title,
       message: params.message,
@@ -258,13 +291,27 @@ export class NotificationEngine {
 
     // Prepend and cap at 50 items
     const updatedList = [newNotification, ...currentList].slice(0, 50);
-    this.saveLocal(userId, updatedList);
+    this.saveLocal(effectiveId, updatedList);
+
+    // If specific userId, mirror to default-guest cache so notification is available across all views
+    if (effectiveId !== "default-guest" && typeof window !== "undefined") {
+      try {
+        const guestCached = localStorage.getItem(getStorageKey("default-guest"));
+        const guestList: InAppNotification[] = guestCached ? JSON.parse(guestCached) : [];
+        if (!guestList.some((n) => n.id === newNotification.id || n.title === newNotification.title)) {
+          const updatedGuest = [newNotification, ...guestList].slice(0, 50);
+          this.saveLocal("default-guest", updatedGuest);
+        }
+      } catch {
+        // Non-blocking
+      }
+    }
 
     // Save to Firestore in background
     try {
       const db = getFirestoreDb();
-      if (db && userId) {
-        const docRef = doc(db, "users", userId, "notifications", newNotification.id);
+      if (db && effectiveId && effectiveId !== "default-guest") {
+        const docRef = doc(db, "users", effectiveId, "notifications", newNotification.id);
         setDoc(docRef, newNotification).catch(() => {});
       }
     } catch {
@@ -279,17 +326,32 @@ export class NotificationEngine {
    * Mark a single notification as read
    */
   public async markAsRead(userId: string, notificationId: string): Promise<void> {
-    const currentList = await this.getNotifications(userId);
+    const effectiveId = userId || "default-guest";
+    const currentList = await this.getNotifications(effectiveId);
     const updatedList = currentList.map((n) =>
       n.id === notificationId ? { ...n, isRead: true, readAt: Date.now() } : n
     );
 
-    this.saveLocal(userId, updatedList);
+    this.saveLocal(effectiveId, updatedList);
+    if (effectiveId !== "default-guest") {
+      try {
+        const guestCached = localStorage.getItem(getStorageKey("default-guest"));
+        if (guestCached) {
+          const guestList = JSON.parse(guestCached) as InAppNotification[];
+          const updatedGuest = guestList.map((n) =>
+            n.id === notificationId ? { ...n, isRead: true, readAt: Date.now() } : n
+          );
+          this.saveLocal("default-guest", updatedGuest);
+        }
+      } catch {
+        // Non-blocking
+      }
+    }
 
     try {
       const db = getFirestoreDb();
-      if (db && userId) {
-        const docRef = doc(db, "users", userId, "notifications", notificationId);
+      if (db && effectiveId && effectiveId !== "default-guest") {
+        const docRef = doc(db, "users", effectiveId, "notifications", notificationId);
         setDoc(docRef, { isRead: true, readAt: Date.now() }, { merge: true }).catch(() => {});
       }
     } catch {
@@ -303,18 +365,31 @@ export class NotificationEngine {
    * Mark all notifications as read
    */
   public async markAllAsRead(userId: string): Promise<void> {
-    const currentList = await this.getNotifications(userId);
+    const effectiveId = userId || "default-guest";
+    const currentList = await this.getNotifications(effectiveId);
     const now = Date.now();
     const updatedList = currentList.map((n) => ({ ...n, isRead: true, readAt: n.readAt || now }));
 
-    this.saveLocal(userId, updatedList);
+    this.saveLocal(effectiveId, updatedList);
+    if (effectiveId !== "default-guest") {
+      try {
+        const guestCached = localStorage.getItem(getStorageKey("default-guest"));
+        if (guestCached) {
+          const guestList = JSON.parse(guestCached) as InAppNotification[];
+          const updatedGuest = guestList.map((n) => ({ ...n, isRead: true, readAt: n.readAt || now }));
+          this.saveLocal("default-guest", updatedGuest);
+        }
+      } catch {
+        // Non-blocking
+      }
+    }
 
     try {
       const db = getFirestoreDb();
-      if (db && userId) {
+      if (db && effectiveId && effectiveId !== "default-guest") {
         const batch = writeBatch(db);
         updatedList.forEach((item) => {
-          const docRef = doc(db, "users", userId, "notifications", item.id);
+          const docRef = doc(db, "users", effectiveId, "notifications", item.id);
           batch.update(docRef, { isRead: true, readAt: now });
         });
         batch.commit().catch(() => {});
@@ -330,13 +405,17 @@ export class NotificationEngine {
    * Clear all notifications
    */
   public async clearAll(userId: string): Promise<void> {
+    const effectiveId = userId || "default-guest";
     const emptyList: InAppNotification[] = [];
-    this.saveLocal(userId, emptyList);
+    this.saveLocal(effectiveId, emptyList);
+    if (effectiveId !== "default-guest") {
+      this.saveLocal("default-guest", emptyList);
+    }
 
     try {
       const db = getFirestoreDb();
-      if (db && userId) {
-        const colRef = collection(db, "users", userId, "notifications");
+      if (db && effectiveId && effectiveId !== "default-guest") {
+        const colRef = collection(db, "users", effectiveId, "notifications");
         const snap = await getDocs(colRef);
         const batch = writeBatch(db);
         snap.forEach((d) => batch.delete(d.ref));

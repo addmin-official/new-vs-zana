@@ -98,7 +98,7 @@ export async function triggerSessionRecoveryNotification(
   userId: string,
   recovery?: SessionRecoveryData | null
 ): Promise<void> {
-  if (!userId) return;
+  const effectiveUserId = userId || "default-guest";
   const rec = recovery || getSessionRecovery();
   const subjectKey = rec?.lastSubject || "chemistry";
   const subjectName = getSubjectKurdishName(subjectKey);
@@ -106,7 +106,7 @@ export async function triggerSessionRecoveryNotification(
 
   try {
     const { notificationEngine } = await import("../notifications/notificationEngine.ts");
-    await notificationEngine.addNotification(userId, {
+    await notificationEngine.addNotification(effectiveUserId, {
       type: "study_reminder",
       title: `بەخێربێیتەوە! دواجار لە ${subjectName} بوویت`,
       message: "دەتوانیت ڕاستەوخۆ لەو وانەیەی کە لێی وەستابوویت بەردەوام بیت.",
