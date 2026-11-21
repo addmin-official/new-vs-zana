@@ -4,6 +4,7 @@ import {
   getSessionRecovery,
   clearSessionRecovery,
   getSubjectKurdishName,
+  triggerSessionRecoveryNotification,
 } from "../../auth/sessionRecovery.ts";
 import { getErrorMessage, FIREBASE_ERRORS_KU } from "../../services/authService.ts";
 import { checkUserExists } from "../../auth/userProfileService.ts";
@@ -82,6 +83,20 @@ describe("ZANA Auth & Session Persistence System", () => {
       expect(getSubjectKurdishName("kurdish")).toBe("زمانی کوردی");
       expect(getSubjectKurdishName("")).toBe("وانەکان");
       expect(getSubjectKurdishName("unknownSubject")).toBe("unknownSubject");
+    });
+
+    it("triggers welcome back returning notification with last subject", async () => {
+      saveSessionPosition("/practice", "chemistry", "electrochemistry");
+      await triggerSessionRecoveryNotification("student_test_123");
+
+      const { notificationEngine } = await import("../../notifications/notificationEngine.ts");
+      const list = await notificationEngine.getNotifications("student_test_123");
+      const welcomeNotif = list.find((n) => n.title.includes("بەخێربێیتەوە"));
+
+      expect(welcomeNotif).toBeDefined();
+      expect(welcomeNotif?.title).toBe("بەخێربێیتەوە! دواجار لە کیمیا بوویت");
+      expect(welcomeNotif?.message).toBe("دەتوانیت ڕاستەوخۆ لەو وانەیەی کە لێی وەستابوویت بەردەوام بیت.");
+      expect(welcomeNotif?.actionUrl).toBe("/practice");
     });
   });
 

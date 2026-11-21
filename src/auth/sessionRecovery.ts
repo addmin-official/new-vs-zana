@@ -89,3 +89,48 @@ export function getSubjectKurdishName(subjectKey?: string): string {
   const norm = subjectKey.toLowerCase().trim();
   return SUBJECT_NAMES_KU[norm] || subjectKey;
 }
+
+/**
+ * Dispatches an in-app notification & toast welcoming the returning student back
+ * to their last studied subject and route.
+ */
+export async function triggerSessionRecoveryNotification(
+  userId: string,
+  recovery?: SessionRecoveryData | null
+): Promise<void> {
+  if (!userId) return;
+  const rec = recovery || getSessionRecovery();
+  const subjectKey = rec?.lastSubject || "chemistry";
+  const subjectName = getSubjectKurdishName(subjectKey);
+  const actionRoute = rec?.lastRoute || "/home";
+
+  try {
+    const { notificationEngine } = await import("../notifications/notificationEngine.ts");
+    await notificationEngine.addNotification(userId, {
+      type: "study_reminder",
+      title: `بەخێربێیتەوە! دواجار لە ${subjectName} بوویت`,
+      message: "دەتوانیت ڕاستەوخۆ لەو وانەیەی کە لێی وەستابوویت بەردەوام بیت.",
+      icon: "✨",
+      actionUrl: actionRoute,
+      actionLabel: "بەردەوام بە",
+      force: true,
+    });
+  } catch (err) {
+    console.warn("Could not dispatch session recovery notification:", err);
+  }
+
+  try {
+    const { useAppStore } = await import("../store/appStore.ts");
+    const currentToasts = useAppStore.getState().notifications;
+    const hasWelcomeToast = currentToasts.some((n) => n.message.includes("بەخێربێیتەوە"));
+    if (!hasWelcomeToast) {
+      useAppStore.getState().addNotification(
+        "info",
+        `بەخێربێیتەوە! دواجار لە ${subjectName} بوویت. دەتوانیت ڕاستەوخۆ لەو وانەیەی کە لێی وەستابوویت بەردەوام بیت.`
+      );
+    }
+  } catch {
+    // Non-blocking
+  }
+}
+

@@ -20,6 +20,7 @@ import {
   getSessionRecovery,
   clearSessionRecovery,
   getSubjectKurdishName,
+  triggerSessionRecoveryNotification,
   SessionRecoveryData,
 } from "./auth/sessionRecovery.ts";
 import { checkUserExists } from "./auth/userProfileService.ts";
@@ -282,13 +283,17 @@ export default function App() {
               setActiveProfile(check.profile);
               setIsForcedOnboarding(false);
               const rec = getSessionRecovery();
-              if (rec) {
-                setSessionRecoveryNotice(rec);
-                if (typeof window !== "undefined") {
-                  const currentPath = window.location.pathname.replace(/\/+$/, "") || "/";
-                  if (currentPath === "/" || currentPath === "/home") {
-                    setActiveTabState(resolveTabFromPath(rec.lastRoute));
-                  }
+              const targetRec = rec || {
+                lastRoute: "/home",
+                lastSubject: check.profile.activeSubject || "chemistry",
+                timestamp: Date.now(),
+              };
+              setSessionRecoveryNotice(targetRec);
+              void triggerSessionRecoveryNotification(effectiveUser.uid, targetRec);
+              if (rec && typeof window !== "undefined") {
+                const currentPath = window.location.pathname.replace(/\/+$/, "") || "/";
+                if (currentPath === "/" || currentPath === "/home") {
+                  setActiveTabState(resolveTabFromPath(rec.lastRoute));
                 }
               }
             } else if (check.isNewUser) {
@@ -565,8 +570,17 @@ export default function App() {
               if (!isNewUser) {
                 setIsForcedOnboarding(false);
                 const rec = getSessionRecovery();
+                const targetRec = rec || {
+                  lastRoute: "/home",
+                  lastSubject: effectiveProfile?.activeSubject || "chemistry",
+                  timestamp: Date.now(),
+                };
+                setSessionRecoveryNotice(targetRec);
+                const uid = currentUser?.uid || effectiveProfile?.id || useAppStore.getState().user.id;
+                if (uid) {
+                  void triggerSessionRecoveryNotification(uid, targetRec);
+                }
                 if (rec) {
-                  setSessionRecoveryNotice(rec);
                   setActiveTabState(resolveTabFromPath(rec.lastRoute));
                 } else {
                   setActiveTabState("home");

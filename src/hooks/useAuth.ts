@@ -11,7 +11,7 @@ import {
 } from "../services/authService.ts";
 import { useAuthStore } from "../store/authStore.ts";
 import { checkUserExists, createUserDocumentIfMissing } from "../auth/userProfileService.ts";
-import { getSessionRecovery } from "../auth/sessionRecovery.ts";
+import { getSessionRecovery, triggerSessionRecoveryNotification } from "../auth/sessionRecovery.ts";
 import { StudentProfileDraft } from "../features/student/studentTypes.ts";
 
 export function useAuth() {
@@ -62,6 +62,7 @@ export function useAuth() {
             const recovery = getSessionRecovery();
             if (recovery) {
               useAuthStore.getState().setSessionRecoveryNotice(recovery);
+              void triggerSessionRecoveryNotification(firebaseUser.uid, recovery);
             }
           } else {
             useAuthStore.getState().setIsNewUser(true);
@@ -98,6 +99,7 @@ export function useAuth() {
       const recovery = getSessionRecovery();
       if (recovery) {
         useAuthStore.getState().setSessionRecoveryNotice(recovery);
+        void triggerSessionRecoveryNotification(loggedUser.uid, recovery);
       }
       return loggedUser;
     } catch (err) {
@@ -124,6 +126,7 @@ export function useAuth() {
       const recovery = getSessionRecovery();
       if (recovery) {
         useAuthStore.getState().setSessionRecoveryNotice(recovery);
+        void triggerSessionRecoveryNotification(loggedUser.uid, recovery);
       }
       return loggedUser;
     } catch (err) {
