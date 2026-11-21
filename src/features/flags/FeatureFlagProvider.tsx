@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useMemo, ReactNode } from "react";
+import React, { createContext, useContext, useEffect, useState, useMemo, useRef, ReactNode } from "react";
 import {
   FEATURE_FLAGS,
   FeatureFlagName,
@@ -28,6 +28,9 @@ export function FeatureFlagProvider({
   userId,
   initialOverrides = {},
 }: FeatureFlagProviderProps) {
+  const initialOverridesRef = useRef(initialOverrides);
+  initialOverridesRef.current = initialOverrides;
+
   const [firestoreOverrides, setFirestoreOverrides] = useState<Record<string, boolean>>(initialOverrides);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -37,7 +40,7 @@ export function FeatureFlagProvider({
 
     const unsubscribe = subscribeToFirestoreFeatureFlags((updatedFlags) => {
       if (!isMounted) return;
-      setFirestoreOverrides({ ...initialOverrides, ...updatedFlags });
+      setFirestoreOverrides({ ...initialOverridesRef.current, ...updatedFlags });
       setIsLoading(false);
     }, userId);
 
@@ -45,7 +48,7 @@ export function FeatureFlagProvider({
       isMounted = false;
       unsubscribe();
     };
-  }, [userId, initialOverrides]);
+  }, [userId]);
 
   // Compute evaluated state for all known flags
   const flags = useMemo(() => {
