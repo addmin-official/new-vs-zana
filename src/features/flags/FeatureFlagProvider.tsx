@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useMemo, useRef, ReactNode } from "react";
+import React, { createContext, useContext, useEffect, useState, useMemo, ReactNode } from "react";
 import {
   FEATURE_FLAGS,
   FeatureFlagName,
@@ -28,10 +28,7 @@ export function FeatureFlagProvider({
   userId,
   initialOverrides = {},
 }: FeatureFlagProviderProps) {
-  const initialOverridesRef = useRef(initialOverrides);
-  initialOverridesRef.current = initialOverrides;
-
-  const [firestoreOverrides, setFirestoreOverrides] = useState<Record<string, boolean>>(initialOverrides);
+  const [firestoreOverrides, setFirestoreOverrides] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(true);
 
   // Subscribe to real-time changes in system/featureFlags document
@@ -40,7 +37,7 @@ export function FeatureFlagProvider({
 
     const unsubscribe = subscribeToFirestoreFeatureFlags((updatedFlags) => {
       if (!isMounted) return;
-      setFirestoreOverrides({ ...initialOverridesRef.current, ...updatedFlags });
+      setFirestoreOverrides(updatedFlags);
       setIsLoading(false);
     }, userId);
 
@@ -50,20 +47,21 @@ export function FeatureFlagProvider({
     };
   }, [userId]);
 
-  // Compute evaluated state for all known flags
+  // Compute evaluated state for all known flags (combining initialOverrides and live firestoreOverrides)
   const flags = useMemo(() => {
     const computed = {} as Record<FeatureFlagName, boolean>;
     const flagNames = Object.keys(FEATURE_FLAGS) as FeatureFlagName[];
+    const mergedOverrides = { ...initialOverrides, ...firestoreOverrides };
 
     flagNames.forEach((name) => {
       computed[name] = resolveFeatureFlag(name, {
         userId,
-        firestoreOverrides,
+        firestoreOverrides: mergedOverrides,
       });
     });
 
     return computed;
-  }, [userId, firestoreOverrides]);
+  }, [userId, initialOverrides, firestoreOverrides]);
 
   // Dev tools logging (development only)
   useEffect(() => {
