@@ -37,7 +37,7 @@ export function FeatureFlagProvider({
 
     const unsubscribe = subscribeToFirestoreFeatureFlags((updatedFlags) => {
       if (!isMounted) return;
-      setFirestoreOverrides(updatedFlags);
+      setFirestoreOverrides({ ...initialOverrides, ...updatedFlags });
       setIsLoading(false);
     }, userId);
 
@@ -45,7 +45,7 @@ export function FeatureFlagProvider({
       isMounted = false;
       unsubscribe();
     };
-  }, [userId]);
+  }, [userId, initialOverrides]);
 
   // Compute evaluated state for all known flags
   const flags = useMemo(() => {
