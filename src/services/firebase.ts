@@ -58,13 +58,20 @@ export function getFirestoreDb(): Firestore | null {
         }
       : {};
 
+    const customDbId =
+      firebaseConfig.firestoreDatabaseId &&
+      firebaseConfig.firestoreDatabaseId !== "(default)" &&
+      firebaseConfig.firestoreDatabaseId !== "default"
+        ? firebaseConfig.firestoreDatabaseId
+        : undefined;
+
     try {
-      _db = firebaseConfig.firestoreDatabaseId
-        ? initializeFirestore(app, settings, firebaseConfig.firestoreDatabaseId)
+      _db = customDbId
+        ? initializeFirestore(app, settings, customDbId)
         : initializeFirestore(app, settings);
     } catch {
-      _db = firebaseConfig.firestoreDatabaseId
-        ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
+      _db = customDbId
+        ? getFirestore(app, customDbId)
         : getFirestore(app);
     }
 
