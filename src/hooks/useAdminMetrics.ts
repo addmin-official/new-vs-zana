@@ -199,6 +199,24 @@ export function useAdminMetrics() {
         }
       }
 
+      // Write today's computed value back to system/metrics
+      // so tomorrow's fallback has real data
+      try {
+        const { setDoc, serverTimestamp } = await import("firebase/firestore");
+        const metricsRef = doc(db, "system", "metrics");
+        setDoc(
+          metricsRef,
+          {
+            totalLearningMinutesToday: todayLearningMinutes,
+            lastUpdated: serverTimestamp(),
+            computedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        ).catch(() => {});
+      } catch {
+        /* non-blocking */
+      }
+
       // Calculate Top Subject
       let topSubject = { name: "chemistry", nameKu: "کیمیا", percent: 0 };
       const totalSessionCount = Object.values(subjectCounts).reduce(

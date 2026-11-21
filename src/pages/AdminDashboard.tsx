@@ -34,6 +34,9 @@ import { useSystemHealth } from "../hooks/useSystemHealth.ts";
 import { useAdminAnomalies } from "../hooks/useAdminAnomalies.ts";
 
 import { useSystemAuditLogs } from "../hooks/useSystemAuditLogs.ts";
+import { getFirebaseAuth } from "../services/firebase.ts";
+import { useNewStudentAlerts } from "../hooks/useNewStudentAlerts.ts";
+import { broadcastToAllStudents } from "../firebase/adminBroadcast.ts";
 
 export type AdminTab = "overview" | "students" | "content" | "system" | "flags";
 
@@ -92,6 +95,21 @@ export function AdminDashboard({
       bootstrapAdminFirestore().catch(console.warn);
     });
   }, []);
+
+  const newStudentAlerts = useNewStudentAlerts();
+
+  // Real-time new student notification in browser tab title
+  useEffect(() => {
+    const count = newStudentAlerts.unacknowledgedCount;
+    if (count > 0) {
+      document.title = `(${count}) قوتابی نوێ — زانا Admin`;
+    } else {
+      document.title = "Admin Dashboard — زانا";
+    }
+    return () => {
+      document.title = "زانا — ZANA";
+    };
+  }, [newStudentAlerts.unacknowledgedCount]);
 
   // Real live Firebase hooks
   const metrics = useAdminMetrics();
@@ -167,13 +185,36 @@ export function AdminDashboard({
     setTimeout(() => setPasswordResetNotice(null), 5000);
   };
 
-  // Broadcast announcement
+  // Quick broadcast action
+  const handleBroadcast = async () => {
+    const title = window.prompt("ناوی ئاگاداری:") || "";
+    const message = window.prompt("دەقی ئاگاداری:") || "";
+    if (!title.trim() || !message.trim()) return;
+
+    const auth = getFirebaseAuth();
+    const result = await broadcastToAllStudents(
+      title,
+      message,
+      auth?.currentUser?.email || ADMIN_EMAIL
+    );
+    window.alert(result.message);
+  };
+
+  // Broadcast announcement form submit
   const handleBroadcastAnnouncement = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!announcementText.trim() || isBroadcasting) return;
 
     setIsBroadcasting(true);
     try {
+      const auth = getFirebaseAuth();
+      const adminEmail = auth?.currentUser?.email || ADMIN_EMAIL;
+      const result = await broadcastToAllStudents(
+        "ئاگاداری لە بەڕێوەبەرایەتی زانا 📢",
+        announcementText.trim(),
+        adminEmail
+      );
+
       await notificationEngine.addNotification("all_broadcast", {
         type: "study_reminder",
         title: "ئاگاداری لە بەڕێوەبەرایەتی زانا 📢",
@@ -182,9 +223,8 @@ export function AdminDashboard({
         actionUrl: "/home",
       });
 
-      void logAdminAction("BROADCAST_ANNOUNCEMENT", undefined, { message: announcementText.trim() });
       setAnnouncementText("");
-      showToast("ئاگاداری بە سەرکەوتوویی بۆ سەرجەم قوتابیان بڵاوکرایەوە ✅");
+      showToast(result.message || "ئاگاداری بە سەرکەوتوویی بۆ سەرجەم قوتابیان بڵاوکرایەوە ✅");
     } catch {
       showToast("هەڵەیەک ڕوویدا لە کاتی ناردنی ئاگاداری.");
     } finally {
@@ -277,6 +317,11 @@ export function AdminDashboard({
                     <Icon className="w-4 h-4 shrink-0" />
                     <span>{item.label}</span>
                   </div>
+                  {item.id === "students" && newStudentAlerts.unacknowledgedCount > 0 && (
+                    <span className="mr-auto bg-indigo-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                      {newStudentAlerts.unacknowledgedCount}
+                    </span>
+                  )}
                   <span className="text-[10px] font-mono opacity-60">{item.labelEn}</span>
                 </button>
               );
@@ -519,6 +564,68 @@ export function AdminDashboard({
               </div>
             )}
 
+            {/* NEW STUDENT ALERTS — only shown when unacknowledged > 0 */}
+            {newStudentAlerts.unacknowledgedCount > 0 && (
+              <div className="mb-6 bg-indigo-950 border border-indigo-800 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-indigo-500" />
+                    </span>
+                    <h3 className="text-indigo-300 font-bold text-sm">
+                      {newStudentAlerts.unacknowledgedCount} قوتابی نوێ تۆمارکردووە
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void newStudentAlerts.acknowledgeAll()}
+                    className="text-xs text-indigo-400 hover:text-indigo-200 transition-colors cursor-pointer"
+                  >
+                    هەموو بینراو نیشاندە
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {newStudentAlerts.alerts
+                    .filter((a) => !a.isAcknowledged)
+                    .slice(0, 5)
+                    .map((alert) => (
+                      <div
+                        key={alert.id}
+                        className="flex items-center justify-between bg-indigo-900/40 rounded-lg px-3 py-2"
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-full bg-indigo-700 flex items-center justify-center text-xs font-bold text-white">
+                            {alert.name.charAt(0)}
+                          </div>
+                          <div>
+                            <p className="text-white text-xs font-semibold">{alert.name}</p>
+                            <p className="text-indigo-400 text-[10px]">
+                              پۆل {alert.grade} · {alert.stream} · {alert.email}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {alert.isNew && (
+                            <span className="bg-emerald-900 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-700">
+                              نوێ
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => void newStudentAlerts.acknowledge(alert.id)}
+                            className="text-indigo-400 hover:text-white transition-colors cursor-pointer"
+                            title="بینراو"
+                          >
+                            <Check size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+
             {/* Quick Actions Panel & Service Status */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Quick Actions */}
@@ -567,7 +674,7 @@ export function AdminDashboard({
 
                   <button
                     type="button"
-                    onClick={() => handleTabChange("system")}
+                    onClick={() => void handleBroadcast()}
                     className="flex items-center gap-3 p-3.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 transition text-right cursor-pointer"
                   >
                     <Megaphone className="w-5 h-5 text-rose-400 shrink-0" />

@@ -249,4 +249,16 @@ describe("Live Admin Dashboard & Real-Time Firebase Suite", () => {
       expect(res.uid).toBe("root_admin_uid");
     });
   });
+
+  describe("Admin Broadcast Engine (broadcastToAllStudents)", () => {
+    it("safely handles null db", async () => {
+      const { broadcastToAllStudents } = await import("../../firebase/adminBroadcast.ts");
+      // When getFirestoreDb returns null (or mocked)
+      const res = await broadcastToAllStudents("Title", "Message", ADMIN_EMAIL);
+      expect(res).toBeDefined();
+      expect(typeof res.sentCount).toBe("number");
+      expect(typeof res.failedCount).toBe("number");
+      expect(typeof res.message).toBe("string");
+    });
+  });
 });

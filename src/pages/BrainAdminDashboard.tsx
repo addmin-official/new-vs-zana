@@ -20,6 +20,7 @@ import { useAppStore, UserRole } from "../store/appStore.ts";
 import { useAdminMetrics } from "../hooks/useAdminMetrics.ts";
 import { useAdminAnomalies } from "../hooks/useAdminAnomalies.ts";
 import { useSystemHealth } from "../hooks/useSystemHealth.ts";
+import { useStrugglingConcepts } from "../hooks/useStrugglingConcepts.ts";
 
 export interface BrainAdminDashboardProps {
   onBackToApp?: () => void;
@@ -45,7 +46,9 @@ export function BrainAdminDashboard({
   const [activeTab, setActiveTab] = useState<"system_intelligence" | "struggling_concepts" | "anomalies">("system_intelligence");
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [strugglingConcepts] = useState<StrugglingConcept[]>([]);
+  // Real Firestore data for struggling concepts
+  const strugglingConceptsData = useStrugglingConcepts(10);
+  const strugglingConcepts = strugglingConceptsData.concepts;
 
   const userRole = useAppStore((state) => state.userRole);
   const setUserRole = useAppStore((state) => state.setUserRole);
@@ -68,13 +71,21 @@ export function BrainAdminDashboard({
     { key: "mastered", labelKu: "ماستەر (> 85%)", color: "#10b981" },
   ];
 
-  const filteredStrugglingConcepts = strugglingConcepts.filter((c) => {
-    const matchSubj = selectedSubjectFilter === "all" || c.subject === selectedSubjectFilter;
-    const matchQuery =
-      c.titleKu.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.subjectKu.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchSubj && matchQuery;
-  });
+  const filteredStrugglingConcepts = useMemo(() => {
+    return strugglingConcepts.filter((c) => {
+      const matchSubj =
+        selectedSubjectFilter === "all" ||
+        c.subject.toLowerCase() === selectedSubjectFilter.toLowerCase() ||
+        (selectedSubjectFilter === "math" && (c.subject === "mathematics" || c.subject === "math"));
+      const q = searchQuery.toLowerCase();
+      const matchQuery =
+        !q ||
+        c.titleKu.toLowerCase().includes(q) ||
+        c.subjectKu.toLowerCase().includes(q) ||
+        c.subject.toLowerCase().includes(q);
+      return matchSubj && matchQuery;
+    });
+  }, [strugglingConcepts, selectedSubjectFilter, searchQuery]);
 
   const subjectMasteryDistribution = useMemo(() => {
     if (!metrics.data || metrics.data.totalStudents === 0) return [];
