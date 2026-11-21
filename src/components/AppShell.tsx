@@ -11,6 +11,7 @@ import { notificationService } from "../services/notificationService.ts";
 import { useTranslation } from "../hooks/useTranslation.ts";
 import { SoundToggle } from "./SoundToggle.tsx";
 import { ThemeToggle } from "./ThemeToggle.tsx";
+import { TrialBanner } from "./trial/TrialBanner.tsx";
 
 export interface AppShellProps {
   children: ReactNode;
@@ -155,6 +156,7 @@ export function AppShell({
           onOpenNotifications={() => setIsNotificationCenterOpen(true)}
           unreadNotificationsCount={unreadNotificationsCount}
         />
+        <TrialBanner />
       </div>
 
       {/* In-App Notification Center Drawer/Modal */}

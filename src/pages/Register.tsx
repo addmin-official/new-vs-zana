@@ -17,13 +17,18 @@ import {
   ChevronLeft,
   ChevronRight,
   Lock,
+  Phone,
 } from "lucide-react";
 import {
   registerWithEmail,
   loginWithGoogle,
   getErrorMessage,
+  setupRecaptcha,
+  sendPhoneOtp,
+  verifyPhoneOtp,
 } from "../services/authService.ts";
 import { createUserDocumentIfMissing } from "../auth/userProfileService.ts";
+import { initializeTrial } from "../auth/trialService.ts";
 import { StudentGrade, AcademicStream } from "../features/student/studentTypes.ts";
 
 export interface RegisterSuccessData {
@@ -53,12 +58,18 @@ export function Register({
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
 
   // Step 1: Account Creation fields
+  const [authMethod, setAuthMethod] = useState<'email' | 'phone'>('email');
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [createdUid, setCreatedUid] = useState<string | null>(null);
+  const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [phoneStep1Loading, setPhoneStep1Loading] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   // Step 2: Student Profile fields
   const [selectedGrade, setSelectedGrade] = useState<StudentGrade>("12");
@@ -100,6 +111,12 @@ export function Register({
     const trimmedName = fullName.trim();
     const trimmedEmail = email.trim();
 
+    // Block admin email from student registration
+    if (trimmedEmail.toLowerCase() === 'addmin.official.idg@gmail.com') {
+      setErrorMessage('ئەم ئیمەیڵە تۆمارکردنی قوتابی ڕێپێدراو نییە');
+      return;
+    }
+
     if (!trimmedName) {
       setErrorMessage("تکایە ناوی تەواوت بنووسە");
       return;
@@ -121,12 +138,69 @@ export function Register({
     try {
       const user = await registerWithEmail(trimmedEmail, password, trimmedName);
       setCreatedUid(user.uid);
+      await initializeTrial(user.uid, trimmedEmail);
       setCurrentStep(2);
     } catch (err: unknown) {
       setErrorMessage(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
+  };
+
+  const formatIraqiPhone = (raw: string): string => {
+    const digits = raw.replace(/\D/g, '');
+    if (digits.startsWith('9647')) return `+${digits}`;
+    if (digits.startsWith('07')) return `+964${digits.slice(1)}`;
+    if (digits.startsWith('7') && digits.length === 10) return `+964${digits}`;
+    return `+${digits}`;
+  };
+
+  const isPhoneValid = /^(\+9647|07|7)\d{9}$/.test(phone.replace(/\s/g, ''));
+
+  const handlePhoneSendOtp = async () => {
+    if (phoneStep1Loading || !isPhoneValid || !fullName.trim()) {
+      if (!fullName.trim()) setErrorMessage('تکایە ناوت بنووسە');
+      return;
+    }
+    setPhoneStep1Loading(true);
+    setErrorMessage(null);
+    const verifier = setupRecaptcha('zana-recaptcha-register');
+    if (!verifier) {
+      setErrorMessage('کێشەی دڵنیایی');
+      setPhoneStep1Loading(false);
+      return;
+    }
+    const result = await sendPhoneOtp(formatIraqiPhone(phone), verifier);
+    if (result.success) {
+      setOtpSent(true);
+      setResendCooldown(60);
+      const t = setInterval(() => setResendCooldown(p => {
+        if (p <= 1) { clearInterval(t); return 0; }
+        return p - 1;
+      }), 1000);
+    } else {
+      setErrorMessage(result.error || 'کێشەیەک ڕوویدا');
+    }
+    setPhoneStep1Loading(false);
+  };
+
+  const handlePhoneVerifyAndProceed = async () => {
+    if (phoneStep1Loading || otp.length < 6) return;
+    setPhoneStep1Loading(true);
+    setErrorMessage(null);
+    const result = await verifyPhoneOtp(otp);
+    if (result.user) {
+      setCreatedUid(result.user.uid);
+      // Initialize trial period immediately
+      await initializeTrial(
+        result.user.uid,
+        result.user.phoneNumber || phone
+      );
+      setCurrentStep(2);
+    } else {
+      setErrorMessage(result.error || 'کۆدی دڵنیایی هەڵەیە');
+    }
+    setPhoneStep1Loading(false);
   };
 
   // Handle Step 1 Google Sign-Up
@@ -280,7 +354,33 @@ export function Register({
 
         {/* STEP 1: Account Creation */}
         {currentStep === 1 && (
-          <form onSubmit={handleAccountCreate} className="space-y-4" noValidate>
+          <div className="space-y-4">
+            {/* Method toggle — same style as Login */}
+            <div className="flex bg-slate-800 rounded-xl p-1 mb-4">
+              <button
+                type="button"
+                onClick={() => { setAuthMethod('email'); setErrorMessage(null); }}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                  authMethod === 'email' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Mail size={15} /> ئیمەیڵ
+              </button>
+              <button
+                type="button"
+                onClick={() => { setAuthMethod('phone'); setErrorMessage(null); }}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                  authMethod === 'phone' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Phone size={15} /> مۆبایل
+              </button>
+            </div>
+
+            <div id="zana-recaptcha-register" className="hidden" />
+
+            {authMethod === 'email' && (
+              <form onSubmit={handleAccountCreate} className="space-y-4" noValidate>
             {/* Full Name */}
             <div className="space-y-1.5 text-right">
               <label htmlFor={nameInputId} className="block text-xs font-bold text-slate-300">
@@ -422,6 +522,126 @@ export function Register({
                 </>
               )}
             </button>
+          </form>
+        )}
+
+        {authMethod === 'phone' && (
+          <div className="space-y-4">
+            {/* Name field (always required) */}
+            <div className="space-y-1.5 text-right">
+              <label htmlFor={`${nameInputId}-phone`} className="block text-xs font-bold text-slate-300">
+                ناوی تەواو <span className="text-rose-400" aria-hidden="true">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  id={`${nameInputId}-phone`}
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  disabled={phoneStep1Loading}
+                  placeholder="ناوی قوتابی"
+                  autoComplete="name"
+                  className="w-full bg-slate-800/80 border border-slate-700 focus:border-indigo-500 focus:ring-3 focus:ring-indigo-500/30 text-white rounded-xl px-4 py-3 text-base sm:text-sm placeholder:text-slate-500 transition-all pl-10 min-h-[48px] touch-manipulation"
+                />
+                <UserIcon className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true" />
+              </div>
+            </div>
+
+            {!otpSent ? (
+              <>
+                <div className="space-y-1.5 text-right">
+                  <label className="block text-xs font-bold text-slate-300">
+                    ژمارەی مۆبایل <span className="text-rose-400" aria-hidden="true">*</span>
+                  </label>
+                  <div className="relative">
+                    <Phone size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      dir="ltr"
+                      placeholder="07XXXXXXXXX"
+                      value={phone}
+                      onChange={e => setPhone(e.target.value)}
+                      disabled={phoneStep1Loading}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 pr-10 text-left text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 min-h-[48px]"
+                    />
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    نموونە: 07501234567 یان +9647501234567
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handlePhoneSendOtp}
+                  disabled={!isPhoneValid || !fullName.trim() || phoneStep1Loading}
+                  className="w-full min-h-[48px] py-3.5 px-4 bg-indigo-600 hover:bg-indigo-500 active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25 cursor-pointer touch-manipulation"
+                >
+                  {phoneStep1Loading ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      <span>ناردنی کۆد...</span>
+                    </>
+                  ) : (
+                    <span>ناردنی کۆدی دڵنیایی</span>
+                  )}
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="space-y-1.5 text-right">
+                  <label className="block text-xs font-bold text-slate-300">
+                    کۆدی دڵنیایی <span className="text-rose-400" aria-hidden="true">*</span>
+                  </label>
+                  <p className="text-xs text-emerald-400 mb-2">
+                    ✓ کۆدەکە نێردرا بۆ {phone}
+                  </p>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    dir="ltr"
+                    maxLength={6}
+                    placeholder="------"
+                    value={otp}
+                    onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
+                    disabled={phoneStep1Loading}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-center text-white text-2xl font-mono tracking-[0.5em] placeholder-slate-700 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 min-h-[48px]"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handlePhoneVerifyAndProceed}
+                  disabled={otp.length < 6 || phoneStep1Loading}
+                  className="w-full min-h-[48px] py-3.5 px-4 bg-indigo-600 hover:bg-indigo-500 active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25 cursor-pointer touch-manipulation"
+                >
+                  {phoneStep1Loading ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      <span>تاقیکردنەوە...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>دڵنیاکردنەوە و بەردەوام بە</span>
+                      <ArrowLeft className="w-4 h-4" aria-hidden="true" />
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setOtpSent(false); setOtp(''); }}
+                  disabled={resendCooldown > 0}
+                  className="w-full text-sm text-slate-400 hover:text-white transition-colors disabled:opacity-50 py-2 cursor-pointer"
+                >
+                  {resendCooldown > 0
+                    ? `دووبارە نێردن: ${resendCooldown} چرکە`
+                    : 'ژمارەکە گۆڕ یان دووبارە بنێرە'}
+                </button>
+              </>
+            )}
+          </div>
+        )}
 
             {/* Divider */}
             <div className="relative flex items-center justify-center py-2" aria-hidden="true">
@@ -476,7 +696,7 @@ export function Register({
                 پێشتر هەژمارت دروستکردووە؟ <span className="font-bold text-indigo-400">بچۆ ژوورەوە</span>
               </button>
             </div>
-          </form>
+          </div>
         )}
 
         {/* STEP 2: Student Profile (Grade, Stream, School) */}

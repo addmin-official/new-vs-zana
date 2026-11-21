@@ -13,6 +13,8 @@ import {
   parseServerProfileDocument,
 } from "../features/student/studentStorage.ts";
 import { getValidatedGrade, getValidatedStream, sanitizeStudentName } from "../features/student/studentDefaults.ts";
+import { notificationEngine } from "../notifications/notificationEngine.ts";
+import { initializeTrial } from "./trialService.ts";
 
 export interface UserCheckResult {
   exists: boolean;
@@ -190,6 +192,28 @@ export async function createUserDocumentIfMissing(
     } catch (err) {
       console.warn("Could not save user profile to Firestore (offline):", err);
     }
+  }
+
+  // Send welcome notification & initialize trial
+  if (uid) {
+    const studentName = newProfile.name || 'قوتابی';
+
+    // Welcome notification with onboarding tips
+    await notificationEngine.addNotification(uid, {
+      type: 'study_reminder',
+      title: `بەخێربێیت بۆ زانا، ${studentName}! 🎉`,
+      message: `٣ ڕۆژی تاقیکردنەوەی خۆڕایت هەیە. ئێستا دەتوانیت:`
+        + `\n• پرسیاری دەربارەی وانەکانت بکەی`
+        + `\n• تاقیکردنەوەی ئەدەپتیڤ بکەی`
+        + `\n• پلانی خوێندنت دروست بکەی`,
+      icon: '🎉',
+      actionUrl: '/home',
+      actionLabel: 'دەستپێبکە',
+      force: true,
+    }).catch(() => {});
+
+    // Initialize trial period
+    await initializeTrial(uid, email || '');
   }
 
   return newProfile;

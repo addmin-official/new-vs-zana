@@ -9,6 +9,10 @@ import {
   signOut,
   updateProfile,
   User,
+  RecaptchaVerifier,
+  ApplicationVerifier,
+  ConfirmationResult,
+  signInWithPhoneNumber as firebaseSignInWithPhoneNumber,
 } from "firebase/auth";
 import { getFirebaseAuth } from "./firebase.ts";
 import { verifyFirebaseIdToken, VerifiedTokenClaims } from "../server/auth/tokenVerification.ts";
@@ -25,6 +29,11 @@ export const FIREBASE_ERRORS_KU: Record<string, string> = {
   "auth/email-already-in-use": "ئەم ئیمەیڵە پێشتر تۆمار کراوە.",
   "auth/weak-password": "وشەی نهێنی دەبێت لانیکەم ٦ پیت بێت.",
   "auth/too-many-requests": "هەوڵی زۆر دراوە. تکایە کەمێکی تر تاقی بکەرەوە.",
+  "auth/invalid-phone-number": "ژمارەی مۆبایل دروست نییە. فۆرماتی پێویستی: +9647XXXXXXXX",
+  "auth/code-expired": "کۆدی دڵنیایی کاتی تەواو بووە. دووبارە هەوڵ بدە.",
+  "auth/invalid-verification-code": "کۆدی دڵنیایی هەڵەیە. تکایە دووبارە بپشکنە.",
+  "auth/missing-phone-number": "تکایە ژمارەی مۆبایلەکەت بنووسە.",
+  "auth/quota-exceeded": "زۆر جار هەوڵی نێردنی کۆد دراوە. دواتر تاقی بکەرەوە.",
   "auth/popup-closed-by-user": "پەنجەرەی چوونەژوورەوە لەلایەن تۆوە داخرایەوە.",
   "auth/popup-blocked": "پەنجەرەی پۆپ-ئەپ بەربەست کراوە. تکایە ڕێگە بە پەنجەرەکە بدە.",
   "auth/cancelled-popup-request": "داواکاری چوونەژوورەوە هەڵوەشێنرایەوە.",
@@ -373,6 +382,89 @@ export async function startStudentTrial(
   return { ok: true };
 }
 
+// ── Phone Authentication ──────────────────────────────────────
+
+// Store verificationId globally (cleared after use)
+let _confirmationResult: ConfirmationResult | null = null;
+
+/**
+ * Setup invisible reCAPTCHA verifier.
+ * containerId: ID of a div in the DOM (can be hidden)
+ */
+export function setupRecaptcha(containerId: string): RecaptchaVerifier | null {
+  const auth = getFirebaseAuth();
+  if (!auth) return null;
+  try {
+    // Clear any existing reCAPTCHA
+    if ((window as unknown as Record<string, unknown>).recaptchaWidgetId !== undefined) {
+      try {
+        const existing = (window as unknown as Record<string, RecaptchaVerifier>).__zanaRecaptcha;
+        if (existing) existing.clear();
+      } catch {
+        /* ignore */
+      }
+    }
+    const verifier = new RecaptchaVerifier(auth, containerId, {
+      size: "invisible",
+      callback: () => {
+        /* reCAPTCHA solved */
+      },
+      "expired-callback": () => {
+        /* expired */
+      },
+    });
+    (window as unknown as Record<string, unknown>).__zanaRecaptcha = verifier;
+    return verifier;
+  } catch (err) {
+    console.warn("[Phone Auth] RecaptchaVerifier setup failed:", err);
+    return null;
+  }
+}
+
+/**
+ * Send OTP to phone number.
+ * phoneNumber must be in E.164 format: +9647XXXXXXXX
+ */
+export async function sendPhoneOtp(
+  phoneNumber: string,
+  appVerifier: ApplicationVerifier
+): Promise<{ success: boolean; error?: string }> {
+  const auth = getFirebaseAuth();
+  if (!auth) return { success: false, error: "Firebase Auth ئامادە نییە" };
+
+  try {
+    _confirmationResult = await firebaseSignInWithPhoneNumber(
+      auth,
+      phoneNumber,
+      appVerifier
+    );
+    return { success: true };
+  } catch (err) {
+    _confirmationResult = null;
+    const msg = getErrorMessage(err);
+    return { success: false, error: msg };
+  }
+}
+
+/**
+ * Verify OTP code entered by user.
+ * Returns the Firebase User on success.
+ */
+export async function verifyPhoneOtp(
+  code: string
+): Promise<{ user: User | null; error?: string }> {
+  if (!_confirmationResult) {
+    return { user: null, error: "تکایە سەرەتا ژمارەی مۆبایلەکەت بنێرە" };
+  }
+  try {
+    const result = await _confirmationResult.confirm(code);
+    _confirmationResult = null;
+    return { user: result.user };
+  } catch (err) {
+    return { user: null, error: getErrorMessage(err) };
+  }
+}
+
 export const AuthService = {
   verifyFirebaseIdToken,
   getClientToken,
@@ -387,5 +479,8 @@ export const AuthService = {
   getErrorMessage,
   FIREBASE_ERRORS_KU,
   startStudentTrial,
+  setupRecaptcha,
+  sendPhoneOtp,
+  verifyPhoneOtp,
 };
 

@@ -10,11 +10,15 @@ import {
   Sparkles,
   BookOpen,
   FlaskConical,
+  Phone,
 } from "lucide-react";
 import {
   loginWithEmail,
   loginWithGoogle,
   getErrorMessage,
+  setupRecaptcha,
+  sendPhoneOtp,
+  verifyPhoneOtp,
 } from "../services/authService.ts";
 import { checkUserExists } from "../auth/userProfileService.ts";
 import { getMyRole, UserRole } from "../auth/roles.ts";
@@ -39,6 +43,25 @@ export function Login({
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Phone auth state
+  const [authMethod, setAuthMethod] = useState<'email' | 'phone'>('email');
+  const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [phoneLoading, setPhoneLoading] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  // Format Iraqi phone: 07XX → +9647XX
+  const formatIraqiPhone = (raw: string): string => {
+    const digits = raw.replace(/\D/g, '');
+    if (digits.startsWith('9647')) return `+${digits}`;
+    if (digits.startsWith('07')) return `+964${digits.slice(1)}`;
+    if (digits.startsWith('7') && digits.length === 10) return `+964${digits}`;
+    return `+${digits}`;
+  };
+
+  const isPhoneValid = /^(\+9647|07|7)\d{9}$/.test(phone.replace(/\s/g, ''));
 
   // Email format validation (real-time)
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
@@ -113,7 +136,53 @@ export function Login({
     }
   };
 
-  const isAnyLoading = loading || googleLoading;
+  const handleSendOtp = async () => {
+    if (phoneLoading || !isPhoneValid) return;
+    setPhoneLoading(true);
+    setErrorMessage(null);
+
+    // Ensure reCAPTCHA container exists
+    const verifier = setupRecaptcha('zana-recaptcha-container');
+    if (!verifier) {
+      setErrorMessage('کێشەیەک لە سیستەمی دڵنیایی ڕوویدا');
+      setPhoneLoading(false);
+      return;
+    }
+
+    const formatted = formatIraqiPhone(phone);
+    const result = await sendPhoneOtp(formatted, verifier);
+
+    if (result.success) {
+      setOtpSent(true);
+      // Start 60s resend cooldown
+      setResendCooldown(60);
+      const timer = setInterval(() => {
+        setResendCooldown(prev => {
+          if (prev <= 1) { clearInterval(timer); return 0; }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      setErrorMessage(result.error || 'کێشەیەک ڕوویدا');
+    }
+    setPhoneLoading(false);
+  };
+
+  const handleVerifyOtp = async () => {
+    if (phoneLoading || otp.length < 6) return;
+    setPhoneLoading(true);
+    setErrorMessage(null);
+
+    const result = await verifyPhoneOtp(otp);
+    if (result.user) {
+      await handlePostLogin(result.user);
+    } else {
+      setErrorMessage(result.error || 'کۆدی دڵنیایی هەڵەیە');
+    }
+    setPhoneLoading(false);
+  };
+
+  const isAnyLoading = loading || googleLoading || phoneLoading;
 
   return (
     <div
@@ -213,99 +282,217 @@ export function Login({
               </div>
             )}
 
-            <form onSubmit={handleEmailSubmit} className="space-y-4" noValidate>
-              {/* Email Field */}
-              <div className="space-y-1.5 text-right">
-                <label
-                  htmlFor={emailInputId}
-                  className="block text-xs font-bold text-slate-300"
-                >
-                  ئیمەیڵ <span className="text-rose-400" aria-hidden="true">*</span>
-                </label>
-                <div className="relative">
-                  <input
-                    id={emailInputId}
-                    type="email"
-                    inputMode="email"
-                    dir="ltr"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    disabled={isAnyLoading}
-                    placeholder="student@example.com"
-                    autoComplete="email"
-                    aria-required="true"
-                    aria-invalid={Boolean(errorMessage)}
-                    aria-describedby={errorMessage ? "login-error-msg" : undefined}
-                    className="w-full bg-slate-800/80 border border-slate-700 focus:border-indigo-500 focus:ring-3 focus:ring-indigo-500/30 text-white rounded-xl px-4 py-3 text-base sm:text-sm placeholder:text-slate-500 placeholder:text-left transition-all duration-200 disabled:opacity-50 pl-10 text-left font-mono touch-manipulation min-h-[48px]"
-                  />
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none">
-                    {isEmailValid && (
-                      <Check className="w-4 h-4 text-emerald-400 animate-in zoom-in duration-150" aria-hidden="true" />
-                    )}
-                    <Mail className="w-4 h-4 text-slate-400" aria-hidden="true" />
+            {/* Auth method toggle */}
+            <div className="flex bg-slate-800 rounded-xl p-1 mb-5">
+              <button
+                type="button"
+                onClick={() => { setAuthMethod('email'); setErrorMessage(null); }}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                  authMethod === 'email'
+                    ? 'bg-indigo-600 text-white shadow'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Mail size={15} />
+                ئیمەیڵ
+              </button>
+              <button
+                type="button"
+                onClick={() => { setAuthMethod('phone'); setErrorMessage(null); }}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                  authMethod === 'phone'
+                    ? 'bg-indigo-600 text-white shadow'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Phone size={15} />
+                مۆبایل
+              </button>
+            </div>
+
+            {/* Invisible reCAPTCHA container */}
+            <div id="zana-recaptcha-container" className="hidden" />
+
+            {authMethod === 'email' && (
+              <form onSubmit={handleEmailSubmit} className="space-y-4" noValidate>
+                {/* Email Field */}
+                <div className="space-y-1.5 text-right">
+                  <label
+                    htmlFor={emailInputId}
+                    className="block text-xs font-bold text-slate-300"
+                  >
+                    ئیمەیڵ <span className="text-rose-400" aria-hidden="true">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      id={emailInputId}
+                      type="email"
+                      inputMode="email"
+                      dir="ltr"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      disabled={isAnyLoading}
+                      placeholder="student@example.com"
+                      autoComplete="email"
+                      aria-required="true"
+                      aria-invalid={Boolean(errorMessage)}
+                      aria-describedby={errorMessage ? "login-error-msg" : undefined}
+                      className="w-full bg-slate-800/80 border border-slate-700 focus:border-indigo-500 focus:ring-3 focus:ring-indigo-500/30 text-white rounded-xl px-4 py-3 text-base sm:text-sm placeholder:text-slate-500 placeholder:text-left transition-all duration-200 disabled:opacity-50 pl-10 text-left font-mono touch-manipulation min-h-[48px]"
+                    />
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none">
+                      {isEmailValid && (
+                        <Check className="w-4 h-4 text-emerald-400 animate-in zoom-in duration-150" aria-hidden="true" />
+                      )}
+                      <Mail className="w-4 h-4 text-slate-400" aria-hidden="true" />
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Password Field */}
-              <div className="space-y-1.5 text-right">
-                <div className="flex items-center justify-between">
-                  <label
-                    htmlFor={passwordInputId}
-                    className="text-xs font-bold text-slate-300"
-                  >
-                    وشەی نهێنی <span className="text-rose-400" aria-hidden="true">*</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={onNavigateToForgotPassword}
-                    className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer py-1 px-2 focus-visible:ring-2 focus-visible:ring-indigo-400 rounded-lg min-h-[36px] flex items-center"
-                  >
-                    وشەی نهێنیت لەیاد چوو؟
-                  </button>
+                {/* Password Field */}
+                <div className="space-y-1.5 text-right">
+                  <div className="flex items-center justify-between">
+                    <label
+                      htmlFor={passwordInputId}
+                      className="text-xs font-bold text-slate-300"
+                    >
+                      وشەی نهێنی <span className="text-rose-400" aria-hidden="true">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={onNavigateToForgotPassword}
+                      className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer py-1 px-2 focus-visible:ring-2 focus-visible:ring-indigo-400 rounded-lg min-h-[36px] flex items-center"
+                    >
+                      وشەی نهێنیت لەیاد چوو؟
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input
+                      id={passwordInputId}
+                      type={showPassword ? "text" : "password"}
+                      dir="ltr"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      disabled={isAnyLoading}
+                      placeholder="••••••••"
+                      autoComplete="current-password"
+                      aria-required="true"
+                      aria-invalid={Boolean(errorMessage)}
+                      aria-describedby={errorMessage ? "login-error-msg" : undefined}
+                      className="w-full bg-slate-800/80 border border-slate-700 focus:border-indigo-500 focus:ring-3 focus:ring-indigo-500/30 text-white rounded-xl px-4 py-3 text-base sm:text-sm placeholder:text-slate-500 placeholder:text-left transition-all duration-200 disabled:opacity-50 pl-11 text-left font-mono touch-manipulation min-h-[48px]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer p-2.5 rounded-lg focus-visible:ring-2 focus-visible:ring-indigo-400 min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
+                      aria-label={showPassword ? "شاردنەوەی وشەی نهێنی" : "نیشاندانی وشەی نهێنی"}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" aria-hidden="true" /> : <Eye className="w-4 h-4" aria-hidden="true" />}
+                    </button>
+                  </div>
                 </div>
-                <div className="relative">
-                  <input
-                    id={passwordInputId}
-                    type={showPassword ? "text" : "password"}
-                    dir="ltr"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    disabled={isAnyLoading}
-                    placeholder="••••••••"
-                    autoComplete="current-password"
-                    aria-required="true"
-                    aria-invalid={Boolean(errorMessage)}
-                    aria-describedby={errorMessage ? "login-error-msg" : undefined}
-                    className="w-full bg-slate-800/80 border border-slate-700 focus:border-indigo-500 focus:ring-3 focus:ring-indigo-500/30 text-white rounded-xl px-4 py-3 text-base sm:text-sm placeholder:text-slate-500 placeholder:text-left transition-all duration-200 disabled:opacity-50 pl-11 text-left font-mono touch-manipulation min-h-[48px]"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer p-2.5 rounded-lg focus-visible:ring-2 focus-visible:ring-indigo-400 min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
-                    aria-label={showPassword ? "شاردنەوەی وشەی نهێنی" : "نیشاندانی وشەی نهێنی"}
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" aria-hidden="true" /> : <Eye className="w-4 h-4" aria-hidden="true" />}
-                  </button>
-                </div>
-              </div>
 
-              {/* Login Button */}
-              <button
-                type="submit"
-                disabled={isAnyLoading}
-                className="w-full min-h-[48px] py-3.5 px-4 bg-indigo-600 hover:bg-indigo-500 active:scale-97 text-white font-bold text-sm rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed mt-2 focus-visible:ring-3 focus-visible:ring-indigo-400 touch-manipulation"
-              >
-                {loading ? (
+                {/* Login Button */}
+                <button
+                  type="submit"
+                  disabled={isAnyLoading}
+                  className="w-full min-h-[48px] py-3.5 px-4 bg-indigo-600 hover:bg-indigo-500 active:scale-97 text-white font-bold text-sm rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed mt-2 focus-visible:ring-3 focus-visible:ring-indigo-400 touch-manipulation"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                      <span>چاوەڕێبکە...</span>
+                    </>
+                  ) : (
+                    <span>چوونەژوورەوە</span>
+                  )}
+                </button>
+              </form>
+            )}
+
+            {authMethod === 'phone' && (
+              <div className="space-y-4">
+                {!otpSent ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-                    <span>چاوەڕێبکە...</span>
+                    {/* Phone number input */}
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                        ژمارەی مۆبایل
+                      </label>
+                      <div className="relative">
+                        <Phone size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="tel"
+                          inputMode="numeric"
+                          dir="ltr"
+                          placeholder="07XXXXXXXXX"
+                          value={phone}
+                          onChange={e => setPhone(e.target.value)}
+                          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 pr-10 text-left text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                        />
+                      </div>
+                      <p className="text-xs text-slate-500 mt-1">
+                        نموونە: 07501234567 یان +9647501234567
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleSendOtp}
+                      disabled={!isPhoneValid || phoneLoading}
+                      className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
+                    >
+                      {phoneLoading
+                        ? <><Loader2 size={16} className="animate-spin" /> ناردنی کۆد...</>
+                        : 'ناردنی کۆدی دڵنیایی'}
+                    </button>
                   </>
                 ) : (
-                  <span>چوونەژوورەوە</span>
+                  <>
+                    {/* OTP input */}
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                        کۆدی دڵنیایی
+                      </label>
+                      <p className="text-xs text-emerald-400 mb-2">
+                        ✓ کۆدەکە نێردرا بۆ {phone}
+                      </p>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        dir="ltr"
+                        maxLength={6}
+                        placeholder="------"
+                        value={otp}
+                        onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-center text-white text-2xl font-mono tracking-[0.5em] placeholder-slate-700 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleVerifyOtp}
+                      disabled={otp.length < 6 || phoneLoading}
+                      className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
+                    >
+                      {phoneLoading
+                        ? <><Loader2 size={16} className="animate-spin" /> تاقیکردنەوە...</>
+                        : 'دڵنیاکردنەوە و چوونەژوورەوە'}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => { setOtpSent(false); setOtp(''); }}
+                      disabled={resendCooldown > 0}
+                      className="w-full text-sm text-slate-400 hover:text-white transition-colors disabled:opacity-50"
+                    >
+                      {resendCooldown > 0
+                        ? `دووبارە نێردن: ${resendCooldown} چرکە`
+                        : 'ژمارەکە گۆڕ یان دووبارە بنێرە'}
+                    </button>
+                  </>
                 )}
-              </button>
-            </form>
+              </div>
+            )}
 
             {/* Divider */}
             <div className="relative flex items-center justify-center py-2" aria-hidden="true">

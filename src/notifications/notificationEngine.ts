@@ -105,6 +105,52 @@ export class NotificationEngine {
     } catch {
       // SyncQueue integration safe
     }
+
+    // Schedule trial reminders
+    this.scheduleTrialReminders(userId).catch(() => {});
+  }
+
+  /**
+   * Schedule trial expiry reminders.
+   * Called from initialize() after userId is set.
+   */
+  private async scheduleTrialReminders(userId: string): Promise<void> {
+    const { getTrialInfo } = await import('../auth/trialService.ts');
+    const { getFirebaseAuth } = await import('../services/firebase.ts');
+
+    const auth = getFirebaseAuth();
+    const email = auth?.currentUser?.email || undefined;
+    const trial = await getTrialInfo(userId, email);
+
+    if (trial.status !== 'trial_active') return;
+
+    // Show "1 day remaining" reminder
+    if (trial.daysRemaining === 1 && trial.hoursRemaining > 0) {
+      await this.addNotification(userId, {
+        type: 'study_reminder',
+        title: '⏰ ئەمڕۆ کۆتا ڕۆژی تاقیکردنەوەیە!',
+        message: `کاتی تاقیکردنەوەی خۆڕایت ئەمڕۆ کۆتادەبێت. `
+          + `${trial.hoursRemaining} کاتژمێرت ماوە. ئەمڕۆ بەردەوام بیخوێنە!`,
+        icon: '⏰',
+        actionUrl: '/home',
+        actionLabel: 'بەردەوام بە',
+        force: true,
+      });
+    }
+
+    // Show "last 2 hours" reminder
+    if (trial.daysRemaining === 0 && trial.hoursRemaining <= 2 && trial.hoursRemaining > 0) {
+      await this.addNotification(userId, {
+        type: 'study_reminder',
+        title: '🔔 کەمتر لە ٢ کاتژمێر ماوە!',
+        message: 'کاتی تاقیکردنەوەت نزیکی کۆتاییە. '
+          + 'دوای ئەوە ژمارەی پرسیارەکانت سنووردار دەبێت.',
+        icon: '🔔',
+        actionUrl: '/subscription',
+        actionLabel: 'بەشداربوون',
+        force: true,
+      });
+    }
   }
 
   /**
