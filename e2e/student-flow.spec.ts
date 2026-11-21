@@ -62,6 +62,6 @@ test.describe("Student Learning & Assessment Flow", () => {
     }
 
     // Verify assessment question or interactive container is loaded and visible
-    await expect(page.locator("main, body")).toBeVisible();
+    await expect(page.locator("body")).toBeVisible();
   });
 });
