@@ -7,6 +7,7 @@ import React, { lazy, ComponentType } from "react";
  * Prevents "Failed to fetch dynamically imported module" errors when users
  * navigate routes after a new version of ZANA has been deployed.
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function lazyWithRetry<T extends ComponentType<any>>(
   factory: () => Promise<{ default: T }>
 ): React.LazyExoticComponent<T> {

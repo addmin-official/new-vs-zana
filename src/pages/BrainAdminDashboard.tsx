@@ -28,16 +28,6 @@ export interface BrainAdminDashboardProps {
   onNavigateToParent?: () => void;
 }
 
-interface StrugglingConcept {
-  conceptId: string;
-  titleKu: string;
-  subject: string;
-  subjectKu: string;
-  grade: string;
-  avgMastery: number;
-  strugglingStudentsCount: number;
-}
-
 export function BrainAdminDashboard({
   onBackToApp,
   onNavigateToTeacher: _onNavigateToTeacher,

@@ -11,8 +11,10 @@ export function TrialBanner() {
   useEffect(() => {
     const uid = user?.id || (user as unknown as { uid?: string })?.uid
     if (!uid) return
-    getTrialInfo(uid, user?.email || undefined).then(setTrial)
-  }, [user?.id, user?.email])
+    void getTrialInfo(uid, user?.email || undefined)
+      .then(setTrial)
+      .catch(() => {})
+  }, [user])
 
   if (!trial || dismissed) return null
   if (trial.status === 'admin' || trial.status === 'subscribed') return null

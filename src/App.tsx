@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { AppShell } from "./components/AppShell.tsx";
 import { LoadingScreen } from "./screens/LoadingScreen.tsx";
@@ -18,7 +18,6 @@ import {
   saveSessionPosition,
   getSessionRecovery,
   triggerSessionRecoveryNotification,
-  SessionRecoveryData,
 } from "./auth/sessionRecovery.ts";
 import { checkUserExists } from "./auth/userProfileService.ts";
 import { FeatureFlagProvider } from "./features/flags/index.ts";

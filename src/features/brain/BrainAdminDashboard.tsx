@@ -266,6 +266,7 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
 
    return () => clearInterval(pollTimer);
   }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
  }, [activeSubTab]);
 
  // Auto-refresh observability snapshot periodically

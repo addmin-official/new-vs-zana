@@ -3,7 +3,6 @@ import {
   Send,
   BookOpen,
   Sparkles,
-  Layers,
   ChevronDown,
   Camera,
   HelpCircle,
@@ -176,7 +175,7 @@ export interface ChatProps {
 }
 
 export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatProps = {}) {
-  const { t, formatNumber: _formatNumber } = useTranslation();
+  const { t: _t, formatNumber: _formatNumber } = useTranslation();
   const chapters = useAppStore((state) => state.chapters);
   const activeChapterId = useAppStore((state) => state.activeChapter);
   const setActiveChapter = useAppStore((state) => state.setActiveChapter);
