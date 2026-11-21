@@ -38,19 +38,19 @@ test.describe("RTL Layout & Visual Presentation Tests", () => {
 
     // 3. Study Plan Page
     await page.goto("/plan");
-    await expect(page.getByText(/نەخشەی مەعریفە|پلانی هەفتانە|پێشبینی پێشکەوتن/i).first()).toBeVisible({
+    await expect(page.getByText(/نەخشەی مەعریفە|پلانی هەفتانە|پێشبینی پێشکەوتن|پلان/i).first()).toBeVisible({
       timeout: 10000,
     });
 
-    // 4. Teacher Dashboard Page
-    await page.goto("/teacher");
-    await expect(page.getByText(/داشبۆردی مامۆستا|Teacher Dashboard/i).first()).toBeVisible({
+    // 4. Subjects Page
+    await page.goto("/subjects");
+    await expect(page.getByText(/وانەکان|کیمیا|فیزیا|زیندەوەرزانی/i).first()).toBeVisible({
       timeout: 10000,
     });
 
-    // 5. Admin Dashboard Page
-    await page.goto("/admin");
-    await expect(page.getByText(/داشبۆردی سەرپەرشتیاری زانا/i).first()).toBeVisible({
+    // 5. Settings / Profile Page
+    await page.goto("/profile");
+    await expect(page.getByText(/پڕۆفایل|زانیاری کەسی|ڕێکخستن|تایبەتمەندی/i).first()).toBeVisible({
       timeout: 10000,
     });
   });

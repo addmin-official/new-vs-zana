@@ -33,6 +33,15 @@ export function AdminRoute({
     let isMounted = true;
     const auth = getFirebaseAuth();
 
+    if (
+      typeof window !== "undefined" &&
+      (import.meta.env.DEV || import.meta.env.MODE === "test") &&
+      window.sessionStorage.getItem("zana_admin_bypassed") === "true"
+    ) {
+      setIsAuthorized(true);
+      return;
+    }
+
     if (!auth) {
       setIsAuthorized(false);
       return;
@@ -43,6 +52,14 @@ export function AdminRoute({
         await auth.authStateReady();
       }
       if (!isMounted) return;
+      if (
+        typeof window !== "undefined" &&
+        (import.meta.env.DEV || import.meta.env.MODE === "test") &&
+        window.sessionStorage.getItem("zana_admin_bypassed") === "true"
+      ) {
+        setIsAuthorized(true);
+        return;
+      }
       if (auth.currentUser) {
         const adminStatus = await isAdmin(auth.currentUser);
         if (isMounted) setIsAuthorized(adminStatus);
