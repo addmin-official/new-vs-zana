@@ -31,20 +31,21 @@ describe("Simplified Student UX & Navigation Architecture", () => {
   });
 
   describe("Bottom Navigation (Mobile-first)", () => {
-    it("contains EXACTLY 4 navigation items", () => {
-      expect(BOTTOM_NAV_ITEMS.length).toBe(4);
+    it("contains EXACTLY 5 navigation items", () => {
+      expect(BOTTOM_NAV_ITEMS.length).toBe(5);
       const keys = BOTTOM_NAV_ITEMS.map((item) => item.key);
-      expect(keys).toEqual(["home", "chat", "subjects", "profile"]);
+      expect(keys).toEqual(["home", "chat", "pedagogy", "subjects", "profile"]);
     });
 
-    it("renders all 4 items with Kurdish labels", () => {
+    it("renders all items with Kurdish labels", () => {
       const onNavigate = vi.fn();
       render(<BottomNav activeTab="home" onNavigate={onNavigate} />);
 
       expect(screen.getByText("ماڵەوە")).toBeDefined();
       expect(screen.getByText("زانا")).toBeDefined();
-      expect(screen.getByText("بابەت")).toBeDefined();
-      expect(screen.getByText("من")).toBeDefined();
+      expect(screen.getByText("پێداگۆجی")).toBeDefined();
+      expect(screen.getByText("بابەتەکان")).toBeDefined();
+      expect(screen.getByText("پرۆفایل")).toBeDefined();
     });
 
     it("triggers onNavigate when a tab button is clicked", () => {
@@ -65,10 +66,22 @@ describe("Simplified Student UX & Navigation Architecture", () => {
   });
 
   describe("Desktop Sidebar & Role Filtering", () => {
-    it("contains exactly 6 simplified student destinations", () => {
-      expect(STUDENT_NAV_ITEMS.length).toBe(6);
+    it("contains student navigation destinations", () => {
+      expect(STUDENT_NAV_ITEMS.length).toBe(11);
       const keys = STUDENT_NAV_ITEMS.map((item) => item.key);
-      expect(keys).toEqual(["home", "chat", "subjects", "labs", "plan", "profile"]);
+      expect(keys).toEqual([
+        "home",
+        "chat",
+        "subjects",
+        "pedagogy",
+        "practice",
+        "labs",
+        "assessment",
+        "plan",
+        "rooms",
+        "report",
+        "profile",
+      ]);
     });
 
     it("toggles collapse state from 240px to 72px icon-only mode", () => {

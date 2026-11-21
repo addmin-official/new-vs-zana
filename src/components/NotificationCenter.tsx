@@ -79,7 +79,10 @@ export function NotificationCenter({
   className = "",
 }: NotificationCenterProps) {
   const storeUser = useAppStore((state) => state.user);
-  const authUser = typeof window !== "undefined" ? getFirebaseAuth()?.currentUser : null;
+  const authUser =
+    typeof window !== "undefined" && typeof getFirebaseAuth === "function"
+      ? getFirebaseAuth()?.currentUser
+      : null;
   const activeUserId =
     propUserId ||
     authUser?.uid ||

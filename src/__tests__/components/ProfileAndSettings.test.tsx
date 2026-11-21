@@ -2,7 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { ProfileAndSettings } from "../../pages/ProfileAndSettings.tsx";
+import { ThemeProvider } from "../../context/ThemeContext.tsx";
 import { useAppStore } from "../../store/appStore.ts";
+
+const renderWithTheme = (ui: React.ReactElement) => render(<ThemeProvider>{ui}</ThemeProvider>);
 
 vi.mock("../../services/firebase.ts", () => ({
   getFirestoreDb: vi.fn(() => ({})),
@@ -52,63 +55,67 @@ describe("ProfileAndSettings - Data Usage & Privacy Section", () => {
     });
   });
 
-  it("renders tab navigation with 'داتا و تایبەتمەندی' (Data Usage & Privacy)", () => {
-    render(<ProfileAndSettings />);
-    const privacyTab = screen.getByRole("button", { name: "داتا و تایبەتمەندی" });
+  it("renders tab navigation with 'تایبەتمەندی' (Data Usage & Privacy)", () => {
+    renderWithTheme(<ProfileAndSettings />);
+    const privacyTab = screen.getByRole("button", { name: "تایبەتمەندی" });
     expect(privacyTab).toBeDefined();
   });
 
-  it("switches to Data Usage & Privacy tab and displays cache & personalization controls", async () => {
-    render(<ProfileAndSettings />);
-    const privacyTab = screen.getByRole("button", { name: "داتا و تایبەتمەندی" });
+  it("switches to Data Usage & Privacy tab and displays cache & privacy controls", async () => {
+    renderWithTheme(<ProfileAndSettings />);
+    const privacyTab = screen.getByRole("button", { name: "تایبەتمەندی" });
     fireEvent.click(privacyTab);
 
     // Verify main section header
     expect(screen.getByText(/بەکارهێنانی داتا و تایبەتمەندی \(Data Usage & Privacy\)/i)).toBeDefined();
 
-    // Verify Local Cache card
-    expect(screen.getByText(/کۆگای ناوخۆیی و کاشی ئامێرەکە \(Local Cache Storage\)/i)).toBeDefined();
-    expect(screen.getByText(/سڕینەوەی کاشی ناوخۆیی \(Clear Cache\)/i)).toBeDefined();
+    // Verify Summary Strip
+    expect(screen.getByText("کۆی تۆمارەکان")).toBeDefined();
+    expect(screen.getByText("قەبارەی ناوخۆیی")).toBeDefined();
+    expect(screen.getByText("کاشی کاتی")).toBeDefined();
 
-    // Verify Personalization card
-    expect(screen.getByText(/بەڕێوەبردنی داتای کەسیاندن و شێوازی فێربوون \(Personalization Data\)/i)).toBeDefined();
-    expect(screen.getByText(/شێوازی سوقراتی/i)).toBeDefined();
-    expect(screen.getByText(/ڕوونکردنەوەی تەواو/i)).toBeDefined();
-    expect(screen.getByText(/پاشەکەوتکردنی ڕێکخستنی کەسیاندن/i)).toBeDefined();
+    // Verify action buttons
+    expect(screen.getByText(/پاککردنەوەی کاش \(Clear Cache\)/i)).toBeDefined();
+    expect(screen.getByText(/هەناردنی داتاکانم \(Export My Data\)/i)).toBeDefined();
 
-    // Verify Export Data card
-    expect(screen.getByText(/داگرتنی کۆپییەک لە داتاکانم \(Export Learning Data\)/i)).toBeDefined();
+    // Verify Sharing preferences
+    expect(screen.getByText(/تایبەتمەندی و بەشکردنی زانیاری/i)).toBeDefined();
+    expect(screen.getByText(/ڕێگەپێدان بە مامۆستا بۆ بینینی نمرە و هەڵسەنگاندنەکان/i)).toBeDefined();
+    expect(screen.getByText(/ڕێگەپێدان بە باوان بۆ داگرتنی ڕاپۆرتی مانگانە/i)).toBeDefined();
   });
 
-  it("opens clear cache modal when clicking clear cache button", async () => {
-    render(<ProfileAndSettings />);
-    const privacyTab = screen.getByRole("button", { name: "داتا و تایبەتمەندی" });
+  it("shows confirmation and handles clear cache action", async () => {
+    renderWithTheme(<ProfileAndSettings />);
+    const privacyTab = screen.getByRole("button", { name: "تایبەتمەندی" });
     fireEvent.click(privacyTab);
 
-    const clearCacheBtn = screen.getByText(/سڕینەوەی کاشی ناوخۆیی \(Clear Cache\)/i);
+    const clearCacheBtn = screen.getByText(/پاککردنەوەی کاش \(Clear Cache\)/i);
     fireEvent.click(clearCacheBtn);
 
-    // Modal title appears
-    expect(screen.getByText(/سڕینەوەی کاشی ناوخۆیی \(Clear Cache\) 🧹/i)).toBeDefined();
-    expect(screen.getByText(/بەڵێ، کاش بسڕەوە/i)).toBeDefined();
+    // Confirmation message and action appears
+    expect(screen.getByText(/پاککردنەوەی کاش تەنها داتا کاتییەکان و کاشی وێبگەڕ دەسڕێتەوە/i)).toBeDefined();
+    const confirmBtn = screen.getByText(/بەڵێ، کاش پاکبکەرەوە/i);
+    expect(confirmBtn).toBeDefined();
+
+    fireEvent.click(confirmBtn);
+    await waitFor(() => {
+      expect(screen.getByText(/کاشی ناوخۆیی/i)).toBeDefined();
+    });
   });
 
-  it("allows selecting different tutor pedagogy styles and saves personalization", async () => {
-    render(<ProfileAndSettings />);
-    const privacyTab = screen.getByRole("button", { name: "داتا و تایبەتمەندی" });
+  it("allows toggling teacher and parent data sharing permissions", async () => {
+    renderWithTheme(<ProfileAndSettings />);
+    const privacyTab = screen.getByRole("button", { name: "تایبەتمەندی" });
     fireEvent.click(privacyTab);
 
-    // Click Comprehensive style
-    const comprehensiveBtn = screen.getByText(/ڕوونکردنەوەی تەواو/i);
-    fireEvent.click(comprehensiveBtn);
+    const teacherToggle = screen.getByLabelText(/ڕێگەپێدان بە مامۆستا بۆ بینینی نمرە و هەڵسەنگاندنەکان/i) as HTMLInputElement;
+    expect(teacherToggle.checked).toBe(true);
+    fireEvent.click(teacherToggle);
+    expect(teacherToggle.checked).toBe(false);
 
-    // Save personalization
-    const saveBtn = screen.getByText(/پاشەکەوتکردنی ڕێکخستنی کەسیاندن/i);
-    fireEvent.click(saveBtn);
-
-    // Verify toast appears
-    await waitFor(() => {
-      expect(screen.getByText(/ڕێکخستنەکانی کەسیاندن بە سەرکەوتوویی پاشەکەوت کران/i)).toBeDefined();
-    });
+    const parentToggle = screen.getByLabelText(/ڕێگەپێدان بە باوان بۆ داگرتنی ڕاپۆرتی مانگانە/i) as HTMLInputElement;
+    expect(parentToggle.checked).toBe(true);
+    fireEvent.click(parentToggle);
+    expect(parentToggle.checked).toBe(false);
   });
 });

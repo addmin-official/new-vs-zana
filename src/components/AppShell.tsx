@@ -48,7 +48,9 @@ export function AppShell({
 
   const effectiveUserId =
     propUserId ||
-    (typeof window !== "undefined" ? getFirebaseAuth()?.currentUser?.uid : null) ||
+    (typeof window !== "undefined" && typeof getFirebaseAuth === "function"
+      ? getFirebaseAuth()?.currentUser?.uid
+      : null) ||
     user?.id ||
     "default-guest";
 

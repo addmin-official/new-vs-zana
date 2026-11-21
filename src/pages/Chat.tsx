@@ -273,10 +273,14 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
   const scrollToBottom = useCallback((smooth = true) => {
     if (!chatScrollContainerRef.current) return;
     const container = chatScrollContainerRef.current;
-    container.scrollTo({
-      top: container.scrollHeight,
-      behavior: smooth ? "smooth" : "auto",
-    });
+    if (typeof container.scrollTo === "function") {
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: smooth ? "smooth" : "auto",
+      });
+    } else {
+      container.scrollTop = container.scrollHeight;
+    }
   }, []);
 
   // ─── Socratic Mode State ──────────────────────────────────────────────────

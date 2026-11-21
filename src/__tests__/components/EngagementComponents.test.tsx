@@ -10,6 +10,7 @@ import { notificationEngine } from "../../notifications/notificationEngine.ts";
 vi.mock("../../services/firebase.ts", () => ({
   getFirestoreDb: vi.fn(() => null),
   getFirebaseApp: vi.fn(() => null),
+  getFirebaseAuth: vi.fn(() => null),
 }));
 
 describe("ZANA Engagement UI Components", () => {
