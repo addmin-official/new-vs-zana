@@ -700,8 +700,12 @@ export default function App() {
         return (
           <AdaptiveAssessment
             onFinish={handleFinishAssessment}
-            onNavigateToPractice={() => setActiveTab("practice")}
+            onNavigateToPractice={(_topic) => setActiveTab("practice")}
             onNavigateToSubjects={() => setActiveTab("subjects")}
+            onNavigateToChat={(subject, _topic) => {
+              if (subject) handleSelectSubject(subject as SubjectKey);
+              setActiveTab("chat");
+            }}
           />
         );
       case "plan":

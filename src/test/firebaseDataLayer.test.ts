@@ -36,6 +36,8 @@ test("Firestore Architecture - 1. Document & Subcollection Paths Match Optimized
   );
   assert.strictEqual(FirestorePaths.assessments(), "assessments");
   assert.strictEqual(FirestorePaths.assessment(assessmentId), "assessments/asm_555");
+  assert.strictEqual(FirestorePaths.notifications(userId), "users/user_abc_123/notifications");
+  assert.strictEqual(FirestorePaths.notification(userId, "notif_1"), "users/user_abc_123/notifications/notif_1");
 });
 
 test("Firestore Architecture - 2. Security Rules Contract Validation", () => {
@@ -46,6 +48,9 @@ test("Firestore Architecture - 2. Security Rules Contract Validation", () => {
   assert.ok(rules.includes("match /users/{userId}"), "Must contain users/{userId} match");
   assert.ok(rules.includes("match /mastery/{subjectId}"), "Must contain mastery/{subjectId} subcollection match");
   assert.ok(rules.includes("match /sessions/{sessionId}"), "Must contain sessions/{sessionId} subcollection match");
+  assert.ok(rules.includes("match /notifications/{notificationId}"), "Must contain notifications/{notificationId} subcollection match");
+  assert.ok(rules.includes("match /{path=**}/mastery/{subjectId}"), "Must contain mastery collectionGroup query match");
+  assert.ok(rules.includes("match /{path=**}/sessions/{sessionId}"), "Must contain sessions collectionGroup query match");
   assert.ok(rules.includes("match /curriculum/{grade}/{subject}/{document=**}"), "Must contain curriculum match");
   assert.ok(rules.includes("match /system/{document=**}"), "Must contain system match");
   assert.ok(rules.includes("match /featureFlags/{flagId}"), "Must contain featureFlags match");

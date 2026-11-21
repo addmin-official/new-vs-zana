@@ -67,6 +67,8 @@ export const FirestorePaths = {
     `curriculum/${grade}/${subject}/concepts/${conceptId}`,
   assessments: () => "assessments",
   assessment: (assessmentId: string) => `assessments/${assessmentId}`,
+  notifications: (userId: string) => `users/${userId}/notifications`,
+  notification: (userId: string, notificationId: string) => `users/${userId}/notifications/${notificationId}`,
 };
 
 export function getUserDocRef(db: Firestore, userId: string): DocumentReference<UserDocument> {

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Flame,
   CheckCircle2,
@@ -25,6 +25,10 @@ import { getSessionRecovery, getSubjectKurdishName } from "../auth/sessionRecove
 import { getSubjectCustomIcon } from "../components/SubjectCard.tsx";
 import { formatNumber } from "../i18n/i18n.ts";
 import type { PedagogyPillarTab } from "../screens/PedagogicalHubScreen.tsx";
+import { useStudentMastery } from "../hooks/useStudentMastery.ts";
+import { NextBestActionEngine } from "../planning/engine/NextBestActionEngine.ts";
+import type { NextBestAction } from "../planning/domain/LearningPlanTypes.ts";
+import { DifficultyLevel } from "../learning/domain/MasteryTypes.ts";
 
 export interface HomeProps {
   profile?: StudentProfile;
@@ -86,37 +90,89 @@ export function Home({
     sessionRecovery?.lastConcept || "ترش و تفتەکان و پێوەری pH";
   const lastSubjectTitle = getSubjectKurdishName(activeSubjectKey);
 
-  // Today's 3 tasks state
-  const [tasks, setTasks] = useState<TodayTask[]>([
-    {
-      id: "t1",
-      subjectKey: "chemistry",
-      subjectName: "کیمیا",
-      conceptName: "پێوەری pH و ترشێتی گیراوەکان",
-      estimatedMinutes: 15,
-      completed: true,
-    },
-    {
-      id: "t2",
-      subjectKey: "physics",
-      subjectName: "فیزیا",
-      conceptName: "یاسای دووەمی نیوتن و هێز",
-      estimatedMinutes: 20,
-      completed: true,
-    },
-    {
-      id: "t3",
-      subjectKey: "math",
-      subjectName: "بیرکاری",
-      conceptName: "شیکارکردنی سیستەمی هاوکێشەی هێڵی",
-      estimatedMinutes: 20,
-      completed: false,
-    },
-  ]);
+  // Real student mastery from server / Firestore
+  const { data: masteryData } = useStudentMastery(user.id, activeSubjectKey);
+  const currentMasteryPercentage =
+    masteryData?.overallScore !== undefined
+      ? Math.round(masteryData.overallScore * 100)
+      : 0;
+
+  // Real Next Best Action calculation
+  const [nba, setNba] = useState<NextBestAction | null>(null);
+
+  useEffect(() => {
+    const rawConcepts = masteryData?.concepts || {};
+    const conceptMasteries: Record<string, {
+      conceptId: string;
+      masteryScore: number;
+      status: "NOT_STARTED" | "INTRODUCED" | "DEVELOPING" | "PROFICIENT" | "MASTERED" | "NEEDS_REVIEW";
+      consecutiveCorrect: number;
+      totalAttempts: number;
+      lastAttemptedAt: string | null;
+      history: { isCorrect: boolean; timestamp: string; responseTimeMs: number; difficulty: DifficultyLevel }[];
+    }> = {};
+
+    for (const [id, m] of Object.entries(rawConcepts)) {
+      conceptMasteries[id] = {
+        conceptId: m.conceptId,
+        masteryScore: m.masteryScore,
+        status: m.status as never,
+        consecutiveCorrect: m.consecutiveCorrect,
+        totalAttempts: m.totalAttempts,
+        lastAttemptedAt: m.lastAttemptedAt,
+        history: [],
+      };
+    }
+
+    const engine = new NextBestActionEngine();
+    const action = engine.determineNextBestAction({
+      studentMasteryProfile: {
+        studentId: user.id || "guest",
+        overallMasteryScore: masteryData?.overallScore ?? 0,
+        conceptMasteries: conceptMasteries as never,
+        activeMisconceptions: [],
+        recentRecommendedActions: [],
+        streak: {
+          currentStreak: streak,
+          longestStreak: streak,
+          lastCompletedDate: null,
+          streakHistory: [],
+          totalTasksCompleted: 0,
+        },
+        unlockedAchievements: [],
+      },
+    });
+    setNba(action);
+  }, [user.id, masteryData, streak]);
+
+  // Real Today tasks state (derived from real mastery or honest empty state)
+  const [tasks, setTasks] = useState<TodayTask[]>([]);
+
+  useEffect(() => {
+    if (masteryData?.concepts && Object.keys(masteryData.concepts).length > 0) {
+      const realTasks: TodayTask[] = Object.values(masteryData.concepts)
+        .slice(0, 3)
+        .map((c, i) => {
+          const topicClean = c.conceptId.replace(/^[a-z0-9]+_/, "").replace(/_/g, " ");
+          return {
+            id: `task_${c.conceptId}_${i}`,
+            subjectKey: activeSubjectKey as SubjectKey,
+            subjectName: lastSubjectTitle,
+            conceptName: topicClean || lastConceptName,
+            estimatedMinutes: 15,
+            completed: c.status === "PROFICIENT" || c.status === "MASTERED",
+          };
+        });
+      setTasks(realTasks);
+    } else {
+      setTasks([]);
+    }
+  }, [masteryData, activeSubjectKey, lastSubjectTitle, lastConceptName]);
 
   const completedTasksCount = tasks.filter((t) => t.completed).length;
   const totalTasksCount = tasks.length;
-  const goalPercentage = Math.round((completedTasksCount / totalTasksCount) * 100);
+  const goalPercentage =
+    totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 0;
 
   const toggleTask = (taskId: string) => {
     setTasks((prev) =>
@@ -124,24 +180,46 @@ export function Home({
     );
   };
 
-  // Available subjects for quick access
-  const quickSubjects: { key: SubjectKey; title: string; mastery: number }[] = [
-    { key: "chemistry", title: "کیمیا", mastery: 78 },
-    { key: "physics", title: "فیزیا", mastery: 64 },
-    { key: "math", title: "بیرکاری", mastery: 82 },
-    { key: "biology", title: "زیندەزانی", mastery: 55 },
-    { key: "english", title: "ئینگلیزی", mastery: 90 },
-    { key: "kurdish", title: "کوردی", mastery: 88 },
-    { key: "arabic", title: "عەرەبی", mastery: 70 },
-  ];
+  // Real subject access with actual mastery percentages
+  const quickSubjects: { key: SubjectKey; title: string; mastery: number }[] = useMemo(() => {
+    const base = [
+      { key: "chemistry" as SubjectKey, title: "کیمیا" },
+      { key: "physics" as SubjectKey, title: "فیزیا" },
+      { key: "math" as SubjectKey, title: "بیرکاری" },
+      { key: "biology" as SubjectKey, title: "زیندەزانی" },
+      { key: "english" as SubjectKey, title: "ئینگلیزی" },
+      { key: "kurdish" as SubjectKey, title: "کوردی" },
+      { key: "arabic" as SubjectKey, title: "عەرەبی" },
+    ];
+    return base.map((s) => {
+      let score = 0;
+      if (s.key === activeSubjectKey && masteryData?.overallScore !== undefined) {
+        score = Math.round(masteryData.overallScore * 100);
+      }
+      return { ...s, mastery: score };
+    });
+  }, [activeSubjectKey, masteryData]);
 
-  // Most recent achievement
-  const recentAchievement = {
-    title: "شارەزای پێوەری pH",
-    description: "تەواوکردنی ٥ پرسیاری تاقیکردنەوە بەبێ هەڵە",
-    icon: "🏆",
-    date: "ئەمڕۆ",
-  };
+  // Real recent achievement or honest empty state
+  const recentAchievement = useMemo(() => {
+    if (user.completedLessons && user.completedLessons > 0) {
+      return {
+        title: "وانەبێژی زانا",
+        description: `تەواوکردنی ${user.completedLessons} وانەی فەرمی مەنهەج`,
+        icon: "🎓",
+        date: "ئەم هەفتەیە",
+      };
+    }
+    if (streak >= 3) {
+      return {
+        title: "بەردەوامی لە فێربوون",
+        description: `${streak} ڕۆژ بەردەوامیت لە خوێندن`,
+        icon: "🔥",
+        date: "ئەمڕۆ",
+      };
+    }
+    return null;
+  }, [user.completedLessons, streak]);
 
   return (
     <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-6 select-none" dir="rtl">
@@ -221,6 +299,61 @@ export function Home({
       </header>
 
       {/* ═════════════════════════════════════════════════════════════ */}
+      {/* SECTION 1B — NEXT BEST ACTION (ADAPTIVE ENGINE RECOMMENDATION) */}
+      {/* ═════════════════════════════════════════════════════════════ */}
+      {nba && (
+        <section aria-labelledby="nba-title">
+          <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-indigo-100 dark:border-slate-800 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[11px] font-bold">
+                  هەنگاوی داهاتووی پێشنیارکراو (Next Best Action)
+                </span>
+              </div>
+              <h3 id="nba-title" className="font-sans font-bold text-base text-slate-900 dark:text-white mt-1">
+                {nba.titleKu}
+              </h3>
+              <p className="font-sans text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                {nba.reasonKu}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              {onNavigateToAssessment && nba.actionType === "TAKE_DIAGNOSTIC" && (
+                <button
+                  type="button"
+                  onClick={onNavigateToAssessment}
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer w-full sm:w-auto flex items-center justify-center gap-1.5"
+                >
+                  <Target className="w-3.5 h-3.5" />
+                  <span>تاقیکردنەوە ئەنجام بدە</span>
+                </button>
+              )}
+              {onNavigateToPractice && (nba.actionType === "PRACTICE_EASY" || nba.actionType === "REVIEW_MISCONCEPTION") && (
+                <button
+                  type="button"
+                  onClick={onNavigateToPractice}
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer w-full sm:w-auto flex items-center justify-center gap-1.5"
+                >
+                  <Dumbbell className="w-3.5 h-3.5" />
+                  <span>دەستپێکردنی ڕاهێنان</span>
+                </button>
+              )}
+              {onNavigateToChat && nba.actionType !== "TAKE_DIAGNOSTIC" && (
+                <button
+                  type="button"
+                  onClick={() => onNavigateToChat(activeSubjectKey)}
+                  className="px-5 py-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 font-bold text-xs border border-indigo-200 dark:border-indigo-800 transition-colors cursor-pointer w-full sm:w-auto flex items-center justify-center gap-1.5"
+                >
+                  <Brain className="w-3.5 h-3.5" />
+                  <span>وانە لەگەڵ زانا</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ═════════════════════════════════════════════════════════════ */}
       {/* SECTION 2 — CONTINUE LEARNING (THE ONE PRIMARY ACTION)        */}
       {/* ═════════════════════════════════════════════════════════════ */}
       <section aria-labelledby="continue-learning-title">
@@ -252,19 +385,19 @@ export function Home({
               <div className="space-y-1.5 pt-1">
                 <div className="flex items-center justify-between text-xs text-indigo-200">
                   <span>ئاستی تێگەیشتن لە چەمک</span>
-                  <span className="font-bold font-mono">%{formatNumber(72)}</span>
+                  <span className="font-bold font-mono">%{formatNumber(currentMasteryPercentage)}</span>
                 </div>
                 <div
                   className="w-full h-2.5 bg-white/20 rounded-full overflow-hidden"
                   role="progressbar"
-                  aria-valuenow={72}
+                  aria-valuenow={currentMasteryPercentage}
                   aria-valuemin={0}
                   aria-valuemax={100}
                   aria-label={`ئاستی تێگەیشتن لە ${lastConceptName}`}
                 >
                   <div
                     className="h-full bg-gradient-to-r from-amber-300 to-emerald-400 rounded-full animate-progress-fill"
-                    style={{ width: "72%" }}
+                    style={{ width: `${currentMasteryPercentage}%` }}
                   />
                 </div>
               </div>

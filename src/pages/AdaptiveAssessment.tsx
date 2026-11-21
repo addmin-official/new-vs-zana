@@ -7,10 +7,22 @@ import {
   ArrowRight,
   RotateCcw,
   Lock,
+  Sparkles,
+  BookOpen,
+  Dumbbell,
+  TrendingUp,
+  AlertCircle,
+  Loader2,
 } from "lucide-react";
 import { useSoundEffects } from "../hooks/useSoundEffects.ts";
 import { useAppStore } from "../store/appStore.ts";
 import { normalizeSubjectKey } from "../data/assessments/curriculum-questions.ts";
+import { getClientToken } from "../services/authService.ts";
+import { fetchWithFallback } from "../lib/apiClient.ts";
+import { saveSubjectMastery } from "../firebase/firestore.ts";
+import { NextBestActionEngine } from "../planning/engine/NextBestActionEngine.ts";
+import type { NextBestAction } from "../planning/domain/LearningPlanTypes.ts";
+import { DifficultyLevel } from "../learning/domain/MasteryTypes.ts";
 
 export type QuestionType = "mcq" | "true_false" | "numeric";
 
@@ -1064,14 +1076,16 @@ export const SUBJECT_ASSESSMENT_QUESTIONS: Record<string, AssessmentQuestion[]> 
 
 export interface AdaptiveAssessmentProps {
   onFinish?: () => void;
-  onNavigateToPractice?: () => void;
+  onNavigateToPractice?: (topic?: string) => void;
   onNavigateToSubjects?: () => void;
+  onNavigateToChat?: (subject?: string, topic?: string) => void;
 }
 
 export function AdaptiveAssessment({
   onFinish,
-  onNavigateToPractice: _onNavigateToPractice,
+  onNavigateToPractice,
   onNavigateToSubjects: _onNavigateToSubjects,
+  onNavigateToChat,
 }: AdaptiveAssessmentProps) {
   const { playSuccess } = useSoundEffects();
   const user = useAppStore((state) => state.user);
@@ -1091,6 +1105,18 @@ export function AdaptiveAssessment({
   const [numericAnswers, setNumericAnswers] = useState<Record<number, string>>({});
   const [timeLeft, setTimeLeft] = useState(300); // 5 minutes = 300s
   const [isTimerActive, setIsTimerActive] = useState(false);
+  const [isSyncingResults, setIsSyncingResults] = useState(false);
+  const [calculatedNba, setCalculatedNba] = useState<NextBestAction | null>(null);
+  const [conceptResults, setConceptResults] = useState<
+    Array<{
+      conceptId: string;
+      topic: string;
+      isCorrect: boolean;
+      score: number;
+      status: string;
+      studentResponse: string;
+    }>
+  >([]);
 
   // Reset state if active subject changes
   useEffect(() => {
@@ -1172,12 +1198,168 @@ export function AdaptiveAssessment({
     } else {
       // Complete test
       setIsTimerActive(false);
-      setPhase("results");
       playSuccess();
-      const earnedXp = score * 20;
+
+      // Formulate detailed assessment attempts & concept masteries
+      const calculatedResults: Array<{
+        conceptId: string;
+        topic: string;
+        isCorrect: boolean;
+        score: number;
+        status: string;
+        studentResponse: string;
+      }> = questions.map((q, idx) => {
+        let isCorrect = false;
+        let studentResponse = "";
+        if (q.type === "numeric") {
+          const userNum = parseFloat(numericAnswers[idx] || "");
+          studentResponse = numericAnswers[idx] || "";
+          if (!isNaN(userNum) && q.correctNumeric !== undefined) {
+            const tol = q.tolerance ?? 0.1;
+            isCorrect = Math.abs(userNum - q.correctNumeric) <= tol;
+          }
+        } else {
+          isCorrect = selectedAnswers[idx] === q.correctIndex;
+          studentResponse =
+            selectedAnswers[idx] !== undefined && q.options[selectedAnswers[idx]]
+              ? q.options[selectedAnswers[idx]]
+              : "";
+        }
+        const safeTopic = q.topic.replace(/\s+/g, "_");
+        const conceptId = `${activeSubjKey}_${safeTopic}`;
+        return {
+          conceptId,
+          topic: q.topic,
+          isCorrect,
+          score: isCorrect ? 1 : 0,
+          status: isCorrect ? "PROFICIENT" : "DEVELOPING",
+          studentResponse,
+        };
+      });
+
+      setConceptResults(calculatedResults);
+
+      const finalScore = calculatedResults.filter((r) => r.isCorrect).length;
+      const finalPercentage = Math.round((finalScore / questions.length) * 100);
+      const missed = calculatedResults.filter((r) => !r.isCorrect).map((r) => r.topic);
+
+      const earnedXp = finalScore * 20;
       if (earnedXp > 0) {
         useAppStore.getState().addProgressScore(earnedXp, 1);
       }
+
+      // Compute server-authoritative deterministic Next Best Action
+      const nbaEngine = new NextBestActionEngine();
+      const conceptsRecord: Record<string, {
+        conceptId: string;
+        masteryScore: number;
+        status: "NOT_STARTED" | "INTRODUCED" | "DEVELOPING" | "PROFICIENT" | "MASTERED" | "NEEDS_REVIEW";
+        consecutiveCorrect: number;
+        totalAttempts: number;
+        lastAttemptedAt: string;
+      }> = {};
+
+      calculatedResults.forEach((r) => {
+        conceptsRecord[r.conceptId] = {
+          conceptId: r.conceptId,
+          masteryScore: r.isCorrect ? 0.85 : 0.35,
+          status: r.isCorrect ? "PROFICIENT" : "DEVELOPING",
+          consecutiveCorrect: r.isCorrect ? 1 : 0,
+          totalAttempts: 1,
+          lastAttemptedAt: new Date().toISOString(),
+        };
+      });
+
+      const nba = nbaEngine.determineNextBestAction({
+        studentMasteryProfile: {
+          studentId: user.id || "guest",
+          overallMasteryScore: finalPercentage / 100,
+          conceptMasteries: conceptsRecord as never,
+          activeMisconceptions: missed.map((topic, i) => ({
+            conceptId: `${activeSubjKey}_${topic.replace(/\s+/g, "_")}`,
+            misconceptionId: `misc_${activeSubjKey}_${i}`,
+            nameKu: topic,
+            count: 1,
+            status: "SUSPECTED" as never,
+            confidence: "medium" as never,
+            evidenceAttempts: [],
+            firstDetectedAt: new Date().toISOString(),
+            lastDetectedAt: new Date().toISOString(),
+            resolvedAt: null,
+            interventionKu: `پێویستت بە ڕاهێنانی زیاتر هەیە لەسەر چەمکی "${topic}".`,
+          })),
+          recentRecommendedActions: [],
+          streak: {
+            currentStreak: 1,
+            longestStreak: 1,
+            lastCompletedDate: null,
+            streakHistory: [],
+            totalTasksCompleted: 1,
+          },
+          unlockedAchievements: [],
+        },
+        recentAssessmentResult: {
+          attemptId: "att_" + Date.now(),
+          assessmentId: "asm_" + activeSubjKey,
+          studentId: user.id || "guest",
+          scoreBreakdown: {
+            totalScore: finalScore,
+            maxScore: questions.length,
+            percentage: finalPercentage,
+            passed: finalPercentage >= 50,
+            byDifficulty: {} as never,
+            byConcept: {} as never,
+            byQuestionType: {} as never,
+          },
+          strengthsKu: calculatedResults.filter((r) => r.isCorrect).map((r) => r.topic),
+          weaknessesKu: missed,
+          masteryChanges: [],
+          misconceptionsDetected: [],
+          nextRecommendedActionKu:
+            missed.length > 0 ? `پێداچوونەوە بە ${missed[0]}` : "پێشکەوتن بۆ چەمکی داهاتوو",
+          recommendations: [],
+          interpretationConfidence: "high",
+        },
+      });
+
+      setCalculatedNba(nba);
+      setPhase("results");
+
+      // Asynchronous background attempt recording & mastery sync
+      setIsSyncingResults(true);
+      void (async () => {
+        try {
+          const token = await getClientToken().catch(() => null);
+          if (token) {
+            for (const res of calculatedResults) {
+              await fetchWithFallback("/api/learning/attempts", {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  conceptId: res.conceptId,
+                  isCorrect: res.isCorrect,
+                  responseTimeMs: 5000,
+                  difficulty: DifficultyLevel.STANDARD,
+                  questionText: questions.find((q) => q.topic === res.topic)?.question || "",
+                  studentResponse: res.studentResponse,
+                }),
+              }).catch(() => null);
+            }
+          }
+          if (user.id && user.id !== "default-guest") {
+            await saveSubjectMastery(user.id, activeSubjKey, {
+              overallScore: finalPercentage / 100,
+              concepts: conceptsRecord as never,
+              lastUpdated: new Date().toISOString(),
+            }).catch(() => null);
+          }
+        } finally {
+          setIsSyncingResults(false);
+        }
+      })();
     }
   };
 
@@ -1453,6 +1635,14 @@ export function AdaptiveAssessment({
             </p>
           </div>
 
+          {/* Sync Status Badge */}
+          {isSyncingResults && (
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 text-[11px] font-sans text-indigo-700 dark:text-indigo-300 mx-auto">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <span>هاوکاتکردنی شارەزایی و تێگەیشتن لەگەڵ بنکەدراوەی فەرمی...</span>
+            </div>
+          )}
+
           {/* Metric Badges */}
           <div className="grid grid-cols-2 gap-4 max-w-sm mx-auto">
             <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 text-center">
@@ -1464,18 +1654,103 @@ export function AdaptiveAssessment({
             </div>
 
             <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 text-center">
-              <span className="text-xs text-slate-500 dark:text-slate-400 font-sans block">ئاستی دەستنیشانکراو</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-sans block">ئاستی شارەزایی</span>
               <span className="font-sans font-black text-lg text-emerald-700 dark:text-emerald-400 mt-1 block">
-                {percentage >= 80 ? "پێشکەوتوو و باڵا" : percentage >= 50 ? "مامناوەند" : "سەرەتایی"}
+                {percentage >= 80 ? "شارەزا (Mastered)" : percentage >= 50 ? "مامناوەند (Developing)" : "سەرەتایی (Introduced)"}
               </span>
               <span className="text-[10px] text-slate-400 block mt-0.5">بەپێی مەنهەجی {activeSubjectMeta.label}</span>
             </div>
           </div>
 
+          {/* Concept-by-Concept Mastery Diagnostics */}
+          {conceptResults.length > 0 && (
+            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 text-right space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-900 dark:text-white font-sans flex items-center gap-1.5">
+                  <TrendingUp className="w-4 h-4 text-indigo-600" />
+                  شیکاری چەمکە تاقیکراوەکان:
+                </span>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                  {conceptResults.filter((c) => c.isCorrect).length} لە {conceptResults.length} پەسەندکراو
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {conceptResults.map((c, i) => (
+                  <div
+                    key={i}
+                    className={`flex items-center justify-between p-2.5 rounded-xl border text-xs font-sans ${
+                      c.isCorrect
+                        ? "bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60 text-emerald-900 dark:text-emerald-200"
+                        : "bg-amber-50/70 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200"
+                    }`}
+                  >
+                    <span className="font-medium truncate max-w-[180px]">{c.topic}</span>
+                    <span
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                        c.isCorrect
+                          ? "bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300"
+                          : "bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300"
+                      }`}
+                    >
+                      {c.isCorrect ? "شارەزا ✓" : "پێداچوونەوە !"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Next Best Action Card (Server-Authoritative Learning Engine) */}
+          {calculatedNba && (
+            <div className="p-5 rounded-2xl bg-gradient-to-br from-indigo-50/90 via-purple-50/50 to-white dark:from-indigo-950/40 dark:via-purple-950/20 dark:to-slate-900 border border-indigo-200/80 dark:border-indigo-800/60 text-right space-y-3 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5 font-sans">
+                  <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                  هەنگاوی داهاتووی پێشنیارکراو (Next Best Action)
+                </span>
+                <span className="text-[10px] bg-indigo-100 dark:bg-indigo-900/60 text-indigo-800 dark:text-indigo-200 px-2.5 py-0.5 rounded-full font-bold">
+                  ئەداپتیڤ
+                </span>
+              </div>
+              <div>
+                <h3 className="font-bold text-sm text-slate-900 dark:text-white font-sans">
+                  {calculatedNba.titleKu}
+                </h3>
+                <p className="text-xs text-slate-600 dark:text-slate-300 font-sans mt-1 leading-relaxed">
+                  {calculatedNba.reasonKu}
+                </p>
+              </div>
+
+              <div className="pt-2 flex flex-wrap gap-2">
+                {missedTopics.length > 0 && onNavigateToPractice && (
+                  <button
+                    type="button"
+                    onClick={() => onNavigateToPractice(missedTopics[0])}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-sans font-bold text-xs shadow-xs transition-colors cursor-pointer"
+                  >
+                    <Dumbbell className="w-3.5 h-3.5" />
+                    <span>ڕاهێنان لەسەر {missedTopics[0]}</span>
+                  </button>
+                )}
+                {onNavigateToChat && (
+                  <button
+                    type="button"
+                    onClick={() => onNavigateToChat(activeSubjKey, missedTopics[0])}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-sans font-bold text-xs shadow-xs transition-colors cursor-pointer"
+                  >
+                    <BookOpen className="w-3.5 h-3.5" />
+                    <span>شیکردنەوە لەگەڵ فێرکەری زیرەک (AI Tutor)</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Weaknesses and Recommendations Strictly Specific to Active Subject */}
           <div className="bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 rounded-xl p-4 text-right space-y-2 text-xs font-sans text-slate-700 dark:text-slate-300">
-            <span className="font-bold text-amber-900 dark:text-amber-300 block">
-              خاڵە پێویستەکان بە پێداچوونەوە لە {activeSubjectMeta.label}:
+            <span className="font-bold text-amber-900 dark:text-amber-300 block flex items-center gap-1.5">
+              <AlertCircle className="w-4 h-4 text-amber-600" />
+              ڕاسپاردەی پێداچوونەوە لە {activeSubjectMeta.label}:
             </span>
             {missedTopics.length > 0 ? (
               <p>
@@ -1487,9 +1762,6 @@ export function AdaptiveAssessment({
                 • ئافەرم! لە تەواوی بابەت و چەمکە سەرەکییەکانی {activeSubjectMeta.label} بە سەرکەوتوویی وەڵامت دایەوە.
               </p>
             )}
-            <p className="font-bold text-indigo-700 dark:text-indigo-400 pt-1">
-              ڕاسپاردەی داهاتوو: بەشداری لە تاقیگەی مەجازی و ڕاهێنانی کارلێککارانە بکە لەسەر {activeSubjectMeta.label}.
-            </p>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
