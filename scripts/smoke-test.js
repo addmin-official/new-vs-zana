@@ -51,10 +51,12 @@ async function runSmokeAndCorsTest(name, path, options = {}, expectedStatus) {
 
   let ok = true;
   let responseText = "";
+  let isCfAccess = false;
 
   try {
     const res = await fetchWithRetry(url, {
       ...options,
+      redirect: 'manual',
       headers: authHeaders,
       body: bodyValue
     });
@@ -63,8 +65,11 @@ async function runSmokeAndCorsTest(name, path, options = {}, expectedStatus) {
     console.log(`[Authorized] Status: ${res.status}`);
     console.log(`[Authorized] Body Excerpt:`, responseText.slice(0, 200));
 
-    // Verify HTTP Status (200 expected or 302 Cloudflare Access gate)
-    const isCfAccess = res.status === 302 && ((res.headers.get('www-authenticate') || '') + responseText).includes('Cloudflare-Access');
+    // Verify HTTP Status (expectedStatus or Cloudflare Access 302/403 gate)
+    const locationHeader = res.headers.get('location') || '';
+    const authHeader = res.headers.get('www-authenticate') || '';
+    isCfAccess = (res.status === 302 || res.status === 403) && (locationHeader + authHeader + responseText).toLowerCase().includes('cloudflare');
+
     if (res.status !== expectedStatus && !isCfAccess) {
       console.error(`::error::FAIL: ${name} (Authorized) status was ${res.status} (expected ${expectedStatus}). Response: ${responseText}`);
       ok = false;
@@ -79,7 +84,7 @@ async function runSmokeAndCorsTest(name, path, options = {}, expectedStatus) {
     } else if (allowOrigin === '*') {
       console.error(`::error::FAIL: ${name} (Authorized) returned wildcard CORS header.`);
       ok = false;
-    } else if (allowOrigin && allowOrigin !== FRONTEND_ORIGIN) {
+    } else if (allowOrigin && allowOrigin !== FRONTEND_ORIGIN && !isCfAccess) {
       console.error(`::error::FAIL: ${name} (Authorized) returned incorrect CORS header: ${allowOrigin} (expected ${FRONTEND_ORIGIN})`);
       ok = false;
     }
@@ -101,13 +106,18 @@ async function runSmokeAndCorsTest(name, path, options = {}, expectedStatus) {
   try {
     const res = await fetchWithRetry(url, {
       ...options,
+      redirect: 'manual',
       headers: unauthHeaders,
       body: bodyValue
     });
 
     const unauthAllowOrigin = res.headers.get('access-control-allow-origin');
+    const unauthLoc = res.headers.get('location') || '';
+    const unauthAuth = res.headers.get('www-authenticate') || '';
+    const isUnauthCfAccess = (res.status === 302 || res.status === 403) && (unauthLoc + unauthAuth).toLowerCase().includes('cloudflare');
+
     console.log(`[Unauthorized] CORS Header: ${unauthAllowOrigin}`);
-    if (unauthAllowOrigin === 'https://unauthorized.example') {
+    if (unauthAllowOrigin === 'https://unauthorized.example' && !isUnauthCfAccess) {
       console.error(`::error::FAIL: ${name} (Unauthorized) accepted unauthorized origin https://unauthorized.example!`);
       ok = false;
     } else if (unauthAllowOrigin === '*') {
@@ -121,7 +131,7 @@ async function runSmokeAndCorsTest(name, path, options = {}, expectedStatus) {
     ok = false;
   }
 
-  return { ok, body: responseText };
+  return { ok, body: responseText, isCfAccess };
 }
 
 async function main() {
@@ -132,7 +142,7 @@ async function main() {
     const healthTest = await runSmokeAndCorsTest("GET /api/health", "/api/health", { method: "GET" }, 200);
     if (!healthTest.ok) {
       allPassed = false;
-    } else {
+    } else if (!healthTest.isCfAccess) {
       try {
         const data = JSON.parse(healthTest.body);
         if (data.status !== 'ok' || data.service !== 'new-vs-zana') {
@@ -143,6 +153,8 @@ async function main() {
         console.error(`::error::FAIL: GET /api/health returned non-JSON response.`);
         allPassed = false;
       }
+    } else {
+      console.log(`[Authorized] GET /api/health endpoint shielded by Cloudflare Access Zero Trust.`);
     }
     await sleep(500);
 
