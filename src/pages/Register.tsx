@@ -164,9 +164,10 @@ export function Register({
     }
     setPhoneStep1Loading(true);
     setErrorMessage(null);
+    await new Promise(resolve => setTimeout(resolve, 100));
     const verifier = setupRecaptcha('zana-recaptcha-register');
     if (!verifier) {
-      setErrorMessage('کێشەی دڵنیایی');
+      setErrorMessage('کێشەی دڵنیایی — تکایە پەڕەکە تازە بکەرەوە');
       setPhoneStep1Loading(false);
       return;
     }
@@ -242,7 +243,10 @@ export function Register({
       const targetUid = createdUid || "guest_" + Date.now();
       const streamVal = selectedGrade === "9" || selectedGrade === "10" ? "general" : selectedStream;
 
-      await createUserDocumentIfMissing(targetUid, email || null, {
+      // For phone-registered users, use phone number as identifier
+      const identifier = email || 
+        (authMethod === 'phone' ? (phone || null) : null);
+      await createUserDocumentIfMissing(targetUid, identifier, {
         name: fullName || "قوتابی",
         grade: selectedGrade,
         stream: streamVal,

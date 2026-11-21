@@ -152,6 +152,14 @@ export async function migrateUsersMissingRole(dbOverride?: Firestore): Promise<M
         updates.lastActive = Timestamp.now();
       }
 
+      // Normalize createdAt to Timestamp if it's a string or missing
+      if (!(data.createdAt instanceof Timestamp)) {
+        updates.createdAt = data.createdAt
+          ? Timestamp.fromDate(new Date(data.createdAt as string))
+          : serverTimestamp();
+        updates.registeredAt = updates.createdAt;
+      }
+
       if (Object.keys(updates).length > 0) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         batch.update(userDoc.ref, updates as Record<string, any>);
@@ -179,7 +187,12 @@ export async function migrateUsersMissingRole(dbOverride?: Firestore): Promise<M
         const userRef = doc(db, "users", sDoc.id);
         const userSnap = await getDoc(userRef);
         if (!userSnap.exists()) {
-          const nowIso = sData.createdAt || new Date().toISOString();
+          const createdTimestamp =
+            sData.createdAt instanceof Timestamp
+              ? sData.createdAt
+              : sData.createdAt
+              ? Timestamp.fromDate(new Date(sData.createdAt))
+              : Timestamp.now();
           await setDoc(
             userRef,
             {
@@ -192,9 +205,15 @@ export async function migrateUsersMissingRole(dbOverride?: Firestore): Promise<M
               grade: sData.grade || "12",
               stream: sData.stream || "scientific",
               school: sData.school || "",
-              lastActive: sData.updatedAt || nowIso,
-              createdAt: nowIso,
-              updatedAt: sData.updatedAt || nowIso,
+              lastActive:
+                sData.updatedAt instanceof Timestamp
+                  ? sData.updatedAt
+                  : sData.updatedAt
+                  ? Timestamp.fromDate(new Date(sData.updatedAt))
+                  : createdTimestamp,
+              createdAt: createdTimestamp,
+              registeredAt: createdTimestamp,
+              updatedAt: serverTimestamp(),
               profile: {
                 name: sData.name || "قوتابی",
                 grade: sData.grade || "12",

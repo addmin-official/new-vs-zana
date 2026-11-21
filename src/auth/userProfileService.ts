@@ -3,7 +3,7 @@
  * Prevents re-registration by detecting returning users from Firestore and local cache
  */
 
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { getFirestoreDb } from "../services/firebase.ts";
 import { StudentProfile, StudentProfileDraft, VerifiedIdentity } from "../features/student/studentTypes.ts";
 import {
@@ -144,27 +144,33 @@ export async function createUserDocumentIfMissing(
       const userRef = doc(db, "users", uid);
       const studentRef = doc(db, "students", uid);
 
-      const nowIso = new Date().toISOString();
+      const isPhoneIdentifier = Boolean(email && !email.includes('@'));
+      const phoneNumber = isPhoneIdentifier ? (email || "") : "";
+      const userEmail = isPhoneIdentifier ? "" : (email || "");
+
       const payload = {
         id: uid,
         uid,
         role: "student",
         name: sanitizedName,
         displayName: sanitizedName,
-        email: email || "",
+        email: userEmail,
+        phoneNumber: phoneNumber || undefined,
         grade: validatedGrade,
         stream: validatedStream,
         school: newProfile.school || "",
-        lastActive: nowIso,
-        createdAt: nowIso,
-        updatedAt: nowIso,
+        lastActive: serverTimestamp(),
+        createdAt: serverTimestamp(),
+        registeredAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
         profile: {
           name: sanitizedName,
           grade: validatedGrade,
           stream: validatedStream,
           school: newProfile.school || "",
           language: "ckb",
-          email: email || "",
+          email: userEmail,
+          phoneNumber: phoneNumber || undefined,
         },
         settings: {
           theme: "dark",
@@ -179,14 +185,16 @@ export async function createUserDocumentIfMissing(
         setDoc(studentRef, {
           id: uid,
           name: sanitizedName,
-          email: email || "",
+          email: userEmail,
+          phoneNumber: phoneNumber || undefined,
           grade: validatedGrade,
           stream: validatedStream,
           activeSubject: newProfile.activeSubject,
           school: newProfile.school || "",
           onboardingCompleted: true,
-          createdAt: nowIso,
-          updatedAt: nowIso,
+          createdAt: serverTimestamp(),
+          registeredAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
         }, { merge: true }),
       ]);
     } catch (err) {

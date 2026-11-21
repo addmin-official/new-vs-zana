@@ -17,6 +17,7 @@ export interface StudentListItem {
   id: string;
   name: string;
   email: string;
+  phoneNumber?: string;
   grade: "9" | "10" | "11" | "12" | string;
   stream: "scientific" | "literary" | "general" | string;
   lastActive: Timestamp | null;
@@ -274,7 +275,9 @@ export function useAdminStudentList() {
           const name = typeof rawName === "string" && rawName.trim() ? rawName.trim() : "قوتابی بێ‌ناو";
 
           const rawEmail = u.email || profile.email;
-          const email = typeof rawEmail === "string" && rawEmail.trim() ? rawEmail.trim() : "بێ ئیمەیڵ";
+          const email = typeof rawEmail === "string" && rawEmail.trim() ? rawEmail.trim() : "";
+          const rawPhone = u.phoneNumber || u.phone || profile.phoneNumber || profile.phone;
+          const phoneNumber = typeof rawPhone === "string" && rawPhone.trim() ? rawPhone.trim() : undefined;
 
           const rawGrade = String(u.grade || profile.grade || "12");
           const grade = (rawGrade === "9" || rawGrade === "10" || rawGrade === "11" || rawGrade === "12")
@@ -289,7 +292,8 @@ export function useAdminStudentList() {
           return {
             id: uid,
             name,
-            email,
+            email: email || (phoneNumber ? "" : "بێ ئیمەیڵ"),
+            phoneNumber,
             grade,
             stream,
             lastActive: lastActiveTimestamp,
@@ -337,6 +341,7 @@ export function useAdminStudentList() {
         (s) =>
           s.name.toLowerCase().includes(q) ||
           s.email.toLowerCase().includes(q) ||
+          Boolean(s.phoneNumber && s.phoneNumber.toLowerCase().includes(q)) ||
           s.id.toLowerCase().includes(q)
       );
     }

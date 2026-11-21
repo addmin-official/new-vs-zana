@@ -849,7 +849,7 @@ export function AdminDashboard({
                               )}
                               <div>
                                 <span className="font-bold text-white block">{std.name}</span>
-                                <span className="font-mono text-[11px] text-slate-400">{std.email}</span>
+                                <span className="font-mono text-[11px] text-slate-400">{std.email || std.phoneNumber || '—'}</span>
                               </div>
                             </div>
                           </td>
@@ -1212,7 +1212,7 @@ export function AdminDashboard({
             <div className="flex items-start justify-between">
               <div>
                 <h3 className="text-lg font-black text-white">{selectedStudent.name}</h3>
-                <span className="font-mono text-xs text-slate-400">{selectedStudent.email}</span>
+                <span className="font-mono text-xs text-slate-400">{selectedStudent.email || selectedStudent.phoneNumber || '—'}</span>
               </div>
               <button
                 type="button"

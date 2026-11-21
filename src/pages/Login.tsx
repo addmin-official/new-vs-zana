@@ -141,10 +141,12 @@ export function Login({
     setPhoneLoading(true);
     setErrorMessage(null);
 
-    // Ensure reCAPTCHA container exists
+    // Small delay to ensure DOM is ready before reCAPTCHA init
+    await new Promise(resolve => setTimeout(resolve, 100));
+
     const verifier = setupRecaptcha('zana-recaptcha-container');
     if (!verifier) {
-      setErrorMessage('کێشەیەک لە سیستەمی دڵنیایی ڕوویدا');
+      setErrorMessage('کێشەیەک لە سیستەمی دڵنیایی ڕوویدا — پەڕەکە تازە بکەرەوە');
       setPhoneLoading(false);
       return;
     }
