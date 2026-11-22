@@ -7,6 +7,7 @@ export interface SessionRecoveryData {
   lastRoute: string;
   lastSubject?: string;
   lastConcept?: string;
+  lastConceptBySubject?: Record<string, string>;
   timestamp: number;
 }
 
@@ -28,6 +29,32 @@ export const SUBJECT_NAMES_KU: Record<string, string> = {
   computerScience: "زانستی کۆمپیوتەر",
 };
 
+/**
+ * Authentic curriculum introductory concepts per subject (KRG Ministry of Education)
+ * Used as honest, subject-accurate defaults when a student hasn't studied a specific lesson yet.
+ */
+export const DEFAULT_SUBJECT_CONCEPTS_KU: Record<string, string> = {
+  chemistry: "ئاوێتە ئایۆنییەکان و ڕەوشە کۆکارییەکان",
+  physics: "تەزووی کارەبایی و یاسای ئۆم",
+  mathematics: "سنوور و داتاشراو (Calculus)",
+  math: "سنوور و داتاشراو (Calculus)",
+  biology: "بۆماوەزانی مێندلی و یاساکانی بۆماوە",
+  english: "Sunrise 12 — Grammar & Relative Clauses",
+  kurdish: "ڕێزمانی کوردی و ئەدەب",
+  arabic: "قواعد اللغة العربية والبلاغة",
+  history: "مێژووی هاوچەرخی کوردستان و جیهان",
+  geography: "جوگرافیای سروشتی و مرۆیی",
+  economy: "بنەماکانی ئابووری و بازاڕ",
+  islamicStudies: "پەروەردەی ئیسلامی و بیروباوەڕ",
+  computerScience: "بنەماکانی پرۆگرامسازی و زانستی کۆمپیوتەر",
+};
+
+export function getDefaultConceptForSubject(subjectKey?: string): string {
+  if (!subjectKey) return "وانەی سەرەتایی";
+  const norm = subjectKey.toLowerCase().trim();
+  return DEFAULT_SUBJECT_CONCEPTS_KU[norm] || "وانەی سەرەتایی";
+}
+
 export function saveSessionPosition(
   route: string,
   subject?: string,
@@ -47,10 +74,35 @@ export function saveSessionPosition(
       return;
     }
 
+    const currentSubject = (subject || existing?.lastSubject || "chemistry").toLowerCase().trim();
+    const lastConceptBySubject: Record<string, string> = {
+      ...(existing?.lastConceptBySubject || {}),
+    };
+
+    let effectiveConcept: string;
+    if (concept) {
+      effectiveConcept = concept;
+      lastConceptBySubject[currentSubject] = concept;
+    } else if (lastConceptBySubject[currentSubject]) {
+      effectiveConcept = lastConceptBySubject[currentSubject];
+    } else if (existing?.lastSubject === currentSubject && existing?.lastConcept) {
+      // Validate that the existing concept belongs to this subject and not leaked from chemistry
+      if (currentSubject !== "chemistry" && (existing.lastConcept.includes("ترش") || existing.lastConcept.includes("pH"))) {
+        effectiveConcept = getDefaultConceptForSubject(currentSubject);
+      } else {
+        effectiveConcept = existing.lastConcept;
+      }
+      lastConceptBySubject[currentSubject] = effectiveConcept;
+    } else {
+      effectiveConcept = getDefaultConceptForSubject(currentSubject);
+      lastConceptBySubject[currentSubject] = effectiveConcept;
+    }
+
     const payload: SessionRecoveryData = {
       lastRoute: cleanRoute,
-      lastSubject: subject || existing?.lastSubject || "chemistry",
-      lastConcept: concept || existing?.lastConcept,
+      lastSubject: currentSubject,
+      lastConcept: effectiveConcept,
+      lastConceptBySubject,
       timestamp: Date.now(),
     };
 
@@ -67,7 +119,17 @@ export function getSessionRecovery(): SessionRecoveryData | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as SessionRecoveryData;
     if (parsed && typeof parsed.lastRoute === "string") {
-      return parsed;
+      const subject = parsed.lastSubject ? parsed.lastSubject.toLowerCase().trim() : undefined;
+      let concept = parsed.lastConcept;
+      // Sanitize legacy leaked chemistry concepts for non-chemistry subjects
+      if (subject && subject !== "chemistry" && concept && (concept.includes("ترش") || concept.includes("pH"))) {
+        concept = parsed.lastConceptBySubject?.[subject] || getDefaultConceptForSubject(subject);
+      }
+      return {
+        ...parsed,
+        lastSubject: subject,
+        lastConcept: concept,
+      };
     }
   } catch {
     // ignore parse error

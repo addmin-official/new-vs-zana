@@ -41,6 +41,7 @@ import { getFirestoreDb } from "../services/firebase.ts";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { useStudentMastery } from "../learning/hooks/useStudentMastery.ts";
 import { DifficultyLevel } from "../learning/domain/MasteryTypes.ts";
+import { saveSessionPosition } from "../auth/sessionRecovery.ts";
 
 interface DynamicBookViewerProps {
   subject: string;
@@ -419,16 +420,19 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
 
   const activeChapter = chapters.find((c) => c.id === activeChapterId) || chapters[0];
 
-  // Track active chapter into session memory concepts
+  // Track active chapter into session memory concepts & persist session recovery
   useEffect(() => {
-    if (activeChapter?.title && !sessionMemory.conceptsDiscussed.includes(activeChapter.title)) {
-      updateSessionMemory((prev) => ({
-        ...prev,
-        conceptsDiscussed: [...prev.conceptsDiscussed, activeChapter.title],
-      }));
+    if (activeChapter?.title) {
+      if (!sessionMemory.conceptsDiscussed.includes(activeChapter.title)) {
+        updateSessionMemory((prev) => ({
+          ...prev,
+          conceptsDiscussed: [...prev.conceptsDiscussed, activeChapter.title],
+        }));
+      }
+      saveSessionPosition("/chat", currentSubject, activeChapter.title);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeChapter?.title, sessionMemory.conceptsDiscussed]);
+  }, [activeChapter?.title, currentSubject, sessionMemory.conceptsDiscussed]);
 
   const _isPhysics = currentSubject === "physics";
   const _isChemistry = currentSubject === "chemistry";

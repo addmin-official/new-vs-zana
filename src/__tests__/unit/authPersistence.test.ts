@@ -4,6 +4,7 @@ import {
   getSessionRecovery,
   clearSessionRecovery,
   getSubjectKurdishName,
+  getDefaultConceptForSubject,
   triggerSessionRecoveryNotification,
 } from "../../auth/sessionRecovery.ts";
 import { getErrorMessage, FIREBASE_ERRORS_KU } from "../../services/authService.ts";
@@ -83,6 +84,65 @@ describe("ZANA Auth & Session Persistence System", () => {
       expect(getSubjectKurdishName("kurdish")).toBe("زمانی کوردی");
       expect(getSubjectKurdishName("")).toBe("وانەکان");
       expect(getSubjectKurdishName("unknownSubject")).toBe("unknownSubject");
+    });
+
+    it("provides authentic subject-specific default concepts for curriculum subjects", () => {
+      expect(getDefaultConceptForSubject("physics")).toBe("تەزووی کارەبایی و یاسای ئۆم");
+      expect(getDefaultConceptForSubject("math")).toBe("سنوور و داتاشراو (Calculus)");
+      expect(getDefaultConceptForSubject("mathematics")).toBe("سنوور و داتاشراو (Calculus)");
+      expect(getDefaultConceptForSubject("biology")).toBe("بۆماوەزانی مێندلی و یاساکانی بۆماوە");
+      expect(getDefaultConceptForSubject("chemistry")).toBe("ئاوێتە ئایۆنییەکان و ڕەوشە کۆکارییەکان");
+      expect(getDefaultConceptForSubject("english")).toBe("Sunrise 12 — Grammar & Relative Clauses");
+    });
+
+    it("isolates concepts per subject so switching subject does not leak chemistry pH concept to physics or math", () => {
+      // 1. Student was studying chemistry pH
+      saveSessionPosition("/chat", "chemistry", "ترش و تفتەکان و پێوەری pH");
+      let session = getSessionRecovery();
+      expect(session?.lastSubject).toBe("chemistry");
+      expect(session?.lastConcept).toBe("ترش و تفتەکان و پێوەری pH");
+
+      // 2. Student switches to physics without specifying a concept yet
+      saveSessionPosition("/home", "physics");
+      session = getSessionRecovery();
+      expect(session?.lastSubject).toBe("physics");
+      // Must NOT leak chemistry pH to physics! Must use physics default concept:
+      expect(session?.lastConcept).toBe("تەزووی کارەبایی و یاسای ئۆم");
+      expect(session?.lastConcept).not.toContain("ترش");
+
+      // 3. Student switches to math
+      saveSessionPosition("/home", "math");
+      session = getSessionRecovery();
+      expect(session?.lastSubject).toBe("math");
+      expect(session?.lastConcept).toBe("سنوور و داتاشراو (Calculus)");
+
+      // 4. Student switches to biology
+      saveSessionPosition("/home", "biology");
+      session = getSessionRecovery();
+      expect(session?.lastSubject).toBe("biology");
+      expect(session?.lastConcept).toBe("بۆماوەزانی مێندلی و یاساکانی بۆماوە");
+
+      // 5. If student switches back to chemistry, chemistry's saved concept is preserved!
+      saveSessionPosition("/home", "chemistry");
+      session = getSessionRecovery();
+      expect(session?.lastSubject).toBe("chemistry");
+      expect(session?.lastConcept).toBe("ترش و تفتەکان و پێوەری pH");
+    });
+
+    it("sanitizes legacy leaked chemistry concepts in existing localStorage sessions", () => {
+      // Simulate an old session in localStorage that had leaked pH to physics
+      const legacyCorrupted = {
+        lastRoute: "/home",
+        lastSubject: "physics",
+        lastConcept: "ترش و تفتەکان و پێوەری pH",
+        timestamp: Date.now(),
+      };
+      localStorage.setItem("zana_session_recovery_v1", JSON.stringify(legacyCorrupted));
+
+      const session = getSessionRecovery();
+      expect(session?.lastSubject).toBe("physics");
+      expect(session?.lastConcept).toBe("تەزووی کارەبایی و یاسای ئۆم");
+      expect(session?.lastConcept).not.toContain("ترش");
     });
 
     it("triggers welcome back returning notification with last subject", async () => {

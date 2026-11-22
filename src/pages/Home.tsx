@@ -21,7 +21,7 @@ import {
 import { StudentProfile, SubjectKey } from "../features/student/studentTypes.ts";
 import { useStudentProfile } from "../features/student/useStudentProfile.ts";
 import { useAppStore } from "../store/appStore.ts";
-import { getSessionRecovery, getSubjectKurdishName } from "../auth/sessionRecovery.ts";
+import { getSessionRecovery, getSubjectKurdishName, getDefaultConceptForSubject } from "../auth/sessionRecovery.ts";
 import { getSubjectCustomIcon } from "../components/SubjectCard.tsx";
 import { formatNumber } from "../i18n/i18n.ts";
 import type { PedagogyPillarTab } from "../screens/PedagogicalHubScreen.tsx";
@@ -82,12 +82,28 @@ export function Home({
   // Last studied subject & concept from session recovery
   const sessionRecovery = useMemo(() => getSessionRecovery(), []);
   const activeSubjectKey =
-    sessionRecovery?.lastSubject ||
     studentProfile?.activeSubject ||
     user.activeSubject ||
+    sessionRecovery?.lastSubject ||
     "chemistry";
-  const lastConceptName =
-    sessionRecovery?.lastConcept || "ترش و تفتەکان و پێوەری pH";
+
+  const lastConceptName = useMemo(() => {
+    // 1. If session recovery matches the active subject:
+    if (sessionRecovery?.lastSubject === activeSubjectKey && sessionRecovery?.lastConcept) {
+      // Prevent cross-subject concept leakage from chemistry
+      if (activeSubjectKey !== "chemistry" && (sessionRecovery.lastConcept.includes("ترش") || sessionRecovery.lastConcept.includes("pH"))) {
+        return sessionRecovery.lastConceptBySubject?.[activeSubjectKey] || getDefaultConceptForSubject(activeSubjectKey);
+      }
+      return sessionRecovery.lastConcept;
+    }
+    // 2. Check per-subject concept history
+    if (sessionRecovery?.lastConceptBySubject?.[activeSubjectKey]) {
+      return sessionRecovery.lastConceptBySubject[activeSubjectKey];
+    }
+    // 3. Fallback to this subject's actual default curriculum concept
+    return getDefaultConceptForSubject(activeSubjectKey);
+  }, [sessionRecovery, activeSubjectKey]);
+
   const lastSubjectTitle = getSubjectKurdishName(activeSubjectKey);
 
   // Real student mastery from server / Firestore
