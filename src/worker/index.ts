@@ -45,7 +45,7 @@ import { handleTelemetryExportRoute } from "../server/api/internal/telemetryExpo
 import { handleHealthRoute, handleCurriculumHealthRoute } from "../server/api/health.ts";
 import { handleStudyRoomsRoute } from "../server/api/studyRooms.ts";
 import { getQuestionsBySubject } from "../data/assessments/curriculum-questions.ts";
-import { verifyAdmin, type AdminVerifyResult } from "./adminGuard.ts";
+import { verifyAdmin, verifyInternalTelemetry, type AdminVerifyResult } from "./adminGuard.ts";
 import { InternalBrainService } from "../core/brain/InternalBrainService.ts";
 import type { AdminRole, ExecutionPlan, AdminPreferenceMemory } from "../core/brain/types.ts";
 import { AdminCommandDO } from "../core/brain/durable/AdminCommandDO.ts";
@@ -460,7 +460,8 @@ export function parseAnswerSubmission(value: unknown): AnswerSubmission {
 }
 
 export interface SubscriptionStatusResult {
-  status: "trial" | "active" | "expired";
+  status: "trial" | "active" | "expired" | "unavailable";
+  error?: string;
 }
 
 export async function checkSubscription(
@@ -468,7 +469,7 @@ export async function checkSubscription(
   userId: string
 ): Promise<SubscriptionStatusResult> {
   if (!env.DB) {
-    return { status: "trial" };
+    return { status: "unavailable", error: "Database binding missing" };
   }
 
   const now = Date.now();
@@ -520,7 +521,7 @@ export async function checkSubscription(
     return { status: "expired" };
   } catch (err) {
     console.error("[checkSubscription Error]", err);
-    return { status: "trial" };
+    return { status: "unavailable", error: (err as Error)?.message || "Database operation failed" };
   }
 }
 
@@ -658,12 +659,9 @@ export default {
       }
     }
 
-    // 🚨 ADMIN GUARD: Server-side Verification for all /api/admin/* and /api/internal/* routes
+    // 🚨 ADMIN & INTERNAL ROUTE GUARDS: Distinct Privilege Boundaries
     let verifiedAdmin: AdminVerifyResult | null = null;
-    if (
-      pathname.startsWith("/api/admin/") ||
-      pathname.startsWith("/api/internal/")
-    ) {
+    if (pathname.startsWith("/api/admin/")) {
       const adminCheck = await verifyAdmin(request, env as never);
       if (!adminCheck.ok) {
         return new Response(
@@ -682,6 +680,20 @@ export default {
       console.log(
         `[ADMIN ACCESS] ${adminCheck.email} (${adminCheck.uid}) → ${pathname}`
       );
+    } else if (pathname.startsWith("/api/internal/")) {
+      const telemetryCheck = await verifyInternalTelemetry(request, env as never);
+      if (!telemetryCheck.ok) {
+        return new Response(
+          JSON.stringify({
+            error: "Forbidden",
+            detail: telemetryCheck.error || "دەستگەیشتن بۆ تەلەمەتریی ناوخۆیی ڕەتکرایەوە.",
+          }),
+          {
+            status: 403,
+            headers: responseHeaders,
+          }
+        );
+      }
     }
 
     // Security: Block access to sensitive files (must be BEFORE SPA fallback)
@@ -1212,7 +1224,7 @@ export default {
           return new Response(JSON.stringify({ error: "دەسەڵاتی پێویستت نییە بۆ دەستگەیشتن بەم بەشە." }), { status: 403, headers: responseHeaders });
         }
 
-        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, "production");
+        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, getPersistenceMode(env));
         const profile = await lp.getStudentMasteryProfile(studentId);
         return new Response(JSON.stringify(profile), { status: 200, headers: responseHeaders });
       }
@@ -1234,7 +1246,7 @@ export default {
         const parts = pathname.split("/");
         const conceptId = decodeURIComponent(parts[parts.length - 1]);
 
-        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, "production");
+        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, getPersistenceMode(env));
         const state = await lp.getConceptMastery(studentId, conceptId);
         if (!state) {
           return new Response(JSON.stringify({ error: "چەمکی داواکراو بۆ ئەم قوتابییە بوونی نییە." }), { status: 404, headers: responseHeaders });
@@ -1257,7 +1269,7 @@ export default {
         }
 
         const status = url.searchParams.get("status") || undefined;
-        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, "production");
+        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, getPersistenceMode(env));
         const recs = await lp.listRecommendations(studentId, status);
         return new Response(JSON.stringify(recs), { status: 200, headers: responseHeaders });
       }
@@ -1296,7 +1308,7 @@ export default {
           data,
         };
 
-        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, "production");
+        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, getPersistenceMode(env));
         await lp.appendLearningEvent(studentId, event);
         const profile = await lp.getStudentMasteryProfile(studentId);
         return new Response(JSON.stringify({ success: true, eventId: event.id, profile }), { status: 200, headers: responseHeaders });
@@ -1311,7 +1323,7 @@ export default {
           return new Response(JSON.stringify({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." }), { status: 401, headers: responseHeaders });
         }
 
-        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, "production");
+        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, getPersistenceMode(env));
         let taskDate: string | undefined;
         try {
           const body = (await request.json()) as { taskDate?: string };
@@ -1366,7 +1378,7 @@ export default {
           );
         }
 
-        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, "production");
+        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, getPersistenceMode(env));
         const currentProfile = await lp.getStudentMasteryProfile(studentId);
         const currentState = await lp.getConceptMastery(studentId, conceptId);
 
@@ -1488,7 +1500,7 @@ export default {
           focusScore: 1.0,
         };
 
-        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, "production");
+        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, getPersistenceMode(env));
         await lp.createLearningSession(session);
         return new Response(JSON.stringify(session), { status: 200, headers: responseHeaders });
       }
@@ -1528,7 +1540,7 @@ export default {
           focusScore,
         };
 
-        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, "production");
+        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, getPersistenceMode(env));
         await lp.updateLearningSession(session);
         return new Response(JSON.stringify(session), { status: 200, headers: responseHeaders });
       }
@@ -1760,8 +1772,8 @@ export default {
 
         try {
           const kv = env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV;
-          const planProvider = new PersistentLearningPlanProvider(kv, "production");
-          const learningProvider = new PersistentLearningRecordProvider(kv, "production");
+          const planProvider = new PersistentLearningPlanProvider(kv, getPersistenceMode(env));
+          const learningProvider = new PersistentLearningRecordProvider(kv, getPersistenceMode(env));
           const planningService = new LearningPlanService(planProvider, learningProvider);
 
           if (pathname === "/api/planning/preferences" && request.method === "GET") {
@@ -2787,12 +2799,28 @@ export default {
         }
         if (!env.DB) {
           return new Response(
-            JSON.stringify({ ok: true, status: "trial", trial_ends_at: Date.now() + 3 * 86400000, days_remaining: 3 }),
-            { headers: responseHeaders }
+            JSON.stringify({
+              ok: false,
+              error: "سێرڤسی بەشداریکردن لەبەردەستدا نییە (داتابەیس بەردەست نییە).",
+              code: "SERVICE_UNAVAILABLE",
+            }),
+            { status: 503, headers: responseHeaders }
           );
         }
         try {
           const subResult = await checkSubscription(env, userId);
+          if (subResult.status === "unavailable") {
+            return new Response(
+              JSON.stringify({
+                ok: false,
+                error: "سێرڤسی بەشداریکردن لەم کاتەدا لەبەردەستدا نییە.",
+                code: "SERVICE_UNAVAILABLE",
+                detail: subResult.error,
+              }),
+              { status: 503, headers: responseHeaders }
+            );
+          }
+
           const row = await env.DB.prepare(
             "SELECT status, trial_started_at, trial_ends_at, plan_id, updated_at FROM subscriptions WHERE user_id = ?"
           ).bind(userId).first<{
@@ -2820,8 +2848,13 @@ export default {
           );
         } catch (dbErr: unknown) {
           return new Response(
-            JSON.stringify({ error: "DATABASE_ERROR", detail: (dbErr as Error)?.message || String(dbErr) }),
-            { status: 500, headers: responseHeaders }
+            JSON.stringify({
+              ok: false,
+              error: "سێرڤسی بەشداریکردن لەم کاتەدا تووشی هەڵە بوو.",
+              code: "SERVICE_UNAVAILABLE",
+              detail: (dbErr as Error)?.message || String(dbErr)
+            }),
+            { status: 503, headers: responseHeaders }
           );
         }
       }
@@ -2829,10 +2862,17 @@ export default {
       // POST /api/subscription/submit-receipt
       if (pathname === "/api/subscription/submit-receipt" && request.method === "POST") {
         if (!env.DB) {
-          return new Response(JSON.stringify({ error: "DB binding not configured" }), {
-            status: 500,
-            headers: responseHeaders,
-          });
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              error: "سێرڤسی ناردنی پسوولە لەم کاتەدا لەبەردەستدا نییە (داتابەیس بەردەست نییە).",
+              code: "SERVICE_UNAVAILABLE"
+            }),
+            {
+              status: 503,
+              headers: responseHeaders,
+            }
+          );
         }
 
         // 🚨 AUTH GUARD: Student must be authenticated
@@ -3105,6 +3145,108 @@ export default {
           }
         }
 
+        // GET /api/notifications/:id
+        const singleMatch = pathname.match(/^\/api\/notifications\/([^/]+)$/);
+        if (singleMatch && !["preferences", "read-all", "batch"].includes(singleMatch[1]) && request.method === "GET") {
+          const notificationId = decodeURIComponent(singleMatch[1]);
+          if (!env.DB) {
+            return new Response(
+              JSON.stringify({ error: "SERVICE_UNAVAILABLE" }),
+              { status: 503, headers: responseHeaders }
+            );
+          }
+
+          try {
+            const notif = await env.DB.prepare(
+              `SELECT id, student_id as studentId, type, title, message, action_label as actionLabel, action_url as actionUrl, created_at as createdAt, read_at as readAt, priority, deduplication_key as deduplicationKey, expires_at as expiresAt
+               FROM notifications WHERE id = ?`
+            ).bind(notificationId).first<{
+              id: string;
+              studentId: string;
+              type: string;
+              title: string;
+              message: string;
+              actionLabel?: string;
+              actionUrl?: string;
+              createdAt: number;
+              readAt?: number | null;
+              priority: string;
+              deduplicationKey: string;
+              expiresAt?: number | null;
+            }>();
+
+            if (!notif) {
+              return new Response(
+                JSON.stringify({ error: "NOT_FOUND", detail: "ئەم ئاگادارییە نەدۆزرایەوە." }),
+                { status: 404, headers: responseHeaders }
+              );
+            }
+
+            if (notif.studentId !== studentId) {
+              return new Response(
+                JSON.stringify({ error: "FORBIDDEN", detail: "ئەم ئاگادارییە هی تۆ نییە." }),
+                { status: 403, headers: responseHeaders }
+              );
+            }
+
+            return new Response(
+              JSON.stringify({ ok: true, notification: notif }),
+              { status: 200, headers: responseHeaders }
+            );
+          } catch (dbErr: unknown) {
+            return new Response(
+              JSON.stringify({ error: "DATABASE_ERROR", detail: (dbErr as Error)?.message || String(dbErr) }),
+              { status: 500, headers: responseHeaders }
+            );
+          }
+        }
+
+        // DELETE /api/notifications/:id
+        const deleteMatch = pathname.match(/^\/api\/notifications\/([^/]+)$/);
+        if (deleteMatch && !["preferences", "read-all", "batch"].includes(deleteMatch[1]) && request.method === "DELETE") {
+          const notificationId = decodeURIComponent(deleteMatch[1]);
+          if (!env.DB) {
+            return new Response(
+              JSON.stringify({ error: "SERVICE_UNAVAILABLE" }),
+              { status: 503, headers: responseHeaders }
+            );
+          }
+
+          try {
+            const existing = await env.DB.prepare(
+              "SELECT student_id FROM notifications WHERE id = ?"
+            ).bind(notificationId).first<{ student_id: string }>();
+
+            if (!existing) {
+              return new Response(
+                JSON.stringify({ error: "NOT_FOUND", detail: "ئەم ئاگادارییە نەدۆزرایەوە." }),
+                { status: 404, headers: responseHeaders }
+              );
+            }
+
+            if (existing.student_id !== studentId) {
+              return new Response(
+                JSON.stringify({ error: "FORBIDDEN", detail: "ئەم ئاگادارییە هی تۆ نییە." }),
+                { status: 403, headers: responseHeaders }
+              );
+            }
+
+            await env.DB.prepare(
+              "DELETE FROM notifications WHERE id = ? AND student_id = ?"
+            ).bind(notificationId, studentId).run();
+
+            return new Response(
+              JSON.stringify({ ok: true, deleted: notificationId }),
+              { status: 200, headers: responseHeaders }
+            );
+          } catch (dbErr: unknown) {
+            return new Response(
+              JSON.stringify({ error: "DATABASE_ERROR", detail: (dbErr as Error)?.message || String(dbErr) }),
+              { status: 500, headers: responseHeaders }
+            );
+          }
+        }
+
         // POST /api/notifications/:id/read
         const readMatch = pathname.match(/^\/api\/notifications\/([^/]+)\/read$/);
         if (readMatch && request.method === "POST") {
@@ -3118,6 +3260,24 @@ export default {
 
           try {
             const now = Date.now();
+            const existing = await env.DB.prepare(
+              "SELECT student_id FROM notifications WHERE id = ?"
+            ).bind(notificationId).first<{ student_id: string }>();
+
+            if (existing && existing.student_id !== studentId) {
+              return new Response(
+                JSON.stringify({ error: "FORBIDDEN", detail: "ئەم ئاگادارییە هی تۆ نییە." }),
+                { status: 403, headers: responseHeaders }
+              );
+            }
+
+            if (!existing) {
+              return new Response(
+                JSON.stringify({ error: "NOT_FOUND", detail: "ئەم ئاگادارییە نەدۆزرایەوە." }),
+                { status: 404, headers: responseHeaders }
+              );
+            }
+
             await env.DB.prepare(
               `UPDATE notifications SET read_at = ? WHERE id = ? AND student_id = ?`
             ).bind(now, notificationId, studentId).run();
@@ -3162,14 +3322,15 @@ export default {
             let insertedCount = 0;
 
             for (const n of notifs) {
-              if (!n.id || !n.type || !n.title || !n.message || !n.deduplicationKey) continue;
+              if (!n.type || !n.title || !n.message || !n.deduplicationKey) continue;
+
+              const rawId = n.id || ("notif_" + Math.random().toString(36).substring(2, 10));
+              // SECURITY: Scope notification ID to this student to prevent ID guessing
+              const scopedId = `${studentId.substring(0, 8)}_${rawId}`;
 
               // SECURITY: Scope deduplication key to this student only
               // Prevents cross-student dedup key collisions
               const scopedDedupKey = `uid:${studentId}:${n.deduplicationKey}`;
-
-              // SECURITY: Scope notification ID to this student to prevent ID guessing
-              const scopedId = `${studentId.substring(0, 8)}_${n.id}`;
 
               const now = Date.now();
               await env.DB.prepare(

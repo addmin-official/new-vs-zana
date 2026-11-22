@@ -215,8 +215,24 @@ function createMockD1Database() {
   };
 }
 
+function createAdminToken(): string {
+  const header = Buffer.from(JSON.stringify({ alg: "RS256", kid: "test" })).toString("base64url");
+  const payload = Buffer.from(JSON.stringify({
+    sub: "admin-uid-1",
+    email: "addmin.official.idg@gmail.com",
+    role: "super_admin",
+    admin: true,
+    aud: "gen-lang-client-0009572581",
+    iss: "https://securetoken.google.com/gen-lang-client-0009572581",
+    iat: Math.floor(Date.now() / 1000) - 60,
+    exp: Math.floor(Date.now() / 1000) + 3600,
+  })).toString("base64url");
+  return `${header}.${payload}.mock-sig`;
+}
+
 describe("ZANA Subscription & FastPay Manual Activation System - Comprehensive 20-Vector Suite", () => {
   const secret = "test-admin-secret-456";
+  const adminToken = createAdminToken();
   const mockDb = createMockD1Database();
   const env = {
     DB: mockDb,
@@ -366,7 +382,7 @@ describe("ZANA Subscription & FastPay Manual Activation System - Comprehensive 2
     const approveReq = new Request("https://example.com/api/admin/payment-receipts/action", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${secret}`,
+        Authorization: `Bearer ${adminToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -414,7 +430,7 @@ describe("ZANA Subscription & FastPay Manual Activation System - Comprehensive 2
     const req = new Request("https://example.com/api/admin/payment-receipts/action", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${secret}`,
+        Authorization: `Bearer ${adminToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -452,7 +468,7 @@ describe("ZANA Subscription & FastPay Manual Activation System - Comprehensive 2
     const req = new Request("https://example.com/api/admin/payment-receipts/action", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${secret}`,
+        Authorization: `Bearer ${adminToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -488,7 +504,7 @@ describe("ZANA Subscription & FastPay Manual Activation System - Comprehensive 2
     const req = new Request("https://example.com/api/admin/payment-receipts/action", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${secret}`,
+        Authorization: `Bearer ${adminToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -525,7 +541,7 @@ describe("ZANA Subscription & FastPay Manual Activation System - Comprehensive 2
     const req = new Request("https://example.com/api/admin/payment-receipts/action", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${secret}`,
+        Authorization: `Bearer ${adminToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -572,7 +588,7 @@ describe("ZANA Subscription & FastPay Manual Activation System - Comprehensive 2
     const req = new Request("https://example.com/api/admin/payment-receipts/action", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${secret}`,
+        Authorization: `Bearer ${adminToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -753,7 +769,7 @@ describe("ZANA Subscription & FastPay Manual Activation System - Comprehensive 2
     const req = new Request("https://example.com/api/admin/payment-receipts?status=pending", {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${secret}`,
+        Authorization: `Bearer ${adminToken}`,
       },
     });
 
@@ -767,5 +783,30 @@ describe("ZANA Subscription & FastPay Manual Activation System - Comprehensive 2
     assert.ok(found, "Newly submitted receipt must be visible in admin pending queue");
     assert.strictEqual(found.status, "pending");
     assert.strictEqual(found.plan_id, "yearly");
+  });
+
+  // 23. Privilege Boundary: Generic ADMIN_TELEMETRY_SECRET is strictly rejected on admin operations
+  test("Vector 23: Telemetry secret ADMIN_TELEMETRY_SECRET is strictly rejected with 403 on admin routes", async () => {
+    const req = new Request("https://example.com/api/admin/payment-receipts", {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${secret}`,
+      },
+    });
+
+    const res = await worker.fetch(req, env as never);
+    assert.strictEqual(res.status, 403, "Telemetry secret must not grant access to admin receipts");
+
+    const activateReq = new Request("https://example.com/api/admin/subscriptions/activate", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${secret}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ userId: "student-1", planId: "monthly" }),
+    });
+
+    const activateRes = await worker.fetch(activateReq, env as never);
+    assert.strictEqual(activateRes.status, 403, "Telemetry secret must not grant access to subscription activation");
   });
 });

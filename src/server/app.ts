@@ -1199,8 +1199,30 @@ app.get("/api/users", async (req: Request, res: Response) => {
   res.json({ ok: true, users: [], note: "DB not available in Express dev mode" });
 });
 
+async function checkExpressAdmin(req: Request): Promise<boolean> {
+  try {
+    const fullUrl = `${req.protocol}://${req.get("host") || "localhost"}${req.originalUrl}`;
+    const headers = new Headers();
+    for (const [k, v] of Object.entries(req.headers)) {
+      if (typeof v === "string") headers.set(k, v);
+      else if (Array.isArray(v)) headers.set(k, v.join(", "));
+    }
+    const webReq = new Request(fullUrl, { method: req.method, headers });
+    const adminCheck = await verifyAdmin(webReq, {
+      VITE_FIREBASE_API_KEY: process.env.VITE_FIREBASE_API_KEY,
+      ALLOW_TEST_AUTH_MOCK: process.env.ALLOW_TEST_AUTH_MOCK,
+    });
+    return adminCheck.ok;
+  } catch {
+    return false;
+  }
+}
+
 // Admin Payment Receipts (Express dev parity — real data only in Cloudflare Worker with D1)
-app.get("/api/admin/payment-receipts", (req: Request, res: Response) => {
+app.get("/api/admin/payment-receipts", async (req: Request, res: Response) => {
+  if (!(await checkExpressAdmin(req))) {
+    return res.status(403).json({ error: "Unauthorized", detail: "دەستگەیشتن تەنها بۆ ئادمینە." });
+  }
   res.json({
     ok: true,
     receipts: [],
@@ -1208,12 +1230,22 @@ app.get("/api/admin/payment-receipts", (req: Request, res: Response) => {
   });
 });
 
-app.post("/api/admin/payment-receipts/action", (req: Request, res: Response) => {
-  res.json({ ok: true, message: "Receipt reviewed successfully" });
+app.post("/api/admin/payment-receipts/action", async (req: Request, res: Response) => {
+  if (!(await checkExpressAdmin(req))) {
+    return res.status(403).json({ error: "Unauthorized", detail: "دەستگەیشتن تەنها بۆ ئادمینە." });
+  }
+  return res.status(501).json({
+    ok: false,
+    error: "ئەم کردارەی ئادمین پێویستی بە داتابەیسی بەرهەمهێنانی D1 هەیە و لە Express dev mode بەردەست نییە.",
+    code: "UNAVAILABLE_IN_DEV",
+  });
 });
 
 // Admin Subscriptions (Express dev parity — real data only in Cloudflare Worker with D1)
-app.get("/api/admin/subscriptions", (req: Request, res: Response) => {
+app.get("/api/admin/subscriptions", async (req: Request, res: Response) => {
+  if (!(await checkExpressAdmin(req))) {
+    return res.status(403).json({ error: "Unauthorized", detail: "دەستگەیشتن تەنها بۆ ئادمینە." });
+  }
   res.json({
     ok: true,
     subscriptions: [],
@@ -1221,12 +1253,26 @@ app.get("/api/admin/subscriptions", (req: Request, res: Response) => {
   });
 });
 
-app.post("/api/admin/subscriptions/activate", (req: Request, res: Response) => {
-  res.json({ ok: true, message: "Subscription activated successfully" });
+app.post("/api/admin/subscriptions/activate", async (req: Request, res: Response) => {
+  if (!(await checkExpressAdmin(req))) {
+    return res.status(403).json({ error: "Unauthorized", detail: "دەستگەیشتن تەنها بۆ ئادمینە." });
+  }
+  return res.status(501).json({
+    ok: false,
+    error: "ئەم کردارەی ئادمین پێویستی بە داتابەیسی بەرهەمهێنانی D1 هەیە و لە Express dev mode بەردەست نییە.",
+    code: "UNAVAILABLE_IN_DEV",
+  });
 });
 
-app.post("/api/admin/subscriptions/reset-trial", (req: Request, res: Response) => {
-  res.json({ ok: true, message: "Trial reset successfully" });
+app.post("/api/admin/subscriptions/reset-trial", async (req: Request, res: Response) => {
+  if (!(await checkExpressAdmin(req))) {
+    return res.status(403).json({ error: "Unauthorized", detail: "دەستگەیشتن تەنها بۆ ئادمینە." });
+  }
+  return res.status(501).json({
+    ok: false,
+    error: "ئەم کردارەی ئادمین پێویستی بە داتابەیسی بەرهەمهێنانی D1 هەیە و لە Express dev mode بەردەست نییە.",
+    code: "UNAVAILABLE_IN_DEV",
+  });
 });
 
 app.all("/api/study-rooms*", async (req: Request, res: Response) => {

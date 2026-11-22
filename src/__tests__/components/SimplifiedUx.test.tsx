@@ -157,7 +157,7 @@ describe("Simplified Student UX & Navigation Architecture", () => {
     it("renders dynamic greeting header and streak badge", () => {
       render(<Home />);
       expect(screen.getByText(/کاروان/)).toBeDefined();
-      expect(screen.getByText(/ڕۆژ بەردەوام/)).toBeDefined();
+      expect(screen.getAllByText(/ڕۆژ بەردەوام/).length).toBeGreaterThan(0);
     });
 
     it("renders the primary Continue Learning card with big CTA", () => {

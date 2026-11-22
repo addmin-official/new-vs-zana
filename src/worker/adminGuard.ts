@@ -42,15 +42,9 @@ export async function verifyAdmin(
     ...(typeof env.ADMIN_EMAILS === "string" ? env.ADMIN_EMAILS.split(",").map((e) => e.trim()) : []),
   ].map((e) => e.toLowerCase());
 
-  // 1. Machine-to-Machine Secret (Telemetry / Cron / Internal)
-  if (env.ADMIN_TELEMETRY_SECRET && token === env.ADMIN_TELEMETRY_SECRET) {
-    return {
-      ok: true,
-      uid: "system-admin",
-      email: configuredEmails[0] || ADMIN_EMAILS[0],
-      role: "system_admin",
-    };
-  }
+  // 1. Cryptographic Firebase ID Token Verification (Human Admin Only)
+  // Note: Machine-to-machine telemetry secret is strictly handled via verifyInternalTelemetry()
+  // and is NEVER accepted for general administrative routes or data access.
 
   const projectId = String(
     env.FIREBASE_PROJECT_ID ||
@@ -147,4 +141,40 @@ export async function verifyAdmin(
 
   // 4. Default Deny
   return { ok: false, error: jwkResult.error || "Unauthorized: Verification service unavailable (deny-by-default)" };
+}
+
+/**
+ * Dedicated machine-to-machine & internal telemetry verification.
+ * Strictly permitted ONLY for internal telemetry endpoints (e.g. /api/internal/telemetry).
+ * Cannot be used to access human administrative routes (e.g. /api/admin/*, student lists, subscription management).
+ */
+export async function verifyInternalTelemetry(
+  request: Request,
+  env: {
+    ADMIN_TELEMETRY_SECRET?: string;
+    [key: string]: unknown;
+  }
+): Promise<{ ok: boolean; error?: string }> {
+  const authHeader = request.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return { ok: false, error: "Missing or invalid Authorization header" };
+  }
+
+  const token = authHeader.slice(7).trim();
+  if (!token) {
+    return { ok: false, error: "Empty Bearer token" };
+  }
+
+  // 1. Explicit Machine-to-Machine Secret (Only valid for internal telemetry)
+  if (env.ADMIN_TELEMETRY_SECRET && token === env.ADMIN_TELEMETRY_SECRET) {
+    return { ok: true };
+  }
+
+  // 2. Also allow verified human admin credentials
+  const humanAdminCheck = await verifyAdmin(request, env as never);
+  if (humanAdminCheck.ok) {
+    return { ok: true };
+  }
+
+  return { ok: false, error: "Unauthorized: Invalid telemetry secret or admin token" };
 }
