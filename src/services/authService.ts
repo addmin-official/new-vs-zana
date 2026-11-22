@@ -314,6 +314,24 @@ export async function logoutUser(): Promise<void> {
   }
   setLocalAuthUser(null);
   notifyAuthListeners(null);
+
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.removeItem("zana_user_role");
+      localStorage.removeItem("zana_app_store_v1");
+      const keysToRemove = Object.keys(localStorage).filter(
+        (k) =>
+          k.startsWith("zana_mastery_") ||
+          k.startsWith("zana_studypath_") ||
+          k.startsWith("zana_notifications_") ||
+          k.startsWith("zana_notification_prefs_") ||
+          k.startsWith("zana_weak_concepts_") ||
+          k.startsWith("zana_chat_messages_") ||
+          k.startsWith("zana_session_resume_")
+      );
+      keysToRemove.forEach((k) => localStorage.removeItem(k));
+    } catch {}
+  }
 }
 
 /**

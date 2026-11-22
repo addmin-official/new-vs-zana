@@ -186,25 +186,38 @@ function rateLimitMiddleware(limit: number, windowMs: number) {
 async function getAuthenticatedStudentId(req: Request): Promise<string> {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    if (process.env.NODE_ENV !== "production") {
-      return (req.query.studentId as string) || "dev_student_pilot";
-    }
+    // SECURITY: Never trust client-supplied studentId.
+    // Dev mode no longer allows query param bypass.
+    // Use Firebase emulator for local development.
     throw new Error("UNAUTHORIZED");
   }
   const token = authHeader.substring(7).trim();
-  if (!token) {
-    if (process.env.NODE_ENV !== "production") {
-      return (req.query.studentId as string) || "dev_student_pilot";
-    }
+  if (!token || token === "null" || token === "undefined") {
     throw new Error("UNAUTHORIZED");
   }
 
   try {
     const claims = await verifyFirebaseIdToken(token, process.env.FIREBASE_PROJECT_ID);
+    // UID comes exclusively from verified token claims — never from client input
     return claims.uid;
   } catch {
-    if (process.env.NODE_ENV !== "production") {
-      return (req.query.studentId as string) || "dev_student_pilot";
+    // In test environment only (not dev), allow test mock tokens
+    if (
+      process.env.NODE_ENV === "test" &&
+      process.env.ALLOW_TEST_AUTH_MOCK === "true"
+    ) {
+      // Extract sub from unverified token for test isolation only
+      try {
+        const parts = token.split(".");
+        if (parts.length === 3) {
+          const payload = JSON.parse(
+            Buffer.from(parts[1], "base64url").toString("utf-8")
+          );
+          if (payload.sub && typeof payload.sub === "string") {
+            return payload.sub;
+          }
+        }
+      } catch { /* fall through to throw */ }
     }
     throw new Error("UNAUTHORIZED");
   }
@@ -1160,18 +1173,52 @@ app.post("/api/admin/brain/preferences", (req: Request, res: Response) => {
   }
 });
 
-// Admin Payment Receipts (Local Dev / Express Parity)
+// Admin-only: student list (Express dev parity)
+// Note: In production, this route runs through Cloudflare Worker with admin guard
+app.get("/api/users", async (req: Request, res: Response) => {
+  // Express: apply admin guard manually
+  try {
+    const fullUrl = `${req.protocol}://${req.get("host") || "localhost"}${req.originalUrl}`;
+    const headers = new Headers();
+    for (const [k, v] of Object.entries(req.headers)) {
+      if (typeof v === "string") headers.set(k, v);
+    }
+    const webReq = new Request(fullUrl, { method: "GET", headers });
+    const adminCheck = await verifyAdmin(webReq, {
+      VITE_FIREBASE_API_KEY: process.env.VITE_FIREBASE_API_KEY,
+      ADMIN_TELEMETRY_SECRET: process.env.ADMIN_TELEMETRY_SECRET,
+      ALLOW_TEST_AUTH_MOCK: process.env.ALLOW_TEST_AUTH_MOCK,
+    });
+    if (!adminCheck.ok) {
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+  } catch {
+    return res.status(403).json({ error: "Unauthorized" });
+  }
+  // Express dev mode: no DB available, return empty
+  res.json({ ok: true, users: [], note: "DB not available in Express dev mode" });
+});
+
+// Admin Payment Receipts (Express dev parity — real data only in Cloudflare Worker with D1)
 app.get("/api/admin/payment-receipts", (req: Request, res: Response) => {
-  res.json({ ok: true, receipts: [] });
+  res.json({
+    ok: true,
+    receipts: [],
+    _note: "Real data available via Cloudflare Worker with D1 binding. Express dev mode has no D1.",
+  });
 });
 
 app.post("/api/admin/payment-receipts/action", (req: Request, res: Response) => {
   res.json({ ok: true, message: "Receipt reviewed successfully" });
 });
 
-// Admin Subscriptions (Local Dev / Express Parity)
+// Admin Subscriptions (Express dev parity — real data only in Cloudflare Worker with D1)
 app.get("/api/admin/subscriptions", (req: Request, res: Response) => {
-  res.json({ ok: true, subscriptions: [] });
+  res.json({
+    ok: true,
+    subscriptions: [],
+    _note: "Real data available via Cloudflare Worker with D1 binding. Express dev mode has no D1.",
+  });
 });
 
 app.post("/api/admin/subscriptions/activate", (req: Request, res: Response) => {

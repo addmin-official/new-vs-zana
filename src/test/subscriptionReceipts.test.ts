@@ -607,6 +607,9 @@ describe("ZANA Subscription & FastPay Manual Activation System - Comprehensive 2
 
     const req = new Request(`https://example.com/api/subscription/status?userId=${expiredUser}`, {
       method: "GET",
+      headers: {
+        Authorization: `Bearer ${expiredUser}`,
+      },
     });
 
     const res = await worker.fetch(req, env as never);

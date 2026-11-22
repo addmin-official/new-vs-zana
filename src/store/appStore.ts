@@ -157,7 +157,7 @@ let currentState: AppState = {
   userRole:
     (typeof window !== "undefined" &&
       (localStorage.getItem("zana_user_role") as UserRole)) ||
-    "admin",
+    "student",
   chapters: FALLBACK_CHEMISTRY_CHAPTERS,
   activeChapter: initialCh,
   chatMessages: initialMsgs,
@@ -480,9 +480,31 @@ let currentState: AppState = {
 
   logout: () => {
     const initialMsgs = loadLessonChatMessages("chemistry", 1);
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.removeItem("zana_user_role");
+        localStorage.removeItem("zana_app_store_v1");
+        const keysToRemove = Object.keys(localStorage).filter(
+          (k) =>
+            k.startsWith("zana_mastery_") ||
+            k.startsWith("zana_studypath_") ||
+            k.startsWith("zana_notifications_") ||
+            k.startsWith("zana_weak_concepts_") ||
+            k.startsWith("zana_chat_messages_") ||
+            k.startsWith("zana_session_resume_")
+        );
+        keysToRemove.forEach((k) => localStorage.removeItem(k));
+      } catch {}
+    }
     setState({
       chatMessages: initialMsgs,
       user: { ...DEFAULT_USER, name: "قوتابی میوان" },
+      userRole: "student",
+      userProgress: {
+        streak: 1,
+        lessonsCompleted: 0,
+        totalScore: 0,
+      },
     });
     currentState.addNotification("info", "لە سیستەم چوویتە دەرەوە.");
   },

@@ -542,6 +542,17 @@ async function getWorkerAuthenticatedStudentId(req: Request, env: Env): Promise<
   }
 }
 
+function getPersistenceMode(env: Env): "production" | "development" | "test" {
+  if (
+    env.ZANA_ENV === "test" ||
+    env.ALLOW_TEST_AUTH_MOCK === "true" ||
+    (typeof process !== "undefined" && (process.env?.ZANA_ENV === "test" || process.env?.NODE_ENV === "test"))
+  ) {
+    return "test";
+  }
+  return "production";
+}
+
 function requireWorkerAdminPersistence(
   env: Env,
   brainService: InternalBrainService,
@@ -1552,8 +1563,8 @@ export default {
           );
         }
 
-        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, "production");
-        const ap = new PersistentAssessmentRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, "production");
+        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, getPersistenceMode(env));
+        const ap = new PersistentAssessmentRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, getPersistenceMode(env));
         const service = new AssessmentService(ap);
 
         const profile = await lp.getStudentMasteryProfile(studentId);
@@ -1644,8 +1655,8 @@ export default {
           );
         }
 
-        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, "production");
-        const ap = new PersistentAssessmentRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, "production");
+        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, getPersistenceMode(env));
+        const ap = new PersistentAssessmentRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, getPersistenceMode(env));
 
         const existingAttempt = await ap.getAttempt(attemptId);
         if (!existingAttempt) {
@@ -1685,8 +1696,8 @@ export default {
           );
         }
 
-        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, "production");
-        const ap = new PersistentAssessmentRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, "production");
+        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, getPersistenceMode(env));
+        const ap = new PersistentAssessmentRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, getPersistenceMode(env));
 
         const existingAttempt = await ap.getAttempt(attemptId);
         if (!existingAttempt) {
@@ -1714,7 +1725,7 @@ export default {
         const parts = pathname.split("/");
         const attemptId = decodeURIComponent(parts[parts.length - 1]);
 
-        const ap = new PersistentAssessmentRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, "production");
+        const ap = new PersistentAssessmentRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, getPersistenceMode(env));
         const attempt = await ap.getAttempt(attemptId);
 
         if (!attempt) {
@@ -2217,8 +2228,19 @@ export default {
         }
       }
 
-      // GET /api/users
-      if (pathname === "/api/users" && request.method === "GET") {
+      // GET /api/admin/users (was /api/users — moved under admin guard)
+      if ((pathname === "/api/admin/users" || pathname === "/api/users") && request.method === "GET") {
+        // Admin guard already verified above for /api/admin/*
+        // For legacy /api/users path, verify admin explicitly
+        if (pathname === "/api/users") {
+          const legacyAdminCheck = await verifyAdmin(request, env as never);
+          if (!legacyAdminCheck.ok) {
+            return new Response(
+              JSON.stringify({ error: "Unauthorized", detail: "Student list requires admin access." }),
+              { status: 403, headers: responseHeaders }
+            );
+          }
+        }
         if (!env.DB) {
           return new Response(JSON.stringify({ ok: true, users: [] }), {
             status: 200,
@@ -2737,12 +2759,20 @@ export default {
 
       // GET /api/subscription/status
       if (pathname === "/api/subscription/status" && request.method === "GET") {
-        let userId = url.searchParams.get("userId")?.trim();
-        const authHeader = request.headers.get("Authorization");
-        if (authHeader && authHeader.startsWith("Bearer ")) {
-          const authResult = await verifyAuthWorker(request, env, responseHeaders);
-          if (authResult instanceof Response) return authResult;
-          if (userId && userId !== authResult.user.uid && authResult.user.email !== "addmin.official.idg@gmail.com") {
+        // SECURITY: Always require authentication — no unauthenticated subscription status
+        const authResult = await verifyAuthWorker(request, env, responseHeaders);
+        if (authResult instanceof Response) return authResult;
+
+        const verifiedUid = authResult.user.uid;
+        const verifiedEmail = authResult.user.email || "";
+
+        // Allow admin to query any user, students can only query themselves
+        const requestedUserId = url.searchParams.get("userId")?.trim();
+        let userId: string;
+
+        if (requestedUserId && requestedUserId !== verifiedUid) {
+          // Only admin can query other users' subscription status
+          if (verifiedEmail.toLowerCase() !== "addmin.official.idg@gmail.com") {
             return new Response(
               JSON.stringify({
                 error: "FORBIDDEN",
@@ -2751,16 +2781,9 @@ export default {
               { status: 403, headers: responseHeaders }
             );
           }
-          if (!userId) {
-            userId = authResult.user.uid;
-          }
-        }
-
-        if (!userId) {
-          return new Response(JSON.stringify({ error: "userId is required" }), {
-            status: 400,
-            headers: responseHeaders,
-          });
+          userId = requestedUserId;
+        } else {
+          userId = verifiedUid;
         }
         if (!env.DB) {
           return new Response(
@@ -3140,22 +3163,30 @@ export default {
 
             for (const n of notifs) {
               if (!n.id || !n.type || !n.title || !n.message || !n.deduplicationKey) continue;
+
+              // SECURITY: Scope deduplication key to this student only
+              // Prevents cross-student dedup key collisions
+              const scopedDedupKey = `uid:${studentId}:${n.deduplicationKey}`;
+
+              // SECURITY: Scope notification ID to this student to prevent ID guessing
+              const scopedId = `${studentId.substring(0, 8)}_${n.id}`;
+
               const now = Date.now();
               await env.DB.prepare(
                 `INSERT OR IGNORE INTO notifications
                  (id, student_id, type, title, message, action_label, action_url, created_at, read_at, priority, deduplication_key, expires_at)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)`
               ).bind(
-                n.id,
-                studentId,
+                scopedId,
+                studentId,     // Always from verified token — never from client
                 n.type,
-                n.title,
-                n.message,
-                n.actionLabel || null,
-                n.actionUrl || null,
+                n.title.substring(0, 200),    // Sanitize length
+                n.message.substring(0, 1000), // Sanitize length
+                n.actionLabel ? n.actionLabel.substring(0, 100) : null,
+                n.actionUrl ? n.actionUrl.substring(0, 500) : null,
                 now,
                 n.priority || "normal",
-                n.deduplicationKey,
+                scopedDedupKey,
                 n.expiresAt || null
               ).run();
               insertedCount++;
