@@ -704,12 +704,23 @@ export default {
     } else if (pathname.startsWith("/api/internal/")) {
       // SECURITY: Only explicitly allowlisted internal endpoints accept the telemetry secret.
       // Any /api/internal/* path NOT in this list is denied by default — even with a valid secret.
-      const ALLOWED_INTERNAL_TELEMETRY_PATHS = ["/api/internal/telemetry"];
+      const ALLOWED_INTERNAL_TELEMETRY_PATHS: ReadonlyArray<string> = ["/api/internal/telemetry"];
       if (!ALLOWED_INTERNAL_TELEMETRY_PATHS.includes(pathname)) {
         return new Response(
           JSON.stringify({
             error: "Forbidden",
             detail: "Internal route not explicitly authorised for telemetry access.",
+          }),
+          { status: 403, headers: responseHeaders }
+        );
+      }
+      // Sensitive export endpoint must not be accessible via telemetry secret alone.
+      // Require admin-routed access for telemetry exports to reduce disclosure risk.
+      if (pathname === "/api/internal/telemetry") {
+        return new Response(
+          JSON.stringify({
+            error: "Forbidden",
+            detail: "Telemetry export requires admin-scoped access.",
           }),
           { status: 403, headers: responseHeaders }
         );
