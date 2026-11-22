@@ -39,15 +39,20 @@ export async function verifyAuthToken(
     };
   }
 
-  // Allow single-segment mock tokens ONLY in explicit test environments.
-  // Any token formatted as a JWT (containing '.') MUST strictly be verified by verifyFirebaseIdToken.
-  const isTest =
+  // Production Security Barrier:
+  // In production (NODE_ENV === 'production' or ZANA_ENV === 'production'), mock tokens are UNCONDITIONALLY FORBIDDEN.
+  // No mock token flag, environment override, or test payload can bypass cryptographic verification in production.
+  const isProduction =
     typeof process !== "undefined" &&
-    (process.env?.NODE_ENV === "test" ||
-      process.env?.ALLOW_TEST_AUTH_MOCK === "true" ||
-      process.env?.ZANA_ENV === "test");
+    (process.env?.NODE_ENV === "production" || process.env?.ZANA_ENV === "production");
 
-  if (isTest && !token.includes(".")) {
+  const isExplicitTestMode =
+    !isProduction &&
+    typeof process !== "undefined" &&
+    (process.env?.NODE_ENV === "test" || process.env?.ZANA_ENV === "test") &&
+    process.env?.ALLOW_TEST_AUTH_MOCK === "true";
+
+  if (isExplicitTestMode && !token.includes(".")) {
     return {
       ok: true,
       status: 200,

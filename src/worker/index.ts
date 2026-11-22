@@ -490,9 +490,30 @@ export async function checkSubscription(
 
     if (!sub) {
       const trialEndsAt = now + trialDurationMs;
-      await env.DB.prepare(
-        "INSERT INTO subscriptions (user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at) VALUES (?, 'trial', ?, ?, NULL, ?)"
+      const insertRes = await env.DB.prepare(
+        `INSERT INTO subscriptions (user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at)
+         VALUES (?, 'trial', ?, ?, 'free_trial_3d', ?)
+         ON CONFLICT(user_id) DO NOTHING`
       ).bind(userId, now, trialEndsAt, now).run();
+
+      const changes = (insertRes as unknown as { meta?: { changes?: number } })?.meta?.changes ?? 1;
+      if (changes === 0) {
+        const raced = await env.DB.prepare(
+          "SELECT user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at FROM subscriptions WHERE user_id = ?"
+        ).bind(userId).first<{
+          user_id: string;
+          status: string;
+          trial_started_at: number;
+          trial_ends_at: number;
+          plan_id: string | null;
+          updated_at: number;
+        }>();
+
+        if (raced) {
+          if (now > raced.trial_ends_at) return { status: "expired" };
+          return { status: (raced.status as "trial" | "active" | "expired") || "trial" };
+        }
+      }
 
       return { status: "trial" };
     }
@@ -2758,8 +2779,27 @@ export default {
           }>();
 
           if (existingSub) {
-            // Case A: User already has an active paid subscription — preserve active status
+            // Case A: User already has an active paid subscription
             if (existingSub.status === "active") {
+              if (now > existingSub.trial_ends_at) {
+                await env.DB.prepare(
+                  "UPDATE subscriptions SET status = 'expired', updated_at = ? WHERE user_id = ?"
+                ).bind(now, studentId).run().catch(() => {});
+
+                return new Response(
+                  JSON.stringify({
+                    ok: false,
+                    error: "SUBSCRIPTION_EXPIRED",
+                    detail: "ماوەی بەشداریکردنەکەت بەسەرچووە. تکایە بەشداریکردنەکەت نوێ بکەرەوە.",
+                    status: "expired",
+                    trial_started_at: existingSub.trial_started_at,
+                    trial_ends_at: existingSub.trial_ends_at,
+                    plan_id: existingSub.plan_id,
+                  }),
+                  { status: 403, headers: responseHeaders }
+                );
+              }
+
               return new Response(
                 JSON.stringify({
                   ok: true,

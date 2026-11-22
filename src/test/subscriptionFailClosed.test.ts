@@ -567,6 +567,39 @@ describe("Critical: Secure Trial Start & Student Registration Lifecycle", () => 
     assert.strictEqual(persisted?.status, "active");
   });
 
+  test("8b. Expired active subscription cannot be restarted and returns 403 SUBSCRIPTION_EXPIRED", async () => {
+    const d1 = createStatefulD1();
+    const env = makeTestEnv(d1);
+    const tokenA = createStudentToken("student_a");
+
+    const pastExpiry = Date.now() - 5000; // expired 5 seconds ago
+    d1.store.subscriptions.push({
+      user_id: "student_a",
+      status: "active",
+      trial_started_at: Date.now() - 365 * 24 * 60 * 60 * 1000,
+      trial_ends_at: pastExpiry,
+      plan_id: "yearly",
+      updated_at: pastExpiry,
+    });
+
+    const req = new Request("https://zana.test/api/trial/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "https://localhost", Authorization: `Bearer ${tokenA}` },
+      body: JSON.stringify({}),
+    });
+
+    const res = await worker.handleRequest(req, env as never);
+    assert.strictEqual(res.status, 403);
+    const body = (await res.json()) as { ok: boolean; error: string; status: string };
+    assert.strictEqual(body.ok, false);
+    assert.strictEqual(body.error, "SUBSCRIPTION_EXPIRED");
+    assert.strictEqual(body.status, "expired");
+
+    // Verify D1 persisted state was updated to expired
+    const persisted = d1.store.subscriptions.find((s) => s.user_id === "student_a");
+    assert.strictEqual(persisted?.status, "expired");
+  });
+
   test("9. Missing D1 database returns 503 DATABASE_UNAVAILABLE", async () => {
     const env = { ...makeTestEnv(), DB: undefined }; // missing DB
     const tokenA = createStudentToken("student_a");
@@ -714,5 +747,71 @@ describe("Critical: Subscription Status Admin Authorization Boundary", () => {
     const body = (await res.json()) as { ok: boolean; status: string };
     assert.strictEqual(body.ok, true);
     assert.strictEqual(body.status, "active");
+  });
+});
+
+describe("Critical: Production Mock Token Hardening & Telemetry Privacy", () => {
+  test("1. verifyAuthToken unconditionally rejects mock tokens when in production environment", async () => {
+    const origNodeEnv = process.env.NODE_ENV;
+    const origZanaEnv = process.env.ZANA_ENV;
+    const origMockFlag = process.env.ALLOW_TEST_AUTH_MOCK;
+    try {
+      process.env.NODE_ENV = "production";
+      process.env.ZANA_ENV = "production";
+      process.env.ALLOW_TEST_AUTH_MOCK = "true"; // Even if attacker or bad config sets this flag!
+
+      const { verifyAuthToken } = await import("../server/middleware/authMiddleware.ts");
+      const result = await verifyAuthToken("Bearer test-student-token");
+      assert.strictEqual(result.ok, false);
+      assert.strictEqual(result.status, 401);
+    } finally {
+      process.env.NODE_ENV = origNodeEnv;
+      process.env.ZANA_ENV = origZanaEnv;
+      process.env.ALLOW_TEST_AUTH_MOCK = origMockFlag;
+    }
+  });
+
+  test("2. Telemetry export strips raw studentId and free-text comments, returning anonymized data", async () => {
+    const { handleTelemetryExportRoute } = await import("../server/api/internal/telemetryExport.ts");
+    const fakeKv = {
+      list: async () => ({
+        keys: [{ name: "feedback:AI_INACCURATE:1700000000000:student_secret_uid" }],
+      }),
+      get: async () => ({
+        id: "fb-test-privacy",
+        studentId: "student_secret_uid_12345",
+        issueType: "AI_INACCURATE",
+        topicId: "physics-ch1",
+        grade: "12",
+        subject: "physics",
+        timestamp: "2026-11-22T10:00:00.000Z",
+        comments: "Secret student comment containing personal info",
+      }),
+    };
+
+    const req = new Request("https://example.com/api/internal/telemetry", {
+      headers: { Authorization: "Bearer test-telemetry-key" },
+    });
+    const res = await handleTelemetryExportRoute(req, {
+      ADMIN_TELEMETRY_SECRET: "test-telemetry-key",
+      LEARNING_RECORDS_KV: fakeKv as never,
+    });
+
+    assert.strictEqual(res.status, 200);
+    const body = (await res.json()) as { success: boolean; data: Array<Record<string, unknown>> };
+    assert.strictEqual(body.success, true);
+    assert.strictEqual(body.data.length, 1);
+
+    const item = body.data[0];
+    assert.strictEqual(item.id, "fb-test-privacy");
+    // Raw studentId MUST NOT exist
+    assert.strictEqual(item.studentId, undefined, "Raw studentId must be omitted");
+    // Free-text comments MUST NOT exist
+    assert.strictEqual(item.comments, undefined, "Raw comments must be omitted");
+    // Anonymized identifier must exist
+    assert.ok(typeof item.anonymousStudentId === "string" && (item.anonymousStudentId as string).startsWith("anon_"));
+    // Operational flags must exist
+    assert.strictEqual(item.hasComments, true);
+    assert.strictEqual(item.commentsLength, "Secret student comment containing personal info".length);
   });
 });
