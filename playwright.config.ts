@@ -23,6 +23,7 @@ export default defineConfig({
       name: "chromium",
       use: {
         ...devices["Desktop Chrome"],
+        channel: process.env.CI ? undefined : "chrome",
         viewport: { width: 1280, height: 720 },
       },
     },

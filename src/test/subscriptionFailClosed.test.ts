@@ -205,13 +205,514 @@ describe("Blocker C — Subscription route: client userId cannot override token 
       }
     );
 
-    await worker.handleRequest(r, env as never);
+    const res = await worker.handleRequest(r, env as never);
+    // When queried by non-admin student, it must return 403 FORBIDDEN
+    assert.strictEqual(res.status, 403, "Student must be forbidden from querying another student's subscription");
+  });
+});
 
-    // The DB must have been queried with the AUTHENTICATED UID, never the spoofed one
-    const usedSpoofedUID = queriedUIDs.some(uid => uid === spoofedUID);
-    assert.ok(!usedSpoofedUID, `Server must NOT query with client-supplied spoofed userId="${spoofedUID}". Queried: ${JSON.stringify(queriedUIDs)}`);
-    if (queriedUIDs.length > 0) {
-      assert.strictEqual(queriedUIDs[0], authenticatedUID, "Must query with authenticated UID from token");
-    }
+// ── Stateful D1 Mock for Persistence Verification ───────────────────────────
+
+function createStatefulD1() {
+  const subscriptions: Array<{
+    user_id: string;
+    status: string;
+    trial_started_at: number;
+    trial_ends_at: number;
+    plan_id: string | null;
+    updated_at: number;
+  }> = [];
+
+  const students: Array<{
+    id: string;
+    firebase_uid: string;
+    name: string;
+    email: string;
+    grade: string;
+    created_at: string;
+  }> = [];
+
+  return {
+    store: { subscriptions, students },
+    prepare(sql: string) {
+      let bound: unknown[] = [];
+      return {
+        bind(...args: unknown[]) {
+          bound = args;
+          return this;
+        },
+        async first<T = Record<string, unknown>>() {
+          if (sql.includes("FROM subscriptions WHERE user_id = ?")) {
+            const uid = bound[0] as string;
+            const found = subscriptions.find((s) => s.user_id === uid);
+            return (found ? { ...found } : null) as T;
+          }
+          if (sql.includes("FROM students WHERE id = ?")) {
+            const uid = bound[0] as string;
+            const found = students.find((s) => s.id === uid);
+            return (found ? { ...found } : null) as T;
+          }
+          return null as T;
+        },
+        async run() {
+          if (sql.includes("INSERT INTO students")) {
+            const [id, firebase_uid, name, email, grade] = bound;
+            const existing = students.find((s) => s.id === String(id));
+            if (existing) {
+              if (name) existing.name = String(name);
+              if (email) existing.email = String(email);
+              if (grade) existing.grade = String(grade);
+            } else {
+              students.push({
+                id: String(id),
+                firebase_uid: String(firebase_uid),
+                name: String(name || "قوتابی"),
+                email: String(email || ""),
+                grade: String(grade || "12"),
+                created_at: new Date().toISOString(),
+              });
+            }
+            return { meta: { changes: 1 } };
+          }
+
+          if (sql.includes("INSERT INTO subscriptions")) {
+            let user_id: unknown, status: unknown, trial_started_at: unknown, trial_ends_at: unknown, plan_id: unknown, updated_at: unknown;
+            if (bound.length === 4) {
+              [user_id, trial_started_at, trial_ends_at, updated_at] = bound;
+              status = "trial";
+              plan_id = "free_trial_3d";
+            } else if (bound.length === 5) {
+              [user_id, trial_started_at, trial_ends_at, plan_id, updated_at] = bound;
+              status = "active";
+            } else {
+              [user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at] = bound;
+            }
+            const existing = subscriptions.find((s) => s.user_id === String(user_id));
+            if (existing) {
+              // ON CONFLICT DO NOTHING — changes = 0
+              return { meta: { changes: 0 } };
+            }
+            subscriptions.push({
+              user_id: String(user_id),
+              status: String(status || "trial"),
+              trial_started_at: Number(trial_started_at),
+              trial_ends_at: Number(trial_ends_at),
+              plan_id: plan_id ? String(plan_id) : null,
+              updated_at: Number(updated_at),
+            });
+            return { meta: { changes: 1 } };
+          }
+
+          if (sql.includes("UPDATE subscriptions SET status = 'expired'")) {
+            const [now, uid] = bound;
+            const existing = subscriptions.find((s) => s.user_id === String(uid));
+            if (existing) {
+              existing.status = "expired";
+              existing.updated_at = Number(now);
+              return { meta: { changes: 1 } };
+            }
+            return { meta: { changes: 0 } };
+          }
+
+          return { meta: { changes: 1 } };
+        },
+        async all<T>() {
+          return { results: [] as T[] };
+        },
+      };
+    },
+  };
+}
+
+function createExpiredStudentToken(uid: string): string {
+  const header = Buffer.from(JSON.stringify({ alg: "RS256", kid: "test" })).toString("base64url");
+  const payload = Buffer.from(JSON.stringify({
+    sub: uid, uid, email: `${uid}@test.krd`,
+    aud: "gen-lang-client-0009572581",
+    iss: "https://securetoken.google.com/gen-lang-client-0009572581",
+    iat: Math.floor(Date.now() / 1000) - 7200,
+    exp: Math.floor(Date.now() / 1000) - 3600, // expired 1 hour ago
+  })).toString("base64url");
+  return `${header}.${payload}.mock-sig`;
+}
+
+function createAdminAuthToken(): string {
+  const header = Buffer.from(JSON.stringify({ alg: "RS256", kid: "test" })).toString("base64url");
+  const payload = Buffer.from(JSON.stringify({
+    sub: "admin_uid_root",
+    uid: "admin_uid_root",
+    email: "addmin.official.idg@gmail.com",
+    role: "admin",
+    admin: true,
+    aud: "gen-lang-client-0009572581",
+    iss: "https://securetoken.google.com/gen-lang-client-0009572581",
+    iat: Math.floor(Date.now() / 1000) - 60,
+    exp: Math.floor(Date.now() / 1000) + 3600,
+  })).toString("base64url");
+  return `${header}.${payload}.mock-sig`;
+}
+
+describe("Critical: Secure Trial Start & Student Registration Lifecycle", () => {
+  const makeTestEnv = (d1: unknown = createStatefulD1()) => ({
+    GEMINI_API_KEY: "test-key",
+    FIREBASE_PROJECT_ID: "gen-lang-client-0009572581",
+    ALLOWED_ORIGINS: "https://localhost",
+    ALLOW_TEST_AUTH_MOCK: "true",
+    ZANA_ENV: "test",
+    DB: d1,
+    LEARNING_RECORDS_KV: { get: () => Promise.resolve(null), put: () => Promise.resolve() },
+  });
+
+  test("1. Unauthenticated trial-start request is rejected with 401", async () => {
+    const env = makeTestEnv();
+    const req = new Request("https://zana.test/api/trial/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "https://localhost" },
+      body: JSON.stringify({ userId: "student_unauth" }),
+    });
+
+    const res = await worker.handleRequest(req, env as never);
+    assert.strictEqual(res.status, 401, "Missing token must be rejected with 401");
+  });
+
+  test("2. Invalid/malformed token plus arbitrary userId is rejected with 401", async () => {
+    const env = makeTestEnv();
+    const req = new Request("https://zana.test/api/trial/start", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "https://localhost",
+        Authorization: "Bearer garbage.invalid.token",
+      },
+      body: JSON.stringify({ userId: "student_victim" }),
+    });
+
+    const res = await worker.handleRequest(req, env as never);
+    assert.strictEqual(res.status, 401, "Invalid token must return 401");
+  });
+
+  test("3. Expired token plus arbitrary userId is rejected with 401", async () => {
+    const env = makeTestEnv();
+    const expiredToken = createExpiredStudentToken("student_expired");
+    const req = new Request("https://zana.test/api/trial/start", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "https://localhost",
+        Authorization: `Bearer ${expiredToken}`,
+      },
+      body: JSON.stringify({ userId: "student_expired" }),
+    });
+
+    const res = await worker.handleRequest(req, env as never);
+    assert.strictEqual(res.status, 401, "Expired token must return 401");
+  });
+
+  test("4. Student A cannot create or modify Student B's trial (rejected with 403)", async () => {
+    const d1 = createStatefulD1();
+    const env = makeTestEnv(d1);
+    const tokenA = createStudentToken("student_a");
+
+    const req = new Request("https://zana.test/api/trial/start", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "https://localhost",
+        Authorization: `Bearer ${tokenA}`,
+      },
+      body: JSON.stringify({ userId: "student_b" }),
+    });
+
+    const res = await worker.handleRequest(req, env as never);
+    assert.strictEqual(res.status, 403, "Client userId differing from token UID must return 403");
+
+    // Verify D1 state: student_b was NOT created
+    const subB = d1.store.subscriptions.find((s) => s.user_id === "student_b");
+    assert.strictEqual(subB, undefined, "student_b subscription must not exist in D1");
+  });
+
+  test("5. Valid Student A token creates Student A's trial with exact 3-day window; persisted in D1", async () => {
+    const d1 = createStatefulD1();
+    const env = makeTestEnv(d1);
+    const tokenA = createStudentToken("student_a");
+
+    const req = new Request("https://zana.test/api/trial/start", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "https://localhost",
+        Authorization: `Bearer ${tokenA}`,
+      },
+      body: JSON.stringify({ name: "Student Alpha", grade: "12" }),
+    });
+
+    const res = await worker.handleRequest(req, env as never);
+    assert.strictEqual(res.status, 200);
+    const body = (await res.json()) as { ok: boolean; status: string; trial_started_at: number; trial_ends_at: number };
+    assert.strictEqual(body.ok, true);
+    assert.strictEqual(body.status, "trial");
+
+    const duration = body.trial_ends_at - body.trial_started_at;
+    const expectedDuration = 3 * 24 * 60 * 60 * 1000;
+    assert.ok(Math.abs(duration - expectedDuration) < 2000, "Trial duration must be 3 days");
+
+    // Verify persisted D1 state
+    const persisted = d1.store.subscriptions.find((s) => s.user_id === "student_a");
+    assert.ok(persisted, "Subscription must be persisted in D1");
+    assert.strictEqual(persisted?.status, "trial");
+    assert.strictEqual(persisted?.trial_ends_at, body.trial_ends_at);
+  });
+
+  test("6. Repeated trial-start calls do NOT extend or reset trial expiry", async () => {
+    const d1 = createStatefulD1();
+    const env = makeTestEnv(d1);
+    const tokenA = createStudentToken("student_a");
+
+    // Initial call
+    const req1 = new Request("https://zana.test/api/trial/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "https://localhost", Authorization: `Bearer ${tokenA}` },
+      body: JSON.stringify({ name: "Student Alpha" }),
+    });
+    const res1 = await worker.handleRequest(req1, env as never);
+    const body1 = (await res1.json()) as { trial_started_at: number; trial_ends_at: number };
+
+    // Simulate time passing: manually advance trial in DB by 1 hour
+    const initialExpiry = body1.trial_ends_at;
+
+    // Second call 1 hour later
+    const req2 = new Request("https://zana.test/api/trial/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "https://localhost", Authorization: `Bearer ${tokenA}` },
+      body: JSON.stringify({ name: "Student Alpha" }),
+    });
+    const res2 = await worker.handleRequest(req2, env as never);
+    assert.strictEqual(res2.status, 200);
+    const body2 = (await res2.json()) as { trial_started_at: number; trial_ends_at: number };
+
+    // MUST NOT EXTEND: expiry must be strictly equal to the initial expiry
+    assert.strictEqual(body2.trial_ends_at, initialExpiry, "Repeated call must NOT extend trial_ends_at");
+
+    // Persisted D1 state check
+    const persisted = d1.store.subscriptions.find((s) => s.user_id === "student_a");
+    assert.strictEqual(persisted?.trial_ends_at, initialExpiry, "D1 persisted trial_ends_at must remain unchanged");
+  });
+
+  test("7. Expired trial cannot be restarted (returns 403 TRIAL_ALREADY_USED)", async () => {
+    const d1 = createStatefulD1();
+    const env = makeTestEnv(d1);
+    const tokenA = createStudentToken("student_a");
+
+    // Insert an already-expired trial into D1
+    const pastStart = Date.now() - 4 * 24 * 60 * 60 * 1000;
+    const pastEnd = Date.now() - 1 * 24 * 60 * 60 * 1000; // expired 1 day ago
+    d1.store.subscriptions.push({
+      user_id: "student_a",
+      status: "expired",
+      trial_started_at: pastStart,
+      trial_ends_at: pastEnd,
+      plan_id: null,
+      updated_at: pastEnd,
+    });
+
+    const req = new Request("https://zana.test/api/trial/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "https://localhost", Authorization: `Bearer ${tokenA}` },
+      body: JSON.stringify({}),
+    });
+
+    const res = await worker.handleRequest(req, env as never);
+    assert.strictEqual(res.status, 403, "Expired trial must return 403");
+    const body = (await res.json()) as { ok: boolean; error: string; status: string };
+    assert.strictEqual(body.ok, false);
+    assert.strictEqual(body.error, "TRIAL_ALREADY_USED");
+    assert.strictEqual(body.status, "expired");
+
+    // Verify D1 state: status remains expired, expiry was NOT extended
+    const persisted = d1.store.subscriptions.find((s) => s.user_id === "student_a");
+    assert.strictEqual(persisted?.status, "expired");
+    assert.strictEqual(persisted?.trial_ends_at, pastEnd);
+  });
+
+  test("8. Existing active subscription remains active (never downgraded by trial-start)", async () => {
+    const d1 = createStatefulD1();
+    const env = makeTestEnv(d1);
+    const tokenA = createStudentToken("student_a");
+
+    const futureExpiry = Date.now() + 30 * 24 * 60 * 60 * 1000;
+    d1.store.subscriptions.push({
+      user_id: "student_a",
+      status: "active",
+      trial_started_at: Date.now() - 1000,
+      trial_ends_at: futureExpiry,
+      plan_id: "yearly",
+      updated_at: Date.now(),
+    });
+
+    const req = new Request("https://zana.test/api/trial/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "https://localhost", Authorization: `Bearer ${tokenA}` },
+      body: JSON.stringify({}),
+    });
+
+    const res = await worker.handleRequest(req, env as never);
+    assert.strictEqual(res.status, 200);
+    const body = (await res.json()) as { ok: boolean; status: string; plan_id: string };
+    assert.strictEqual(body.ok, true);
+    assert.strictEqual(body.status, "active", "Status must remain active");
+    assert.strictEqual(body.plan_id, "yearly", "Plan must remain yearly");
+
+    // Verify D1 persisted state
+    const persisted = d1.store.subscriptions.find((s) => s.user_id === "student_a");
+    assert.strictEqual(persisted?.status, "active");
+  });
+
+  test("9. Missing D1 database returns 503 DATABASE_UNAVAILABLE", async () => {
+    const env = { ...makeTestEnv(), DB: undefined }; // missing DB
+    const tokenA = createStudentToken("student_a");
+
+    const req = new Request("https://zana.test/api/trial/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "https://localhost", Authorization: `Bearer ${tokenA}` },
+      body: JSON.stringify({}),
+    });
+
+    const res = await worker.handleRequest(req, env as never);
+    assert.strictEqual(res.status, 503);
+    const body = (await res.json()) as { error: string };
+    assert.strictEqual(body.error, "DATABASE_UNAVAILABLE");
+  });
+
+  test("10. POST /api/students/register follows same strict identity rules", async () => {
+    const d1 = createStatefulD1();
+    const env = makeTestEnv(d1);
+    const tokenA = createStudentToken("student_a");
+
+    // Spoofed userId attempt
+    const spoofReq = new Request("https://zana.test/api/students/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "https://localhost", Authorization: `Bearer ${tokenA}` },
+      body: JSON.stringify({ userId: "student_impersonated" }),
+    });
+
+    const spoofRes = await worker.handleRequest(spoofReq, env as never);
+    assert.strictEqual(spoofRes.status, 403, "Spoofed userId on /api/students/register must return 403");
+
+    // Legitimate registration
+    const legitReq = new Request("https://zana.test/api/students/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "https://localhost", Authorization: `Bearer ${tokenA}` },
+      body: JSON.stringify({ name: "Student Legit", grade: "11" }),
+    });
+
+    const legitRes = await worker.handleRequest(legitReq, env as never);
+    assert.strictEqual(legitRes.status, 200);
+
+    const studentRecord = d1.store.students.find((st) => st.id === "student_a");
+    assert.ok(studentRecord, "Student must be registered in D1 under authenticated UID");
+    assert.strictEqual(studentRecord?.id, "student_a");
+  });
+});
+
+describe("Critical: Subscription Status Admin Authorization Boundary", () => {
+  const makeTestEnv = (d1: unknown = createStatefulD1()) => ({
+    GEMINI_API_KEY: "test-key",
+    FIREBASE_PROJECT_ID: "gen-lang-client-0009572581",
+    ALLOWED_ORIGINS: "https://localhost",
+    ALLOW_TEST_AUTH_MOCK: "true",
+    ZANA_ENV: "test",
+    DB: d1,
+    LEARNING_RECORDS_KV: { get: () => Promise.resolve(null), put: () => Promise.resolve() },
+  });
+
+  test("1. Normal student querying own subscription succeeds (200)", async () => {
+    const d1 = createStatefulD1();
+    d1.store.subscriptions.push({
+      user_id: "student_self",
+      status: "trial",
+      trial_started_at: Date.now() - 1000,
+      trial_ends_at: Date.now() + 200_000,
+      plan_id: null,
+      updated_at: Date.now(),
+    });
+    const env = makeTestEnv(d1);
+    const token = createStudentToken("student_self");
+
+    const req = new Request("https://zana.test/api/subscription/status", {
+      method: "GET",
+      headers: { Origin: "https://localhost", Authorization: `Bearer ${token}` },
+    });
+
+    const res = await worker.handleRequest(req, env as never);
+    assert.strictEqual(res.status, 200);
+    const body = (await res.json()) as { ok: boolean; status: string };
+    assert.strictEqual(body.ok, true);
+    assert.strictEqual(body.status, "trial");
+  });
+
+  test("2. Student A querying Student B's subscription is rejected with 403 FORBIDDEN", async () => {
+    const d1 = createStatefulD1();
+    const env = makeTestEnv(d1);
+    const tokenA = createStudentToken("student_a");
+
+    const req = new Request("https://zana.test/api/subscription/status?userId=student_b", {
+      method: "GET",
+      headers: { Origin: "https://localhost", Authorization: `Bearer ${tokenA}` },
+    });
+
+    const res = await worker.handleRequest(req, env as never);
+    assert.strictEqual(res.status, 403, "Student querying another user must return 403");
+  });
+
+  test("3. Student impersonating admin with spoofed email in token header/payload without admin role is rejected (403)", async () => {
+    const d1 = createStatefulD1();
+    const env = makeTestEnv(d1);
+
+    // Create a student token that claims the admin email but does NOT have admin role or verifiable claims
+    const header = Buffer.from(JSON.stringify({ alg: "RS256", kid: "test" })).toString("base64url");
+    const payload = Buffer.from(JSON.stringify({
+      sub: "fake_admin_uid",
+      uid: "fake_admin_uid",
+      email: "addmin.official.idg@gmail.com",
+      role: "student", // NOT admin role
+      aud: "gen-lang-client-0009572581",
+      iss: "https://securetoken.google.com/gen-lang-client-0009572581",
+      iat: Math.floor(Date.now() / 1000) - 60,
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    })).toString("base64url");
+    const spoofedToken = `${header}.${payload}.mock-sig`;
+
+    const req = new Request("https://zana.test/api/subscription/status?userId=student_b", {
+      method: "GET",
+      headers: { Origin: "https://localhost", Authorization: `Bearer ${spoofedToken}` },
+    });
+
+    const res = await worker.handleRequest(req, env as never);
+    assert.strictEqual(res.status, 403, "Impersonator without valid admin claims must return 403");
+  });
+
+  test("4. Properly authorized administrator can lookup student's subscription", async () => {
+    const d1 = createStatefulD1();
+    d1.store.subscriptions.push({
+      user_id: "student_target",
+      status: "active",
+      trial_started_at: Date.now() - 1000,
+      trial_ends_at: Date.now() + 500_000,
+      plan_id: "yearly",
+      updated_at: Date.now(),
+    });
+    const env = makeTestEnv(d1);
+    const adminToken = createAdminAuthToken();
+
+    const req = new Request("https://zana.test/api/subscription/status?userId=student_target", {
+      method: "GET",
+      headers: { Origin: "https://localhost", Authorization: `Bearer ${adminToken}` },
+    });
+
+    const res = await worker.handleRequest(req, env as never);
+    assert.strictEqual(res.status, 200, "Authorized admin must be permitted to lookup student subscription");
+    const body = (await res.json()) as { ok: boolean; status: string };
+    assert.strictEqual(body.ok, true);
+    assert.strictEqual(body.status, "active");
   });
 });

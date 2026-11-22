@@ -216,6 +216,7 @@ export async function verifyFirebaseIdToken(
   }
 
   const { headerB64, payloadB64, signatureB64, header, payload } = parts;
+  const email = typeof payload.email === 'string' ? payload.email.toLowerCase() : '';
 
   // 1. Test Mock Bypass (ONLY when explicitly permitted in test environment)
   if (options.allowTestMock) {
@@ -233,12 +234,12 @@ export async function verifyFirebaseIdToken(
     if (signatureB64 === 'invalid-signature' || signatureB64 === 'forged') {
       return { ok: false, error: 'Unauthorized: Invalid token signature' };
     }
-    const email = typeof payload.email === 'string' ? payload.email.toLowerCase() : '';
-    const hasAdminClaim = payload.admin === true || payload.role === 'SuperAdmin' || payload.role === 'super_admin';
+    const isStudentRole = payload.role === 'student' || payload.role === 'user';
+    const hasAdminClaim = payload.admin === true || payload.role === 'SuperAdmin' || payload.role === 'super_admin' || payload.role === 'admin';
     const isAuthorizedEmail = Boolean(email && options.configuredEmails?.includes(email));
 
-    if (!isAuthorizedEmail && !hasAdminClaim) {
-      return { ok: false, error: 'Unauthorized: User is not an admin' };
+    if (isStudentRole || (!isAuthorizedEmail && !hasAdminClaim)) {
+      return { ok: false, error: 'Unauthorized: User is not an authorized administrator' };
     }
 
     return {
@@ -330,7 +331,6 @@ export async function verifyFirebaseIdToken(
   }
 
   // 10. Role and Admin Rights Enforcement
-  const email = typeof payload.email === 'string' ? payload.email.toLowerCase() : '';
   const hasAdminClaim = payload.admin === true || payload.role === 'SuperAdmin' || payload.role === 'super_admin';
   const isAuthorizedEmail = Boolean(email && options.configuredEmails?.includes(email));
 

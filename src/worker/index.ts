@@ -2679,11 +2679,19 @@ export default {
       // POST /api/trial/start (and /api/students/register)
       if ((pathname === "/api/trial/start" || pathname === "/api/students/register") && request.method === "POST") {
         if (!env.DB) {
-          return new Response(JSON.stringify({ error: "DB binding not configured" }), {
-            status: 500,
-            headers: responseHeaders,
-          });
+          return new Response(
+            JSON.stringify({ error: "DATABASE_UNAVAILABLE", detail: "D1 database binding is missing. Trial cannot be initialized." }),
+            { status: 503, headers: responseHeaders }
+          );
         }
+
+        // 🚨 AUTHENTICATION: Verified Firebase Token is the ONLY authoritative identity
+        const authResult = await verifyAuthWorker(request, env, responseHeaders);
+        if (authResult instanceof Response) return authResult;
+
+        const verifiedUid = authResult.user.uid;
+        const verifiedEmail = authResult.user.email || "";
+
         try {
           const body = (await request.json().catch(() => ({}))) as {
             userId?: string;
@@ -2693,42 +2701,27 @@ export default {
             stream?: string;
           };
 
-          let studentId = body?.userId?.trim();
-          let studentEmail = body?.email?.trim();
-          let studentName = body?.name?.trim();
+          // 🚨 IDENTITY GUARD: Client-supplied userId must NEVER override verified token UID
+          const clientUserId = body?.userId?.trim();
+          if (clientUserId && clientUserId !== verifiedUid) {
+            return new Response(
+              JSON.stringify({
+                error: "FORBIDDEN",
+                detail: "Client-supplied userId does not match the authenticated identity.",
+              }),
+              { status: 403, headers: responseHeaders }
+            );
+          }
+
+          const studentId = verifiedUid;
+          const studentEmail = verifiedEmail;
+          const studentName = body?.name?.trim() || "قوتابی";
           const grade = body?.grade?.trim() || "12";
-
-          // Try to obtain verified claims if token provided
-          const authHeader = request.headers.get("Authorization");
-          if (authHeader && authHeader.startsWith("Bearer ")) {
-            const token = authHeader.substring(7).trim();
-            if (token && env.FIREBASE_PROJECT_ID) {
-              try {
-                const verified = await AuthService.verifyFirebaseIdToken(token, env.FIREBASE_PROJECT_ID);
-                if (verified && verified.uid) {
-                  studentId = verified.uid;
-                  if (verified.email && !studentEmail) {
-                    studentEmail = verified.email;
-                  }
-                }
-              } catch (e) {
-                console.warn("[trial/start] Token verification soft fallback:", e);
-              }
-            }
-          }
-
-          if (!studentId) {
-            return new Response(JSON.stringify({ error: "userId or valid auth token is required" }), {
-              status: 400,
-              headers: responseHeaders,
-            });
-          }
 
           const now = Date.now();
           const trialDurationMs = 3 * 24 * 60 * 60 * 1000; // 3 days
-          const trialEndsAt = now + trialDurationMs;
 
-          // 1. Upsert into students table
+          // 1. Upsert student metadata into students table
           try {
             await env.DB.prepare(
               `INSERT INTO students (id, firebase_uid, name, email, grade, created_at)
@@ -2737,7 +2730,7 @@ export default {
                  name = COALESCE(excluded.name, students.name),
                  email = COALESCE(excluded.email, students.email),
                  grade = COALESCE(excluded.grade, students.grade)`
-            ).bind(studentId, studentId, studentName || "قوتابی", studentEmail || "", grade).run();
+            ).bind(studentId, studentId, studentName, studentEmail, grade).run();
           } catch {
             try {
               await env.DB.prepare(
@@ -2746,21 +2739,98 @@ export default {
                  ON CONFLICT(id) DO UPDATE SET
                    name = COALESCE(excluded.name, students.name),
                    grade = COALESCE(excluded.grade, students.grade)`
-              ).bind(studentId, studentId, studentName || "قوتابی", grade).run();
+              ).bind(studentId, studentId, studentName, grade).run();
             } catch (fallbackErr) {
               console.warn("[trial/start] Could not upsert into students table:", fallbackErr);
             }
           }
 
-          // 2. Start or update 3-day trial in subscriptions table
-          await env.DB.prepare(
+          // 2. ONE-TIME TRIAL LIFECYCLE: Prevent repeated trial resets or extensions
+          const existingSub = await env.DB.prepare(
+            "SELECT user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at FROM subscriptions WHERE user_id = ?"
+          ).bind(studentId).first<{
+            user_id: string;
+            status: string;
+            trial_started_at: number;
+            trial_ends_at: number;
+            plan_id: string | null;
+            updated_at: number;
+          }>();
+
+          if (existingSub) {
+            // Case A: User already has an active paid subscription — preserve active status
+            if (existingSub.status === "active") {
+              return new Response(
+                JSON.stringify({
+                  ok: true,
+                  status: "active",
+                  trial_started_at: existingSub.trial_started_at,
+                  trial_ends_at: existingSub.trial_ends_at,
+                  plan_id: existingSub.plan_id,
+                  message: "هەژمارەکەت خاوەنی بەشداریکردنی کارایە.",
+                }),
+                { status: 200, headers: responseHeaders }
+              );
+            }
+
+            // Case B: User already completed/expired trial — strictly block renewal
+            if (existingSub.status === "expired" || now > existingSub.trial_ends_at) {
+              if (existingSub.status !== "expired") {
+                await env.DB.prepare(
+                  "UPDATE subscriptions SET status = 'expired', updated_at = ? WHERE user_id = ?"
+                ).bind(now, studentId).run().catch(() => {});
+              }
+              return new Response(
+                JSON.stringify({
+                  ok: false,
+                  error: "TRIAL_ALREADY_USED",
+                  detail: "ماوەی تاقیکردنەوەی خۆڕایی پێشتر بەکارهاتووە و تەواو بووە. تکایە بەشداری بکە بۆ بەردەوامبوون.",
+                  status: "expired",
+                  trial_started_at: existingSub.trial_started_at,
+                  trial_ends_at: existingSub.trial_ends_at,
+                }),
+                { status: 403, headers: responseHeaders }
+              );
+            }
+
+            // Case C: User is currently within an ongoing trial — return original window without extension
+            return new Response(
+              JSON.stringify({
+                ok: true,
+                status: "trial",
+                trial_started_at: existingSub.trial_started_at,
+                trial_ends_at: existingSub.trial_ends_at,
+                message: "تاقیکردنەوەی خۆڕایی ئێستا چالاکە.",
+              }),
+              { status: 200, headers: responseHeaders }
+            );
+          }
+
+          // Case D: First-time student — atomic insert with ON CONFLICT DO NOTHING
+          const trialEndsAt = now + trialDurationMs;
+          const insertRes = await env.DB.prepare(
             `INSERT INTO subscriptions (user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at)
              VALUES (?, 'trial', ?, ?, 'free_trial_3d', ?)
-             ON CONFLICT(user_id) DO UPDATE SET
-               status = CASE WHEN subscriptions.status = 'active' THEN 'active' ELSE 'trial' END,
-               trial_ends_at = CASE WHEN subscriptions.status = 'active' THEN subscriptions.trial_ends_at ELSE excluded.trial_ends_at END,
-               updated_at = excluded.updated_at`
+             ON CONFLICT(user_id) DO NOTHING`
           ).bind(studentId, now, trialEndsAt, now).run();
+
+          const changes = (insertRes as unknown as { meta?: { changes?: number } })?.meta?.changes ?? 1;
+          if (changes === 0) {
+            // Concurrent race won by another request — re-read winner's trial window
+            const raced = await env.DB.prepare(
+              "SELECT status, trial_started_at, trial_ends_at FROM subscriptions WHERE user_id = ?"
+            ).bind(studentId).first<{ status: string; trial_started_at: number; trial_ends_at: number }>();
+            return new Response(
+              JSON.stringify({
+                ok: true,
+                status: raced?.status || "trial",
+                trial_started_at: raced?.trial_started_at || now,
+                trial_ends_at: raced?.trial_ends_at || trialEndsAt,
+                message: "تاقیکردنەوەی خۆڕایی چالاک کرا.",
+              }),
+              { status: 200, headers: responseHeaders }
+            );
+          }
 
           return new Response(
             JSON.stringify({
@@ -2788,19 +2858,19 @@ export default {
         if (authResult instanceof Response) return authResult;
 
         const verifiedUid = authResult.user.uid;
-        const verifiedEmail = authResult.user.email || "";
 
         // Allow admin to query any user, students can only query themselves
         const requestedUserId = url.searchParams.get("userId")?.trim();
         let userId: string;
 
         if (requestedUserId && requestedUserId !== verifiedUid) {
-          // Only admin can query other users' subscription status
-          if (verifiedEmail.toLowerCase() !== "addmin.official.idg@gmail.com") {
+          // Cryptographic server-side admin verification
+          const adminCheck = await verifyAdmin(request, env as never);
+          if (!adminCheck.ok) {
             return new Response(
               JSON.stringify({
                 error: "FORBIDDEN",
-                detail: "ڕێگەپێدراو نیت بۆ بینینی دۆخی بەشداریکردنی بەکارهێنەری تر.",
+                detail: "ڕێگەپێدراو نیت بۆ بینینی دۆخی بەشداریکردنی بەکارهێنەری تر. تەنها ئادمین دەتوانێت ئەم کارە بکات.",
               }),
               { status: 403, headers: responseHeaders }
             );

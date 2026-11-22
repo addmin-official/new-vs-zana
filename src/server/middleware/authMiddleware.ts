@@ -39,6 +39,25 @@ export async function verifyAuthToken(
     };
   }
 
+  // Allow single-segment mock tokens ONLY in explicit test environments.
+  // Any token formatted as a JWT (containing '.') MUST strictly be verified by verifyFirebaseIdToken.
+  const isTest =
+    typeof process !== "undefined" &&
+    (process.env?.NODE_ENV === "test" ||
+      process.env?.ALLOW_TEST_AUTH_MOCK === "true" ||
+      process.env?.ZANA_ENV === "test");
+
+  if (isTest && !token.includes(".")) {
+    return {
+      ok: true,
+      status: 200,
+      user: {
+        uid: token.slice(0, 32),
+        email: `${token.slice(0, 16)}@test.zana.krd`,
+      },
+    };
+  }
+
   try {
     const claims = await verifyFirebaseIdToken(token, projectId);
     return {
@@ -51,21 +70,6 @@ export async function verifyAuthToken(
       },
     };
   } catch (err: unknown) {
-    // In test environment, allow test tokens only when ALLOW_TEST_AUTH_MOCK is set
-    if (
-      typeof process !== "undefined" &&
-      (process.env?.ALLOW_TEST_AUTH_MOCK === "true" || process.env?.NODE_ENV === "test")
-    ) {
-      return {
-        ok: true,
-        status: 200,
-        user: {
-          uid: token.slice(0, 32),
-          email: `${token.slice(0, 16)}@test.zana.krd`,
-        },
-      };
-    }
-
     return {
       ok: false,
       status: 401,
