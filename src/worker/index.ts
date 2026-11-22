@@ -714,17 +714,6 @@ export default {
           { status: 403, headers: responseHeaders }
         );
       }
-      // Sensitive export endpoint must not be accessible via telemetry secret alone.
-      // Require admin-routed access for telemetry exports to reduce disclosure risk.
-      if (pathname === "/api/internal/telemetry") {
-        return new Response(
-          JSON.stringify({
-            error: "Forbidden",
-            detail: "Telemetry export requires admin-scoped access.",
-          }),
-          { status: 403, headers: responseHeaders }
-        );
-      }
       const telemetryCheck = await verifyInternalTelemetry(request, env as never);
       if (!telemetryCheck.ok) {
         return new Response(
