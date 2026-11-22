@@ -171,10 +171,11 @@ describe("Simplified Student UX & Navigation Architecture", () => {
       expect(onNavigateToChat).toHaveBeenCalled();
     });
 
-    it("renders today's 3 tasks with toggleable checkmarks", () => {
+    it("renders today's section and learning progress", () => {
       render(<Home />);
       expect(screen.getByText("ئەرکەکانی ئەمڕۆ")).toBeDefined();
-      expect(screen.getAllByText(/پێوەری pH/).length).toBeGreaterThan(0);
+      expect(screen.getByText(/ئامانجی ئەمڕۆ/)).toBeDefined();
+      expect(screen.getByText(/وانەی خوێندراو/)).toBeDefined();
     });
 
     it("renders quick subject access row", () => {
