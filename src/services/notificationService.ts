@@ -7,7 +7,7 @@ import {
   NotificationType,
 } from "../domain/notification.ts";
 import { fetchWithFallback, parseResponseJson } from "../lib/apiClient.ts";
-import { getClientToken } from "./authService.ts";
+import { getClientToken, getCurrentUser } from "./authService.ts";
 
 const NOTIFICATIONS_CACHE_KEY = "zana_notifications_cache_v1";
 const NOTIFICATIONS_PREFS_KEY = "zana_notification_prefs_v1";
@@ -422,29 +422,37 @@ export class NotificationService {
   }
 
   // In-memory store fallback when localStorage is unavailable (Node.js test / SSR)
-  private memoryNotifications: NotificationItem[] = [];
+  private memoryNotifications: Map<string, NotificationItem[]> = new Map();
   private memoryPreferences: Map<string, NotificationPreferences> = new Map();
 
   // --- Local Storage Helpers ---
 
-  private getLocalNotifications(): NotificationItem[] {
+  private getEffectiveStudentId(explicitId?: string): string {
+    if (explicitId) return explicitId;
+    const user = getCurrentUser();
+    return user?.uid || "guest";
+  }
+
+  private getLocalNotifications(studentId?: string): NotificationItem[] {
+    const targetUid = this.getEffectiveStudentId(studentId);
     try {
       if (typeof localStorage !== "undefined") {
-        const raw = localStorage.getItem(NOTIFICATIONS_CACHE_KEY);
+        const raw = localStorage.getItem(`${NOTIFICATIONS_CACHE_KEY}_${targetUid}`);
         if (raw) {
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed)) return parsed;
         }
       }
     } catch {}
-    return this.memoryNotifications;
+    return this.memoryNotifications.get(targetUid) || [];
   }
 
-  private cacheLocalNotifications(items: NotificationItem[]): void {
-    this.memoryNotifications = items;
+  private cacheLocalNotifications(items: NotificationItem[], studentId?: string): void {
+    const targetUid = this.getEffectiveStudentId(studentId);
+    this.memoryNotifications.set(targetUid, items);
     try {
       if (typeof localStorage !== "undefined") {
-        localStorage.setItem(NOTIFICATIONS_CACHE_KEY, JSON.stringify(items));
+        localStorage.setItem(`${NOTIFICATIONS_CACHE_KEY}_${targetUid}`, JSON.stringify(items));
       }
     } catch {}
   }

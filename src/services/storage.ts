@@ -1,6 +1,7 @@
 import { StudentProfile } from "../features/student/studentTypes.ts";
 export type { StudentProfile };
 import { getStudentProfile, saveStudentProfile, deleteStudentProfile } from "../features/student/studentStorage.ts";
+import { formatBaghdadTime } from "../utils/dateTime.ts";
 
 export interface ChatMessage {
   id: string;
@@ -136,7 +137,7 @@ export const ZanaStorage = {
         sender: ((item.sender === "bot" ? "zana" : item.sender) as "user" | "zana") || "zana",
         content,
         text: String(item.text || content),
-        timestamp: String(item.timestamp || new Date().toLocaleTimeString("ku-IQ", { hour: "2-digit", minute: "2-digit" })),
+        timestamp: String(item.timestamp || formatBaghdadTime(new Date())),
         chapterId: item.chapterId as string | number | undefined,
         isEducational: Boolean(item.isEducational),
       };

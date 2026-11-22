@@ -1,6 +1,6 @@
 import test, { describe } from "node:test";
 import assert from "node:assert/strict";
-import { verifyAdmin, ADMIN_EMAILS } from "../worker/adminGuard.ts";
+import { verifyAdmin, verifyInternalTelemetry, ADMIN_EMAILS } from "../worker/adminGuard.ts";
 import worker from "../worker/index.ts";
 
 function createMockToken(payload: Record<string, unknown>): string {
@@ -28,15 +28,24 @@ describe("Admin Guard and 3-Layer Protection System", () => {
     assert.match(res.error || "", /Missing or invalid Authorization/i);
   });
 
-  test("verifyAdmin - Accepts matching ADMIN_TELEMETRY_SECRET", async () => {
+  test("verifyAdmin - Strictly rejects ADMIN_TELEMETRY_SECRET (cannot elevate to human admin)", async () => {
+    const secret = "test-secret-key-123";
+    const req = new Request("https://example.com/api/admin/brain/status", {
+      method: "GET",
+      headers: { Authorization: `Bearer ${secret}` },
+    });
+    const res = await verifyAdmin(req, { ADMIN_TELEMETRY_SECRET: secret });
+    assert.strictEqual(res.ok, false, "Generic verifyAdmin must reject telemetry secret");
+  });
+
+  test("verifyInternalTelemetry - Accepts matching ADMIN_TELEMETRY_SECRET for dedicated telemetry", async () => {
     const secret = "test-secret-key-123";
     const req = new Request("https://example.com/api/internal/telemetry", {
       method: "GET",
       headers: { Authorization: `Bearer ${secret}` },
     });
-    const res = await verifyAdmin(req, { ADMIN_TELEMETRY_SECRET: secret });
+    const res = await verifyInternalTelemetry(req, { ADMIN_TELEMETRY_SECRET: secret });
     assert.strictEqual(res.ok, true);
-    assert.strictEqual(res.email, ADMIN_EMAILS[0]);
   });
 
   test("verifyAdmin - Accepts token for designated admin email addmin.official.idg@gmail.com", async () => {

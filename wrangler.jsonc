@@ -2,6 +2,9 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "new-vs-zana",
   "main": "src/worker/index.ts",
+  "build": {
+    "command": "npm run build:client"
+  },
   "compatibility_date": "2025-02-04",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,

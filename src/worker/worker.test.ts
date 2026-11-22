@@ -27,6 +27,18 @@ const createMockEnv = (assetsMock?: { fetch: (req: Request) => Promise<Response>
   ALLOWED_ORIGINS: "https://zana.idggov.tech",
   FIREBASE_PROJECT_ID: "gen-lang-client-0009572581",
   ASSETS: assetsMock,
+  DB: {
+    prepare: () => ({
+      bind: () => ({
+        all: async () => ({ results: [] }),
+        first: async () => null,
+        run: async () => ({ success: true, meta: { changes: 0 } }),
+      }),
+      all: async () => ({ results: [] }),
+      first: async () => null,
+      run: async () => ({ success: true, meta: { changes: 0 } }),
+    }),
+  } as unknown as Env["DB"],
 });
 
 test("Worker - GET /api/health with approved Origin returns 200 and exact CORS origin", async () => {
@@ -756,12 +768,22 @@ test("Config - validateProductionEnv validates presence of required keys", () =>
     });
   }, /LEARNING_RECORDS_KV binding is missing/);
 
+  assert.throws(() => {
+    validateProductionEnv({
+      GEMINI_API_KEY: "key",
+      GEMINI_PRIMARY_MODEL: "model",
+      ADMIN_TELEMETRY_SECRET: "sec",
+      LEARNING_RECORDS_KV: {},
+    });
+  }, /DB \(Cloudflare D1\) binding is missing/);
+
   assert.doesNotThrow(() => {
     validateProductionEnv({
       GEMINI_API_KEY: "key",
       GEMINI_PRIMARY_MODEL: "model",
       ADMIN_TELEMETRY_SECRET: "sec",
       LEARNING_RECORDS_KV: {},
+      DB: {},
     });
   });
 });

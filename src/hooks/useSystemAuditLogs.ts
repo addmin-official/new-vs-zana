@@ -5,10 +5,10 @@ import {
   orderBy,
   limit,
   onSnapshot,
-  Timestamp,
 } from "firebase/firestore";
 import { getFirebaseAuth, getFirestoreDb } from "../services/firebase.ts";
 import { isAdmin } from "../auth/roles.ts";
+import { formatBaghdadTime } from "../utils/dateTime.ts";
 
 export interface SystemAuditLogItem {
   id: string;
@@ -55,15 +55,7 @@ export function useSystemAuditLogs() {
           (snapshot) => {
             const list: SystemAuditLogItem[] = snapshot.docs.map((docSnap) => {
               const data = docSnap.data();
-              let formattedTime = "ئەمڕۆ";
-
-              if (data.timestamp) {
-                if (data.timestamp instanceof Timestamp) {
-                  formattedTime = data.timestamp.toDate().toLocaleTimeString("ar-u-nu-arab");
-                } else if (typeof data.timestamp === "number") {
-                  formattedTime = new Date(data.timestamp).toLocaleTimeString("ar-u-nu-arab");
-                }
-              }
+              const formattedTime = data.timestamp ? formatBaghdadTime(data.timestamp) : "ئەمڕۆ";
 
               const typeStr = String(data.type || data.name || (data.message ? "CLIENT_ERROR" : "SYSTEM_EVENT"));
               const pathStr = String(data.path || data.route || data.endpoint || "/");

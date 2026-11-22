@@ -39,6 +39,30 @@ export async function verifyAuthToken(
     };
   }
 
+  // Production Security Barrier:
+  // In production (NODE_ENV === 'production' or ZANA_ENV === 'production'), mock tokens are UNCONDITIONALLY FORBIDDEN.
+  // No mock token flag, environment override, or test payload can bypass cryptographic verification in production.
+  const isProduction =
+    typeof process !== "undefined" &&
+    (process.env?.NODE_ENV === "production" || process.env?.ZANA_ENV === "production");
+
+  const isExplicitTestMode =
+    !isProduction &&
+    typeof process !== "undefined" &&
+    (process.env?.NODE_ENV === "test" || process.env?.ZANA_ENV === "test") &&
+    process.env?.ALLOW_TEST_AUTH_MOCK === "true";
+
+  if (isExplicitTestMode && !token.includes(".")) {
+    return {
+      ok: true,
+      status: 200,
+      user: {
+        uid: token.slice(0, 32),
+        email: `${token.slice(0, 16)}@test.zana.krd`,
+      },
+    };
+  }
+
   try {
     const claims = await verifyFirebaseIdToken(token, projectId);
     return {
@@ -51,21 +75,6 @@ export async function verifyAuthToken(
       },
     };
   } catch (err: unknown) {
-    // In test environment, allow test tokens only when ALLOW_TEST_AUTH_MOCK is set
-    if (
-      typeof process !== "undefined" &&
-      (process.env?.ALLOW_TEST_AUTH_MOCK === "true" || process.env?.NODE_ENV === "test")
-    ) {
-      return {
-        ok: true,
-        status: 200,
-        user: {
-          uid: token.slice(0, 32),
-          email: `${token.slice(0, 16)}@test.zana.krd`,
-        },
-      };
-    }
-
     return {
       ok: false,
       status: 401,

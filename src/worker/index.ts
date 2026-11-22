@@ -45,7 +45,7 @@ import { handleTelemetryExportRoute } from "../server/api/internal/telemetryExpo
 import { handleHealthRoute, handleCurriculumHealthRoute } from "../server/api/health.ts";
 import { handleStudyRoomsRoute } from "../server/api/studyRooms.ts";
 import { getQuestionsBySubject } from "../data/assessments/curriculum-questions.ts";
-import { verifyAdmin, type AdminVerifyResult } from "./adminGuard.ts";
+import { verifyAdmin, verifyInternalTelemetry, type AdminVerifyResult } from "./adminGuard.ts";
 import { InternalBrainService } from "../core/brain/InternalBrainService.ts";
 import type { AdminRole, ExecutionPlan, AdminPreferenceMemory } from "../core/brain/types.ts";
 import { AdminCommandDO } from "../core/brain/durable/AdminCommandDO.ts";
@@ -460,7 +460,8 @@ export function parseAnswerSubmission(value: unknown): AnswerSubmission {
 }
 
 export interface SubscriptionStatusResult {
-  status: "trial" | "active" | "expired";
+  status: "trial" | "active" | "expired" | "unavailable";
+  error?: string;
 }
 
 export async function checkSubscription(
@@ -468,7 +469,7 @@ export async function checkSubscription(
   userId: string
 ): Promise<SubscriptionStatusResult> {
   if (!env.DB) {
-    return { status: "trial" };
+    return { status: "unavailable", error: "Database binding missing" };
   }
 
   const now = Date.now();
@@ -489,9 +490,30 @@ export async function checkSubscription(
 
     if (!sub) {
       const trialEndsAt = now + trialDurationMs;
-      await env.DB.prepare(
-        "INSERT INTO subscriptions (user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at) VALUES (?, 'trial', ?, ?, NULL, ?)"
+      const insertRes = await env.DB.prepare(
+        `INSERT INTO subscriptions (user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at)
+         VALUES (?, 'trial', ?, ?, 'free_trial_3d', ?)
+         ON CONFLICT(user_id) DO NOTHING`
       ).bind(userId, now, trialEndsAt, now).run();
+
+      const changes = (insertRes as unknown as { meta?: { changes?: number } })?.meta?.changes ?? 1;
+      if (changes === 0) {
+        const raced = await env.DB.prepare(
+          "SELECT user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at FROM subscriptions WHERE user_id = ?"
+        ).bind(userId).first<{
+          user_id: string;
+          status: string;
+          trial_started_at: number;
+          trial_ends_at: number;
+          plan_id: string | null;
+          updated_at: number;
+        }>();
+
+        if (raced) {
+          if (now > raced.trial_ends_at) return { status: "expired" };
+          return { status: (raced.status as "trial" | "active" | "expired") || "trial" };
+        }
+      }
 
       return { status: "trial" };
     }
@@ -520,7 +542,7 @@ export async function checkSubscription(
     return { status: "expired" };
   } catch (err) {
     console.error("[checkSubscription Error]", err);
-    return { status: "trial" };
+    return { status: "unavailable", error: (err as Error)?.message || "Database operation failed" };
   }
 }
 
@@ -540,6 +562,17 @@ async function getWorkerAuthenticatedStudentId(req: Request, env: Env): Promise<
   } catch {
     throw new Error("UNAUTHORIZED");
   }
+}
+
+function getPersistenceMode(env: Env): "production" | "development" | "test" {
+  if (
+    env.ZANA_ENV === "test" ||
+    env.ALLOW_TEST_AUTH_MOCK === "true" ||
+    (typeof process !== "undefined" && (process.env?.ZANA_ENV === "test" || process.env?.NODE_ENV === "test"))
+  ) {
+    return "test";
+  }
+  return "production";
 }
 
 function requireWorkerAdminPersistence(
@@ -647,12 +680,9 @@ export default {
       }
     }
 
-    // 🚨 ADMIN GUARD: Server-side Verification for all /api/admin/* and /api/internal/* routes
+    // 🚨 ADMIN & INTERNAL ROUTE GUARDS: Distinct Privilege Boundaries
     let verifiedAdmin: AdminVerifyResult | null = null;
-    if (
-      pathname.startsWith("/api/admin/") ||
-      pathname.startsWith("/api/internal/")
-    ) {
+    if (pathname.startsWith("/api/admin/")) {
       const adminCheck = await verifyAdmin(request, env as never);
       if (!adminCheck.ok) {
         return new Response(
@@ -671,6 +701,43 @@ export default {
       console.log(
         `[ADMIN ACCESS] ${adminCheck.email} (${adminCheck.uid}) → ${pathname}`
       );
+    } else if (pathname.startsWith("/api/internal/")) {
+      // SECURITY: Only explicitly allowlisted internal endpoints accept the telemetry secret.
+      // Any /api/internal/* path NOT in this list is denied by default — even with a valid secret.
+      const ALLOWED_INTERNAL_TELEMETRY_PATHS: ReadonlyArray<string> = ["/api/internal/telemetry"];
+      if (!ALLOWED_INTERNAL_TELEMETRY_PATHS.includes(pathname)) {
+        return new Response(
+          JSON.stringify({
+            error: "Forbidden",
+            detail: "Internal route not explicitly authorised for telemetry access.",
+          }),
+          { status: 403, headers: responseHeaders }
+        );
+      }
+      // Sensitive export endpoint must not be accessible via telemetry secret alone.
+      // Require admin-routed access for telemetry exports to reduce disclosure risk.
+      if (pathname === "/api/internal/telemetry") {
+        return new Response(
+          JSON.stringify({
+            error: "Forbidden",
+            detail: "Telemetry export requires admin-scoped access.",
+          }),
+          { status: 403, headers: responseHeaders }
+        );
+      }
+      const telemetryCheck = await verifyInternalTelemetry(request, env as never);
+      if (!telemetryCheck.ok) {
+        return new Response(
+          JSON.stringify({
+            error: "Forbidden",
+            detail: telemetryCheck.error || "دەستگەیشتن بۆ تەلەمەتریی ناوخۆیی ڕەتکرایەوە.",
+          }),
+          {
+            status: 403,
+            headers: responseHeaders,
+          }
+        );
+      }
     }
 
     // Security: Block access to sensitive files (must be BEFORE SPA fallback)
@@ -1201,7 +1268,7 @@ export default {
           return new Response(JSON.stringify({ error: "دەسەڵاتی پێویستت نییە بۆ دەستگەیشتن بەم بەشە." }), { status: 403, headers: responseHeaders });
         }
 
-        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, "production");
+        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, getPersistenceMode(env));
         const profile = await lp.getStudentMasteryProfile(studentId);
         return new Response(JSON.stringify(profile), { status: 200, headers: responseHeaders });
       }
@@ -1223,7 +1290,7 @@ export default {
         const parts = pathname.split("/");
         const conceptId = decodeURIComponent(parts[parts.length - 1]);
 
-        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, "production");
+        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, getPersistenceMode(env));
         const state = await lp.getConceptMastery(studentId, conceptId);
         if (!state) {
           return new Response(JSON.stringify({ error: "چەمکی داواکراو بۆ ئەم قوتابییە بوونی نییە." }), { status: 404, headers: responseHeaders });
@@ -1246,7 +1313,7 @@ export default {
         }
 
         const status = url.searchParams.get("status") || undefined;
-        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, "production");
+        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, getPersistenceMode(env));
         const recs = await lp.listRecommendations(studentId, status);
         return new Response(JSON.stringify(recs), { status: 200, headers: responseHeaders });
       }
@@ -1285,7 +1352,7 @@ export default {
           data,
         };
 
-        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, "production");
+        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, getPersistenceMode(env));
         await lp.appendLearningEvent(studentId, event);
         const profile = await lp.getStudentMasteryProfile(studentId);
         return new Response(JSON.stringify({ success: true, eventId: event.id, profile }), { status: 200, headers: responseHeaders });
@@ -1300,7 +1367,7 @@ export default {
           return new Response(JSON.stringify({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." }), { status: 401, headers: responseHeaders });
         }
 
-        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, "production");
+        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, getPersistenceMode(env));
         let taskDate: string | undefined;
         try {
           const body = (await request.json()) as { taskDate?: string };
@@ -1355,7 +1422,7 @@ export default {
           );
         }
 
-        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, "production");
+        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, getPersistenceMode(env));
         const currentProfile = await lp.getStudentMasteryProfile(studentId);
         const currentState = await lp.getConceptMastery(studentId, conceptId);
 
@@ -1477,7 +1544,7 @@ export default {
           focusScore: 1.0,
         };
 
-        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, "production");
+        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, getPersistenceMode(env));
         await lp.createLearningSession(session);
         return new Response(JSON.stringify(session), { status: 200, headers: responseHeaders });
       }
@@ -1517,7 +1584,7 @@ export default {
           focusScore,
         };
 
-        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, "production");
+        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, getPersistenceMode(env));
         await lp.updateLearningSession(session);
         return new Response(JSON.stringify(session), { status: 200, headers: responseHeaders });
       }
@@ -1552,8 +1619,8 @@ export default {
           );
         }
 
-        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, "production");
-        const ap = new PersistentAssessmentRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, "production");
+        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, getPersistenceMode(env));
+        const ap = new PersistentAssessmentRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, getPersistenceMode(env));
         const service = new AssessmentService(ap);
 
         const profile = await lp.getStudentMasteryProfile(studentId);
@@ -1644,8 +1711,8 @@ export default {
           );
         }
 
-        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, "production");
-        const ap = new PersistentAssessmentRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, "production");
+        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, getPersistenceMode(env));
+        const ap = new PersistentAssessmentRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, getPersistenceMode(env));
 
         const existingAttempt = await ap.getAttempt(attemptId);
         if (!existingAttempt) {
@@ -1685,8 +1752,8 @@ export default {
           );
         }
 
-        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, "production");
-        const ap = new PersistentAssessmentRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, "production");
+        const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, getPersistenceMode(env));
+        const ap = new PersistentAssessmentRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, getPersistenceMode(env));
 
         const existingAttempt = await ap.getAttempt(attemptId);
         if (!existingAttempt) {
@@ -1714,7 +1781,7 @@ export default {
         const parts = pathname.split("/");
         const attemptId = decodeURIComponent(parts[parts.length - 1]);
 
-        const ap = new PersistentAssessmentRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, "production");
+        const ap = new PersistentAssessmentRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, getPersistenceMode(env));
         const attempt = await ap.getAttempt(attemptId);
 
         if (!attempt) {
@@ -1749,8 +1816,8 @@ export default {
 
         try {
           const kv = env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV;
-          const planProvider = new PersistentLearningPlanProvider(kv, "production");
-          const learningProvider = new PersistentLearningRecordProvider(kv, "production");
+          const planProvider = new PersistentLearningPlanProvider(kv, getPersistenceMode(env));
+          const learningProvider = new PersistentLearningRecordProvider(kv, getPersistenceMode(env));
           const planningService = new LearningPlanService(planProvider, learningProvider);
 
           if (pathname === "/api/planning/preferences" && request.method === "GET") {
@@ -2217,13 +2284,24 @@ export default {
         }
       }
 
-      // GET /api/users
-      if (pathname === "/api/users" && request.method === "GET") {
+      // GET /api/admin/users (was /api/users — moved under admin guard)
+      if ((pathname === "/api/admin/users" || pathname === "/api/users") && request.method === "GET") {
+        // Admin guard already verified above for /api/admin/*
+        // For legacy /api/users path, verify admin explicitly
+        if (pathname === "/api/users") {
+          const legacyAdminCheck = await verifyAdmin(request, env as never);
+          if (!legacyAdminCheck.ok) {
+            return new Response(
+              JSON.stringify({ error: "Unauthorized", detail: "Student list requires admin access." }),
+              { status: 403, headers: responseHeaders }
+            );
+          }
+        }
         if (!env.DB) {
-          return new Response(JSON.stringify({ ok: true, users: [] }), {
-            status: 200,
-            headers: responseHeaders,
-          });
+          return new Response(
+            JSON.stringify({ error: "DATABASE_UNAVAILABLE", detail: "D1 database binding is missing. Users cannot be listed." }),
+            { status: 503, headers: responseHeaders }
+          );
         }
         try {
           const res = await env.DB.prepare(
@@ -2244,10 +2322,10 @@ export default {
       // GET /api/curriculum/pages
       if (pathname === "/api/curriculum/pages" && request.method === "GET") {
         if (!env.DB) {
-          return new Response(JSON.stringify({ ok: true, pages: [] }), {
-            status: 200,
-            headers: responseHeaders,
-          });
+          return new Response(
+            JSON.stringify({ error: "DATABASE_UNAVAILABLE", detail: "D1 database binding is missing. Curriculum pages cannot be listed." }),
+            { status: 503, headers: responseHeaders }
+          );
         }
         try {
           const subject = url.searchParams.get("subject");
@@ -2633,11 +2711,19 @@ export default {
       // POST /api/trial/start (and /api/students/register)
       if ((pathname === "/api/trial/start" || pathname === "/api/students/register") && request.method === "POST") {
         if (!env.DB) {
-          return new Response(JSON.stringify({ error: "DB binding not configured" }), {
-            status: 500,
-            headers: responseHeaders,
-          });
+          return new Response(
+            JSON.stringify({ error: "DATABASE_UNAVAILABLE", detail: "D1 database binding is missing. Trial cannot be initialized." }),
+            { status: 503, headers: responseHeaders }
+          );
         }
+
+        // 🚨 AUTHENTICATION: Verified Firebase Token is the ONLY authoritative identity
+        const authResult = await verifyAuthWorker(request, env, responseHeaders);
+        if (authResult instanceof Response) return authResult;
+
+        const verifiedUid = authResult.user.uid;
+        const verifiedEmail = authResult.user.email || "";
+
         try {
           const body = (await request.json().catch(() => ({}))) as {
             userId?: string;
@@ -2647,42 +2733,27 @@ export default {
             stream?: string;
           };
 
-          let studentId = body?.userId?.trim();
-          let studentEmail = body?.email?.trim();
-          let studentName = body?.name?.trim();
+          // 🚨 IDENTITY GUARD: Client-supplied userId must NEVER override verified token UID
+          const clientUserId = body?.userId?.trim();
+          if (clientUserId && clientUserId !== verifiedUid) {
+            return new Response(
+              JSON.stringify({
+                error: "FORBIDDEN",
+                detail: "Client-supplied userId does not match the authenticated identity.",
+              }),
+              { status: 403, headers: responseHeaders }
+            );
+          }
+
+          const studentId = verifiedUid;
+          const studentEmail = verifiedEmail;
+          const studentName = body?.name?.trim() || "قوتابی";
           const grade = body?.grade?.trim() || "12";
-
-          // Try to obtain verified claims if token provided
-          const authHeader = request.headers.get("Authorization");
-          if (authHeader && authHeader.startsWith("Bearer ")) {
-            const token = authHeader.substring(7).trim();
-            if (token && env.FIREBASE_PROJECT_ID) {
-              try {
-                const verified = await AuthService.verifyFirebaseIdToken(token, env.FIREBASE_PROJECT_ID);
-                if (verified && verified.uid) {
-                  studentId = verified.uid;
-                  if (verified.email && !studentEmail) {
-                    studentEmail = verified.email;
-                  }
-                }
-              } catch (e) {
-                console.warn("[trial/start] Token verification soft fallback:", e);
-              }
-            }
-          }
-
-          if (!studentId) {
-            return new Response(JSON.stringify({ error: "userId or valid auth token is required" }), {
-              status: 400,
-              headers: responseHeaders,
-            });
-          }
 
           const now = Date.now();
           const trialDurationMs = 3 * 24 * 60 * 60 * 1000; // 3 days
-          const trialEndsAt = now + trialDurationMs;
 
-          // 1. Upsert into students table
+          // 1. Upsert student metadata into students table
           try {
             await env.DB.prepare(
               `INSERT INTO students (id, firebase_uid, name, email, grade, created_at)
@@ -2691,7 +2762,7 @@ export default {
                  name = COALESCE(excluded.name, students.name),
                  email = COALESCE(excluded.email, students.email),
                  grade = COALESCE(excluded.grade, students.grade)`
-            ).bind(studentId, studentId, studentName || "قوتابی", studentEmail || "", grade).run();
+            ).bind(studentId, studentId, studentName, studentEmail, grade).run();
           } catch {
             try {
               await env.DB.prepare(
@@ -2700,21 +2771,117 @@ export default {
                  ON CONFLICT(id) DO UPDATE SET
                    name = COALESCE(excluded.name, students.name),
                    grade = COALESCE(excluded.grade, students.grade)`
-              ).bind(studentId, studentId, studentName || "قوتابی", grade).run();
+              ).bind(studentId, studentId, studentName, grade).run();
             } catch (fallbackErr) {
               console.warn("[trial/start] Could not upsert into students table:", fallbackErr);
             }
           }
 
-          // 2. Start or update 3-day trial in subscriptions table
-          await env.DB.prepare(
+          // 2. ONE-TIME TRIAL LIFECYCLE: Prevent repeated trial resets or extensions
+          const existingSub = await env.DB.prepare(
+            "SELECT user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at FROM subscriptions WHERE user_id = ?"
+          ).bind(studentId).first<{
+            user_id: string;
+            status: string;
+            trial_started_at: number;
+            trial_ends_at: number;
+            plan_id: string | null;
+            updated_at: number;
+          }>();
+
+          if (existingSub) {
+            // Case A: User already has an active paid subscription
+            if (existingSub.status === "active") {
+              if (now > existingSub.trial_ends_at) {
+                await env.DB.prepare(
+                  "UPDATE subscriptions SET status = 'expired', updated_at = ? WHERE user_id = ?"
+                ).bind(now, studentId).run().catch(() => {});
+
+                return new Response(
+                  JSON.stringify({
+                    ok: false,
+                    error: "SUBSCRIPTION_EXPIRED",
+                    detail: "ماوەی بەشداریکردنەکەت بەسەرچووە. تکایە بەشداریکردنەکەت نوێ بکەرەوە.",
+                    status: "expired",
+                    trial_started_at: existingSub.trial_started_at,
+                    trial_ends_at: existingSub.trial_ends_at,
+                    plan_id: existingSub.plan_id,
+                  }),
+                  { status: 403, headers: responseHeaders }
+                );
+              }
+
+              return new Response(
+                JSON.stringify({
+                  ok: true,
+                  status: "active",
+                  trial_started_at: existingSub.trial_started_at,
+                  trial_ends_at: existingSub.trial_ends_at,
+                  plan_id: existingSub.plan_id,
+                  message: "هەژمارەکەت خاوەنی بەشداریکردنی کارایە.",
+                }),
+                { status: 200, headers: responseHeaders }
+              );
+            }
+
+            // Case B: User already completed/expired trial — strictly block renewal
+            if (existingSub.status === "expired" || now > existingSub.trial_ends_at) {
+              if (existingSub.status !== "expired") {
+                await env.DB.prepare(
+                  "UPDATE subscriptions SET status = 'expired', updated_at = ? WHERE user_id = ?"
+                ).bind(now, studentId).run().catch(() => {});
+              }
+              return new Response(
+                JSON.stringify({
+                  ok: false,
+                  error: "TRIAL_ALREADY_USED",
+                  detail: "ماوەی تاقیکردنەوەی خۆڕایی پێشتر بەکارهاتووە و تەواو بووە. تکایە بەشداری بکە بۆ بەردەوامبوون.",
+                  status: "expired",
+                  trial_started_at: existingSub.trial_started_at,
+                  trial_ends_at: existingSub.trial_ends_at,
+                }),
+                { status: 403, headers: responseHeaders }
+              );
+            }
+
+            // Case C: User is currently within an ongoing trial — return original window without extension
+            return new Response(
+              JSON.stringify({
+                ok: true,
+                status: "trial",
+                trial_started_at: existingSub.trial_started_at,
+                trial_ends_at: existingSub.trial_ends_at,
+                message: "تاقیکردنەوەی خۆڕایی ئێستا چالاکە.",
+              }),
+              { status: 200, headers: responseHeaders }
+            );
+          }
+
+          // Case D: First-time student — atomic insert with ON CONFLICT DO NOTHING
+          const trialEndsAt = now + trialDurationMs;
+          const insertRes = await env.DB.prepare(
             `INSERT INTO subscriptions (user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at)
              VALUES (?, 'trial', ?, ?, 'free_trial_3d', ?)
-             ON CONFLICT(user_id) DO UPDATE SET
-               status = CASE WHEN subscriptions.status = 'active' THEN 'active' ELSE 'trial' END,
-               trial_ends_at = CASE WHEN subscriptions.status = 'active' THEN subscriptions.trial_ends_at ELSE excluded.trial_ends_at END,
-               updated_at = excluded.updated_at`
+             ON CONFLICT(user_id) DO NOTHING`
           ).bind(studentId, now, trialEndsAt, now).run();
+
+          const changes = (insertRes as unknown as { meta?: { changes?: number } })?.meta?.changes ?? 1;
+          if (changes === 0) {
+            // Concurrent race won by another request — re-read winner's trial window
+            const raced = await env.DB.prepare(
+              "SELECT status, trial_started_at, trial_ends_at FROM subscriptions WHERE user_id = ?"
+            ).bind(studentId).first<{ status: string; trial_started_at: number; trial_ends_at: number }>();
+            return new Response(
+              JSON.stringify({
+                ok: true,
+                status: raced?.status || "trial",
+                trial_started_at: raced?.trial_started_at || now,
+                trial_ends_at: raced?.trial_ends_at || trialEndsAt,
+                message: "تاقیکردنەوەی خۆڕایی چالاک کرا.",
+              }),
+              { status: 200, headers: responseHeaders }
+            );
+          }
 
           return new Response(
             JSON.stringify({
@@ -2737,39 +2904,56 @@ export default {
 
       // GET /api/subscription/status
       if (pathname === "/api/subscription/status" && request.method === "GET") {
-        let userId = url.searchParams.get("userId")?.trim();
-        const authHeader = request.headers.get("Authorization");
-        if (authHeader && authHeader.startsWith("Bearer ")) {
-          const authResult = await verifyAuthWorker(request, env, responseHeaders);
-          if (authResult instanceof Response) return authResult;
-          if (userId && userId !== authResult.user.uid && authResult.user.email !== "addmin.official.idg@gmail.com") {
+        // SECURITY: Always require authentication — no unauthenticated subscription status
+        const authResult = await verifyAuthWorker(request, env, responseHeaders);
+        if (authResult instanceof Response) return authResult;
+
+        const verifiedUid = authResult.user.uid;
+
+        // Allow admin to query any user, students can only query themselves
+        const requestedUserId = url.searchParams.get("userId")?.trim();
+        let userId: string;
+
+        if (requestedUserId && requestedUserId !== verifiedUid) {
+          // Cryptographic server-side admin verification
+          const adminCheck = await verifyAdmin(request, env as never);
+          if (!adminCheck.ok) {
             return new Response(
               JSON.stringify({
                 error: "FORBIDDEN",
-                detail: "ڕێگەپێدراو نیت بۆ بینینی دۆخی بەشداریکردنی بەکارهێنەری تر.",
+                detail: "ڕێگەپێدراو نیت بۆ بینینی دۆخی بەشداریکردنی بەکارهێنەری تر. تەنها ئادمین دەتوانێت ئەم کارە بکات.",
               }),
               { status: 403, headers: responseHeaders }
             );
           }
-          if (!userId) {
-            userId = authResult.user.uid;
-          }
-        }
-
-        if (!userId) {
-          return new Response(JSON.stringify({ error: "userId is required" }), {
-            status: 400,
-            headers: responseHeaders,
-          });
+          userId = requestedUserId;
+        } else {
+          userId = verifiedUid;
         }
         if (!env.DB) {
           return new Response(
-            JSON.stringify({ ok: true, status: "trial", trial_ends_at: Date.now() + 3 * 86400000, days_remaining: 3 }),
-            { headers: responseHeaders }
+            JSON.stringify({
+              ok: false,
+              error: "سێرڤسی بەشداریکردن لەبەردەستدا نییە (داتابەیس بەردەست نییە).",
+              code: "SERVICE_UNAVAILABLE",
+            }),
+            { status: 503, headers: responseHeaders }
           );
         }
         try {
           const subResult = await checkSubscription(env, userId);
+          if (subResult.status === "unavailable") {
+            return new Response(
+              JSON.stringify({
+                ok: false,
+                error: "سێرڤسی بەشداریکردن لەم کاتەدا لەبەردەستدا نییە.",
+                code: "SERVICE_UNAVAILABLE",
+                detail: subResult.error,
+              }),
+              { status: 503, headers: responseHeaders }
+            );
+          }
+
           const row = await env.DB.prepare(
             "SELECT status, trial_started_at, trial_ends_at, plan_id, updated_at FROM subscriptions WHERE user_id = ?"
           ).bind(userId).first<{
@@ -2797,8 +2981,13 @@ export default {
           );
         } catch (dbErr: unknown) {
           return new Response(
-            JSON.stringify({ error: "DATABASE_ERROR", detail: (dbErr as Error)?.message || String(dbErr) }),
-            { status: 500, headers: responseHeaders }
+            JSON.stringify({
+              ok: false,
+              error: "سێرڤسی بەشداریکردن لەم کاتەدا تووشی هەڵە بوو.",
+              code: "SERVICE_UNAVAILABLE",
+              detail: (dbErr as Error)?.message || String(dbErr)
+            }),
+            { status: 503, headers: responseHeaders }
           );
         }
       }
@@ -2806,10 +2995,17 @@ export default {
       // POST /api/subscription/submit-receipt
       if (pathname === "/api/subscription/submit-receipt" && request.method === "POST") {
         if (!env.DB) {
-          return new Response(JSON.stringify({ error: "DB binding not configured" }), {
-            status: 500,
-            headers: responseHeaders,
-          });
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              error: "سێرڤسی ناردنی پسوولە لەم کاتەدا لەبەردەستدا نییە (داتابەیس بەردەست نییە).",
+              code: "SERVICE_UNAVAILABLE"
+            }),
+            {
+              status: 503,
+              headers: responseHeaders,
+            }
+          );
         }
 
         // 🚨 AUTH GUARD: Student must be authenticated
@@ -3006,10 +3202,10 @@ export default {
           const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "50", 10), 1), 100);
 
           if (!env.DB) {
-            return new Response(JSON.stringify({ ok: true, notifications: [], unreadCount: 0 }), {
-              status: 200,
-              headers: responseHeaders,
-            });
+            return new Response(
+              JSON.stringify({ error: "DATABASE_UNAVAILABLE", detail: "D1 binding is missing. Cannot retrieve notifications." }),
+              { status: 503, headers: responseHeaders }
+            );
           }
 
           try {
@@ -3057,10 +3253,10 @@ export default {
         // POST /api/notifications/read-all
         if (pathname === "/api/notifications/read-all" && request.method === "POST") {
           if (!env.DB) {
-            return new Response(JSON.stringify({ ok: true, updatedCount: 0 }), {
-              status: 200,
-              headers: responseHeaders,
-            });
+            return new Response(
+              JSON.stringify({ error: "DATABASE_UNAVAILABLE", detail: "D1 binding is missing. Cannot mark notifications as read." }),
+              { status: 503, headers: responseHeaders }
+            );
           }
 
           try {
@@ -3082,19 +3278,139 @@ export default {
           }
         }
 
+        // GET /api/notifications/:id
+        const singleMatch = pathname.match(/^\/api\/notifications\/([^/]+)$/);
+        if (singleMatch && !["preferences", "read-all", "batch"].includes(singleMatch[1]) && request.method === "GET") {
+          const notificationId = decodeURIComponent(singleMatch[1]);
+          if (!env.DB) {
+            return new Response(
+              JSON.stringify({ error: "DATABASE_UNAVAILABLE", detail: "D1 binding is missing. Cannot retrieve notification." }),
+              { status: 503, headers: responseHeaders }
+            );
+          }
+
+          try {
+            const notif = await env.DB.prepare(
+              `SELECT id, student_id as studentId, type, title, message, action_label as actionLabel, action_url as actionUrl, created_at as createdAt, read_at as readAt, priority, deduplication_key as deduplicationKey, expires_at as expiresAt
+               FROM notifications WHERE id = ?`
+            ).bind(notificationId).first<{
+              id: string;
+              studentId: string;
+              type: string;
+              title: string;
+              message: string;
+              actionLabel?: string;
+              actionUrl?: string;
+              createdAt: number;
+              readAt?: number | null;
+              priority: string;
+              deduplicationKey: string;
+              expiresAt?: number | null;
+            }>();
+
+            if (!notif) {
+              return new Response(
+                JSON.stringify({ error: "NOT_FOUND", detail: "ئەم ئاگادارییە نەدۆزرایەوە." }),
+                { status: 404, headers: responseHeaders }
+              );
+            }
+
+            if (notif.studentId !== studentId) {
+              return new Response(
+                JSON.stringify({ error: "FORBIDDEN", detail: "ئەم ئاگادارییە هی تۆ نییە." }),
+                { status: 403, headers: responseHeaders }
+              );
+            }
+
+            return new Response(
+              JSON.stringify({ ok: true, notification: notif }),
+              { status: 200, headers: responseHeaders }
+            );
+          } catch (dbErr: unknown) {
+            return new Response(
+              JSON.stringify({ error: "DATABASE_ERROR", detail: (dbErr as Error)?.message || String(dbErr) }),
+              { status: 500, headers: responseHeaders }
+            );
+          }
+        }
+
+        // DELETE /api/notifications/:id
+        const deleteMatch = pathname.match(/^\/api\/notifications\/([^/]+)$/);
+        if (deleteMatch && !["preferences", "read-all", "batch"].includes(deleteMatch[1]) && request.method === "DELETE") {
+          const notificationId = decodeURIComponent(deleteMatch[1]);
+          if (!env.DB) {
+            return new Response(
+              JSON.stringify({ error: "DATABASE_UNAVAILABLE", detail: "D1 binding is missing. Cannot delete notification." }),
+              { status: 503, headers: responseHeaders }
+            );
+          }
+
+          try {
+            const existing = await env.DB.prepare(
+              "SELECT student_id FROM notifications WHERE id = ?"
+            ).bind(notificationId).first<{ student_id: string }>();
+
+            if (!existing) {
+              return new Response(
+                JSON.stringify({ error: "NOT_FOUND", detail: "ئەم ئاگادارییە نەدۆزرایەوە." }),
+                { status: 404, headers: responseHeaders }
+              );
+            }
+
+            if (existing.student_id !== studentId) {
+              return new Response(
+                JSON.stringify({ error: "FORBIDDEN", detail: "ئەم ئاگادارییە هی تۆ نییە." }),
+                { status: 403, headers: responseHeaders }
+              );
+            }
+
+            await env.DB.prepare(
+              "DELETE FROM notifications WHERE id = ? AND student_id = ?"
+            ).bind(notificationId, studentId).run();
+
+            return new Response(
+              JSON.stringify({ ok: true, deleted: notificationId }),
+              { status: 200, headers: responseHeaders }
+            );
+          } catch (dbErr: unknown) {
+            return new Response(
+              JSON.stringify({ error: "DATABASE_ERROR", detail: (dbErr as Error)?.message || String(dbErr) }),
+              { status: 500, headers: responseHeaders }
+            );
+          }
+        }
+
         // POST /api/notifications/:id/read
         const readMatch = pathname.match(/^\/api\/notifications\/([^/]+)\/read$/);
         if (readMatch && request.method === "POST") {
           const notificationId = decodeURIComponent(readMatch[1]);
           if (!env.DB) {
-            return new Response(JSON.stringify({ ok: true, id: notificationId }), {
-              status: 200,
-              headers: responseHeaders,
-            });
+            return new Response(
+              JSON.stringify({ error: "DATABASE_UNAVAILABLE", detail: "D1 binding is missing. Cannot mark notification as read." }),
+              { status: 503, headers: responseHeaders }
+            );
           }
 
           try {
             const now = Date.now();
+            const existing = await env.DB.prepare(
+              "SELECT student_id FROM notifications WHERE id = ?"
+            ).bind(notificationId).first<{ student_id: string }>();
+
+            if (existing && existing.student_id !== studentId) {
+              return new Response(
+                JSON.stringify({ error: "FORBIDDEN", detail: "ئەم ئاگادارییە هی تۆ نییە." }),
+                { status: 403, headers: responseHeaders }
+              );
+            }
+
+            if (!existing) {
+              return new Response(
+                JSON.stringify({ error: "NOT_FOUND", detail: "ئەم ئاگادارییە نەدۆزرایەوە." }),
+                { status: 404, headers: responseHeaders }
+              );
+            }
+
             await env.DB.prepare(
               `UPDATE notifications SET read_at = ? WHERE id = ? AND student_id = ?`
             ).bind(now, notificationId, studentId).run();
@@ -3114,10 +3430,10 @@ export default {
         // POST /api/notifications/batch
         if (pathname === "/api/notifications/batch" && request.method === "POST") {
           if (!env.DB) {
-            return new Response(JSON.stringify({ ok: true, insertedCount: 0 }), {
-              status: 200,
-              headers: responseHeaders,
-            });
+            return new Response(
+              JSON.stringify({ error: "DATABASE_UNAVAILABLE", detail: "D1 binding is missing. Cannot store notifications." }),
+              { status: 503, headers: responseHeaders }
+            );
           }
 
           try {
@@ -3139,23 +3455,32 @@ export default {
             let insertedCount = 0;
 
             for (const n of notifs) {
-              if (!n.id || !n.type || !n.title || !n.message || !n.deduplicationKey) continue;
+              if (!n.type || !n.title || !n.message || !n.deduplicationKey) continue;
+
+              const rawId = n.id || ("notif_" + Math.random().toString(36).substring(2, 10));
+              // SECURITY: Scope notification ID to this student to prevent ID guessing
+              const scopedId = `${studentId.substring(0, 8)}_${rawId}`;
+
+              // SECURITY: Scope deduplication key to this student only
+              // Prevents cross-student dedup key collisions
+              const scopedDedupKey = `uid:${studentId}:${n.deduplicationKey}`;
+
               const now = Date.now();
               await env.DB.prepare(
                 `INSERT OR IGNORE INTO notifications
                  (id, student_id, type, title, message, action_label, action_url, created_at, read_at, priority, deduplication_key, expires_at)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)`
               ).bind(
-                n.id,
-                studentId,
+                scopedId,
+                studentId,     // Always from verified token — never from client
                 n.type,
-                n.title,
-                n.message,
-                n.actionLabel || null,
-                n.actionUrl || null,
+                n.title.substring(0, 200),    // Sanitize length
+                n.message.substring(0, 1000), // Sanitize length
+                n.actionLabel ? n.actionLabel.substring(0, 100) : null,
+                n.actionUrl ? n.actionUrl.substring(0, 500) : null,
                 now,
                 n.priority || "normal",
-                n.deduplicationKey,
+                scopedDedupKey,
                 n.expiresAt || null
               ).run();
               insertedCount++;
@@ -3177,26 +3502,8 @@ export default {
         if (pathname === "/api/notifications/preferences" && request.method === "GET") {
           if (!env.DB) {
             return new Response(
-              JSON.stringify({
-                ok: true,
-                preferences: {
-                  studentId,
-                  inAppEnabled: true,
-                  dailyReminderTime: "18:00",
-                  quietHoursStart: "22:00",
-                  quietHoursEnd: "07:00",
-                  planRemindersEnabled: true,
-                  nextBestActionEnabled: true,
-                  deadlinesEnabled: true,
-                  taskRecoveryEnabled: true,
-                  achievementsEnabled: true,
-                  weakConceptEnabled: true,
-                  assessmentEnabled: true,
-                  systemEnabled: true,
-                  updatedAt: Date.now(),
-                },
-              }),
-              { status: 200, headers: responseHeaders }
+              JSON.stringify({ error: "DATABASE_UNAVAILABLE", detail: "D1 binding is missing. Cannot retrieve notification preferences." }),
+              { status: 503, headers: responseHeaders }
             );
           }
 
@@ -3284,10 +3591,10 @@ export default {
         // POST /api/notifications/preferences
         if (pathname === "/api/notifications/preferences" && request.method === "POST") {
           if (!env.DB) {
-            return new Response(JSON.stringify({ ok: true, preferences: {} }), {
-              status: 200,
-              headers: responseHeaders,
-            });
+            return new Response(
+              JSON.stringify({ error: "DATABASE_UNAVAILABLE", detail: "D1 binding is missing. Cannot save notification preferences." }),
+              { status: 503, headers: responseHeaders }
+            );
           }
 
           try {

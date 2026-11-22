@@ -9,6 +9,16 @@ export interface TelemetryExportEnv {
   [key: string]: unknown;
 }
 
+function anonymizeStudentId(rawId: unknown): string | undefined {
+  if (typeof rawId !== "string" || !rawId.trim()) return undefined;
+  let hash = 2166136261;
+  for (let i = 0; i < rawId.length; i++) {
+    hash ^= rawId.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `anon_${(hash >>> 0).toString(16).padStart(8, "0")}`;
+}
+
 export async function handleTelemetryExportRoute(
   request: Request,
   env: TelemetryExportEnv | Record<string, unknown>
@@ -51,7 +61,20 @@ export async function handleTelemetryExportRoute(
     for (const key of listed.keys) {
       const data = (await kv.get(key.name, 'json')) as Record<string, unknown> | null;
       if (data) {
-        records.push(data);
+        // Privacy Preservation & Data Minimization:
+        // Strip raw studentId and free-text comments to protect student privacy and resolve code scanning alerts.
+        const sanitizedRecord: Record<string, unknown> = {
+          id: data.id || key.name,
+          issueType: data.issueType,
+          topicId: data.topicId,
+          grade: data.grade,
+          subject: data.subject,
+          timestamp: data.timestamp,
+          anonymousStudentId: anonymizeStudentId(data.studentId),
+          hasComments: Boolean(typeof data.comments === 'string' && data.comments.trim().length > 0),
+          commentsLength: typeof data.comments === 'string' ? data.comments.trim().length : 0,
+        };
+        records.push(sanitizedRecord);
       }
     }
 
