@@ -37,6 +37,7 @@ import { useSystemAuditLogs } from "../hooks/useSystemAuditLogs.ts";
 import { getFirebaseAuth } from "../services/firebase.ts";
 import { useNewStudentAlerts } from "../hooks/useNewStudentAlerts.ts";
 import { broadcastToAllStudents } from "../firebase/adminBroadcast.ts";
+import { formatBaghdadTime } from "../utils/dateTime.ts";
 
 export type AdminTab = "overview" | "students" | "content" | "system" | "flags";
 
@@ -261,7 +262,7 @@ export function AdminDashboard({
   };
 
   const formattedLastUpdated = metrics.data?.lastUpdated
-    ? metrics.data.lastUpdated.toLocaleTimeString("ar-u-nu-arab")
+    ? formatBaghdadTime(metrics.data.lastUpdated)
     : null;
 
   return (

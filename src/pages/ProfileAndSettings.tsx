@@ -23,6 +23,7 @@ import { SubscriptionModal } from "../components/SubscriptionModal.tsx";
 import { getSubscriptionStatus, type StudentSubscriptionStatus } from "../services/subscriptionService.ts";
 import { logoutUser, getCurrentUser, resetPassword } from "../services/authService.ts";
 import { deleteStudentProfile } from "../features/student/studentStorage.ts";
+import { BAGHDAD_TIMEZONE } from "../utils/dateTime.ts";
 import { StudentProfile } from "../features/student/studentTypes.ts";
 import { useStudentProfile } from "../features/student/useStudentProfile.ts";
 import { useStudentMastery } from "../learning/hooks/useStudentMastery.ts";
@@ -84,7 +85,7 @@ export function ProfileAndSettings({
       if (rawDate) {
         const d = new Date(rawDate);
         if (!isNaN(d.getTime())) {
-          return `${d.toLocaleDateString("ckb-IQ", { month: "long", year: "numeric" })}`;
+          return `${d.toLocaleDateString("ckb-IQ", { month: "long", year: "numeric", timeZone: BAGHDAD_TIMEZONE })}`;
         }
       }
     } catch {
@@ -445,7 +446,7 @@ export function ProfileAndSettings({
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1 border-t border-indigo-100 dark:border-indigo-900/60">
                 <p className="text-xs text-slate-600 dark:text-slate-300 font-sans leading-relaxed">
                   {subStatus?.status === "active"
-                    ? `بەشداریکردنت تا ${new Date(subStatus.trial_ends_at).toLocaleDateString("en-GB")} کارایە.`
+                    ? `بەشداریکردنت تا ${new Date(subStatus.trial_ends_at).toLocaleDateString("en-GB", { timeZone: BAGHDAD_TIMEZONE })} کارایە.`
                     : "بۆ دەستگەیشتنی تەواو و بەردەوام، دەتوانیت لە ڕێگەی فاستپەی و واتسئەپ بەشداری بکەیت."}
                 </p>
 

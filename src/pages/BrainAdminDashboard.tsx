@@ -21,6 +21,7 @@ import { useAdminMetrics } from "../hooks/useAdminMetrics.ts";
 import { useAdminAnomalies } from "../hooks/useAdminAnomalies.ts";
 import { useSystemHealth } from "../hooks/useSystemHealth.ts";
 import { useStrugglingConcepts } from "../hooks/useStrugglingConcepts.ts";
+import { formatBaghdadDate } from "../utils/dateTime.ts";
 
 export interface BrainAdminDashboardProps {
   onBackToApp?: () => void;
@@ -389,7 +390,7 @@ export function BrainAdminDashboard({
                             : "گومانی هەڕەمەکی"}
                         </span>
                         <span className="text-[10px] text-slate-400 font-mono">
-                          {a.detectedAt ? new Date(a.detectedAt as unknown as string).toLocaleDateString("ku") : "ئەمڕۆ"}
+                          {a.detectedAt ? formatBaghdadDate(a.detectedAt as unknown as string) : "ئەمڕۆ"}
                         </span>
                       </div>
                       <p className="text-xs font-bold text-slate-800 dark:text-slate-200 line-clamp-1 font-sans">

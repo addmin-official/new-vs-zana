@@ -10,6 +10,7 @@ import { syncStudentProgressToFirestore } from "../features/student/studentStora
 import { fetchWithFallback } from "../lib/apiClient.ts";
 import { ZanaStorage, ChatMessage } from "../services/storage.ts";
 import { getClientToken } from "../services/authService.ts";
+import { formatBaghdadTime } from "../utils/dateTime.ts";
 export type { ChatMessage };
 
 export interface UserProfile {
@@ -103,7 +104,7 @@ export function loadLessonChatMessages(
       id: `welcome-${key}`,
       sender: "zana",
       content: `سڵاو! من **مامۆستا زانا**م، هاوڕێی زیرەکی تۆ بۆ فێربوونی وانەکان بە شێوازی سوقراتی و پرسیارکردن.\nبەخێربێیت بۆ وانەی **«${title}»**. چ پرسیارێک یان ڕوونکردنەوەیەکت لەسەر ئەم بەندە هەیە تا پێکەوە شیکاری بکەین؟`,
-      timestamp: new Date().toLocaleTimeString("ku-IQ", { hour: "2-digit", minute: "2-digit" }),
+      timestamp: formatBaghdadTime(new Date()),
       chapterId: ch,
     },
   ];
@@ -282,7 +283,7 @@ let currentState: AppState = {
       id: "usr-" + Date.now(),
       sender: "user",
       content: content.trim(),
-      timestamp: new Date().toLocaleTimeString("ku-IQ", { hour: "2-digit", minute: "2-digit" }),
+      timestamp: formatBaghdadTime(new Date()),
       chapterId: activeCh.id,
     };
 
@@ -335,7 +336,7 @@ let currentState: AppState = {
             id: "zana-trial-" + Date.now(),
             sender: "zana",
             content: "تاقیکردنەوەی ٣ ڕۆژەکەت بەسەرچوو. بۆ بەردەوامبوون لە فێربوون لەگەڵ زانا، تکایە بەشداری بکە.",
-            timestamp: new Date().toLocaleTimeString("ku-IQ", { hour: "2-digit", minute: "2-digit" }),
+            timestamp: formatBaghdadTime(new Date()),
             chapterId: activeCh.id,
           };
           const updatedMsgs = [...newMsgs, trialMsg];
@@ -352,7 +353,7 @@ let currentState: AppState = {
           id: "zana-" + Date.now(),
           sender: "zana",
           content: zanaReply,
-          timestamp: new Date().toLocaleTimeString("ku-IQ", { hour: "2-digit", minute: "2-digit" }),
+          timestamp: formatBaghdadTime(new Date()),
           chapterId: activeCh.id,
         };
         const updatedMsgs = [...newMsgs, zanaMsg];
@@ -372,7 +373,7 @@ let currentState: AppState = {
         id: "zana-err-" + Date.now(),
         sender: "zana",
         content: "ببوورە، کێشەیەک لە پەیوەندی بە سێرڤەری زانا ڕوویدا. تکایە دڵنیابەرەوە لە پەیوەندیی ئینتەرنێت و دووبارە پرسیارەکەت بنووسەرەوە.",
-        timestamp: new Date().toLocaleTimeString("ku-IQ", { hour: "2-digit", minute: "2-digit" }),
+        timestamp: formatBaghdadTime(new Date()),
         chapterId: activeCh.id,
       };
       const fallbackMsgs = [...newMsgs, fallbackMsg];

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { ChatMessage, ZanaStorage, StudentProfile } from "../../services/storage.ts";
+import { formatBaghdadTime } from "../../utils/dateTime.ts";
 import { sendChatMessageToZana } from "./tutorApi.ts";
 import {
   playInteractionTone,
@@ -53,7 +54,7 @@ export function useTutorChat(profile: StudentProfile, academicContext?: Academic
             sender: "zana",
             content: welcomeText,
             text: welcomeText,
-            timestamp: new Date().toLocaleTimeString("ku-IQ", { hour: "2-digit", minute: "2-digit" }),
+            timestamp: formatBaghdadTime(new Date()),
             isEducational: true
           };
           ZanaStorage.saveChatMessages(profile.activeSubject, [welcomeMessage]);
@@ -79,7 +80,7 @@ export function useTutorChat(profile: StudentProfile, academicContext?: Academic
       sender: "user",
       content: text,
       text,
-      timestamp: new Date().toLocaleTimeString("ku-IQ", { hour: "2-digit", minute: "2-digit" })
+      timestamp: formatBaghdadTime(new Date())
     };
 
     const updatedMessages = [...messages, userMsg];
@@ -99,7 +100,7 @@ export function useTutorChat(profile: StudentProfile, academicContext?: Academic
         sender: "zana",
         content: response.text,
         text: response.text,
-        timestamp: new Date().toLocaleTimeString("ku-IQ", { hour: "2-digit", minute: "2-digit" }),
+        timestamp: formatBaghdadTime(new Date()),
         isEducational: response.isEducational
       };
 
