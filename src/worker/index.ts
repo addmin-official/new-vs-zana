@@ -681,6 +681,18 @@ export default {
         `[ADMIN ACCESS] ${adminCheck.email} (${adminCheck.uid}) → ${pathname}`
       );
     } else if (pathname.startsWith("/api/internal/")) {
+      // SECURITY: Only explicitly allowlisted internal endpoints accept the telemetry secret.
+      // Any /api/internal/* path NOT in this list is denied by default — even with a valid secret.
+      const ALLOWED_INTERNAL_TELEMETRY_PATHS = ["/api/internal/telemetry"];
+      if (!ALLOWED_INTERNAL_TELEMETRY_PATHS.includes(pathname)) {
+        return new Response(
+          JSON.stringify({
+            error: "Forbidden",
+            detail: "Internal route not explicitly authorised for telemetry access.",
+          }),
+          { status: 403, headers: responseHeaders }
+        );
+      }
       const telemetryCheck = await verifyInternalTelemetry(request, env as never);
       if (!telemetryCheck.ok) {
         return new Response(
@@ -2254,10 +2266,10 @@ export default {
           }
         }
         if (!env.DB) {
-          return new Response(JSON.stringify({ ok: true, users: [] }), {
-            status: 200,
-            headers: responseHeaders,
-          });
+          return new Response(
+            JSON.stringify({ error: "DATABASE_UNAVAILABLE", detail: "D1 database binding is missing. Users cannot be listed." }),
+            { status: 503, headers: responseHeaders }
+          );
         }
         try {
           const res = await env.DB.prepare(
@@ -2278,10 +2290,10 @@ export default {
       // GET /api/curriculum/pages
       if (pathname === "/api/curriculum/pages" && request.method === "GET") {
         if (!env.DB) {
-          return new Response(JSON.stringify({ ok: true, pages: [] }), {
-            status: 200,
-            headers: responseHeaders,
-          });
+          return new Response(
+            JSON.stringify({ error: "DATABASE_UNAVAILABLE", detail: "D1 database binding is missing. Curriculum pages cannot be listed." }),
+            { status: 503, headers: responseHeaders }
+          );
         }
         try {
           const subject = url.searchParams.get("subject");
@@ -3069,10 +3081,10 @@ export default {
           const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "50", 10), 1), 100);
 
           if (!env.DB) {
-            return new Response(JSON.stringify({ ok: true, notifications: [], unreadCount: 0 }), {
-              status: 200,
-              headers: responseHeaders,
-            });
+            return new Response(
+              JSON.stringify({ error: "DATABASE_UNAVAILABLE", detail: "D1 binding is missing. Cannot retrieve notifications." }),
+              { status: 503, headers: responseHeaders }
+            );
           }
 
           try {
@@ -3120,10 +3132,10 @@ export default {
         // POST /api/notifications/read-all
         if (pathname === "/api/notifications/read-all" && request.method === "POST") {
           if (!env.DB) {
-            return new Response(JSON.stringify({ ok: true, updatedCount: 0 }), {
-              status: 200,
-              headers: responseHeaders,
-            });
+            return new Response(
+              JSON.stringify({ error: "DATABASE_UNAVAILABLE", detail: "D1 binding is missing. Cannot mark notifications as read." }),
+              { status: 503, headers: responseHeaders }
+            );
           }
 
           try {
@@ -3151,7 +3163,7 @@ export default {
           const notificationId = decodeURIComponent(singleMatch[1]);
           if (!env.DB) {
             return new Response(
-              JSON.stringify({ error: "SERVICE_UNAVAILABLE" }),
+              JSON.stringify({ error: "DATABASE_UNAVAILABLE", detail: "D1 binding is missing. Cannot retrieve notification." }),
               { status: 503, headers: responseHeaders }
             );
           }
@@ -3207,7 +3219,7 @@ export default {
           const notificationId = decodeURIComponent(deleteMatch[1]);
           if (!env.DB) {
             return new Response(
-              JSON.stringify({ error: "SERVICE_UNAVAILABLE" }),
+              JSON.stringify({ error: "DATABASE_UNAVAILABLE", detail: "D1 binding is missing. Cannot delete notification." }),
               { status: 503, headers: responseHeaders }
             );
           }
@@ -3252,10 +3264,10 @@ export default {
         if (readMatch && request.method === "POST") {
           const notificationId = decodeURIComponent(readMatch[1]);
           if (!env.DB) {
-            return new Response(JSON.stringify({ ok: true, id: notificationId }), {
-              status: 200,
-              headers: responseHeaders,
-            });
+            return new Response(
+              JSON.stringify({ error: "DATABASE_UNAVAILABLE", detail: "D1 binding is missing. Cannot mark notification as read." }),
+              { status: 503, headers: responseHeaders }
+            );
           }
 
           try {
@@ -3297,10 +3309,10 @@ export default {
         // POST /api/notifications/batch
         if (pathname === "/api/notifications/batch" && request.method === "POST") {
           if (!env.DB) {
-            return new Response(JSON.stringify({ ok: true, insertedCount: 0 }), {
-              status: 200,
-              headers: responseHeaders,
-            });
+            return new Response(
+              JSON.stringify({ error: "DATABASE_UNAVAILABLE", detail: "D1 binding is missing. Cannot store notifications." }),
+              { status: 503, headers: responseHeaders }
+            );
           }
 
           try {
@@ -3369,26 +3381,8 @@ export default {
         if (pathname === "/api/notifications/preferences" && request.method === "GET") {
           if (!env.DB) {
             return new Response(
-              JSON.stringify({
-                ok: true,
-                preferences: {
-                  studentId,
-                  inAppEnabled: true,
-                  dailyReminderTime: "18:00",
-                  quietHoursStart: "22:00",
-                  quietHoursEnd: "07:00",
-                  planRemindersEnabled: true,
-                  nextBestActionEnabled: true,
-                  deadlinesEnabled: true,
-                  taskRecoveryEnabled: true,
-                  achievementsEnabled: true,
-                  weakConceptEnabled: true,
-                  assessmentEnabled: true,
-                  systemEnabled: true,
-                  updatedAt: Date.now(),
-                },
-              }),
-              { status: 200, headers: responseHeaders }
+              JSON.stringify({ error: "DATABASE_UNAVAILABLE", detail: "D1 binding is missing. Cannot retrieve notification preferences." }),
+              { status: 503, headers: responseHeaders }
             );
           }
 
@@ -3476,10 +3470,10 @@ export default {
         // POST /api/notifications/preferences
         if (pathname === "/api/notifications/preferences" && request.method === "POST") {
           if (!env.DB) {
-            return new Response(JSON.stringify({ ok: true, preferences: {} }), {
-              status: 200,
-              headers: responseHeaders,
-            });
+            return new Response(
+              JSON.stringify({ error: "DATABASE_UNAVAILABLE", detail: "D1 binding is missing. Cannot save notification preferences." }),
+              { status: 503, headers: responseHeaders }
+            );
           }
 
           try {
