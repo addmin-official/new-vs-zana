@@ -84,7 +84,7 @@ export const DEFAULT_CONCEPTS_BY_GRADE_AND_SUBJECT: Record<string, Record<string
   },
   "12": {
     chemistry: "ئاوێتە ئایۆنییەکان و ڕەوشە کۆکارییەکان",
-    physics: "جووڵەی خولاوە و یاسای کێشکردن",
+    physics: "تەزووی کارەبایی و یاسای ئۆم",
     mathematics: "سنوور و داتاشراو (Calculus)",
     math: "سنوور و داتاشراو (Calculus)",
     biology: "بۆماوەزانی مێندلی و یاساکانی بۆماوە",
@@ -273,7 +273,7 @@ export async function triggerSessionRecoveryNotification(
     const { notificationEngine } = await import("../notifications/notificationEngine.ts");
     await notificationEngine.addNotification(effectiveUserId, {
       type: "study_reminder",
-      title: `بەخێربێیتەوە! دواجار لە ${subjectName} (${gradeName}) بوویت`,
+      title: `بەخێربێیتەوە! دواجار لە ${subjectName} بوویت`,
       message: "دەتوانیت ڕاستەوخۆ لەو وانەیەی کە لێی وەستابوویت بەردەوام بیت.",
       icon: "✨",
       actionUrl: actionRoute,
