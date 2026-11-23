@@ -3,7 +3,7 @@ import { onAuthStateChanged, User } from "firebase/auth";
 import { AppShell } from "./components/AppShell.tsx";
 import { LoadingScreen } from "./screens/LoadingScreen.tsx";
 import { useStudentProfile } from "./features/student/useStudentProfile.ts";
-import { SubjectKey, StudentProfile } from "./features/student/studentTypes.ts";
+import { SubjectKey, StudentProfile, StudentGrade } from "./features/student/studentTypes.ts";
 import { getStudentProfile } from "./features/student/studentStorage.ts";
 import { getFirebaseAuth, isFirebaseConfigured } from "./services/firebase.ts";
 import { getCurrentUser, logoutUser, subscribeToAuthChanges } from "./services/authService.ts";
@@ -459,10 +459,13 @@ export default function App() {
     });
   };
 
-  const handleSelectSubject = (subjectId: SubjectKey) => {
-    updateProfile({ activeSubject: subjectId });
-    setActiveProfile((prev: StudentProfile | null) => (prev ? { ...prev, activeSubject: subjectId } : null));
-    useAppStore.getState().setActiveSubject(subjectId);
+  const handleSelectSubject = (subjectId: SubjectKey, grade?: StudentGrade) => {
+    const nextGrade = grade || effectiveProfile?.grade || "12";
+    updateProfile({ activeSubject: subjectId, grade: nextGrade });
+    setActiveProfile((prev: StudentProfile | null) =>
+      prev ? { ...prev, activeSubject: subjectId, grade: nextGrade } : null
+    );
+    useAppStore.getState().setActiveSubject(subjectId, nextGrade);
   };
 
   const _handleStartAssessment = () => {

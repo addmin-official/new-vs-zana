@@ -1943,7 +1943,8 @@ export default {
       const outlineMatch = pathname.match(/^\/api\/curriculum\/([^/]+)\/([^/]+)\/outline$/);
       if (outlineMatch && request.method === "GET") {
         const subject = decodeURIComponent(outlineMatch[1]);
-        const outline = getChapterOutlineForSubject(subject);
+        const grade = decodeURIComponent(outlineMatch[2]);
+        const outline = getChapterOutlineForSubject(subject, grade);
         const currHeaders = new Headers(responseHeaders);
         currHeaders.set("Cache-Control", "public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400");
         return new Response(JSON.stringify(outline), { status: 200, headers: currHeaders });

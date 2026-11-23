@@ -21,7 +21,7 @@ import {
 import { StudentProfile, SubjectKey } from "../features/student/studentTypes.ts";
 import { useStudentProfile } from "../features/student/useStudentProfile.ts";
 import { useAppStore } from "../store/appStore.ts";
-import { getSessionRecovery, getSubjectKurdishName, getDefaultConceptForSubject } from "../auth/sessionRecovery.ts";
+import { getSessionRecovery, getSubjectKurdishName, getDefaultConceptForSubject, getGradeKurdishName } from "../auth/sessionRecovery.ts";
 import { getSubjectCustomIcon } from "../components/SubjectCard.tsx";
 import { formatNumber } from "../i18n/i18n.ts";
 import type { PedagogyPillarTab } from "../screens/PedagogicalHubScreen.tsx";
@@ -70,7 +70,7 @@ export function Home({
   onNavigateToLabs,
   onNavigateToRooms,
   onNavigateToReport,
-}: HomeProps) {
+  }: HomeProps) {
   const { profile: hookProfile } = useStudentProfile();
   const studentProfile = propProfile || hookProfile;
   const user = useAppStore((state) => state.user);
@@ -86,23 +86,33 @@ export function Home({
     user.activeSubject ||
     sessionRecovery?.lastSubject ||
     "chemistry";
+  const activeGrade = String(studentProfile?.grade || user.grade || sessionRecovery?.lastGrade || "12");
 
   const lastConceptName = useMemo(() => {
     // 1. If session recovery matches the active subject:
     if (sessionRecovery?.lastSubject === activeSubjectKey && sessionRecovery?.lastConcept) {
+      if (sessionRecovery.lastGrade && sessionRecovery.lastGrade !== activeGrade) {
+        return sessionRecovery.lastConceptBySubjectAndGrade?.[`${activeSubjectKey}_${activeGrade}`] ||
+          getDefaultConceptForSubject(activeSubjectKey, activeGrade);
+      }
       // Prevent cross-subject concept leakage from chemistry
       if (activeSubjectKey !== "chemistry" && (sessionRecovery.lastConcept.includes("ترش") || sessionRecovery.lastConcept.includes("pH"))) {
-        return sessionRecovery.lastConceptBySubject?.[activeSubjectKey] || getDefaultConceptForSubject(activeSubjectKey);
+        return sessionRecovery.lastConceptBySubjectAndGrade?.[`${activeSubjectKey}_${activeGrade}`] ||
+          sessionRecovery.lastConceptBySubject?.[activeSubjectKey] ||
+          getDefaultConceptForSubject(activeSubjectKey, activeGrade);
       }
       return sessionRecovery.lastConcept;
     }
-    // 2. Check per-subject concept history
+    // 2. Check per-subject and grade concept history
+    if (sessionRecovery?.lastConceptBySubjectAndGrade?.[`${activeSubjectKey}_${activeGrade}`]) {
+      return sessionRecovery.lastConceptBySubjectAndGrade[`${activeSubjectKey}_${activeGrade}`];
+    }
     if (sessionRecovery?.lastConceptBySubject?.[activeSubjectKey]) {
       return sessionRecovery.lastConceptBySubject[activeSubjectKey];
     }
-    // 3. Fallback to this subject's actual default curriculum concept
-    return getDefaultConceptForSubject(activeSubjectKey);
-  }, [sessionRecovery, activeSubjectKey]);
+    // 3. Fallback to this subject's actual default curriculum concept for this grade
+    return getDefaultConceptForSubject(activeSubjectKey, activeGrade);
+  }, [sessionRecovery, activeSubjectKey, activeGrade]);
 
   const lastSubjectTitle = getSubjectKurdishName(activeSubjectKey);
 
@@ -248,6 +258,9 @@ export function Home({
             <h1 className="font-sans font-black text-xl sm:text-2xl text-slate-900 dark:text-white leading-tight">
               {getTimeGreeting()}، {studentName}! 👋
             </h1>
+            <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/40">
+              {getGradeKurdishName(activeGrade)}
+            </span>
           </div>
           <p className="font-sans text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
             با ئەمڕۆ هەنگاوێکی تر بەرەو نایابی بنێین لە وانەکانت.

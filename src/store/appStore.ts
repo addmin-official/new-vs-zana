@@ -1,11 +1,9 @@
 import { useSyncExternalStore } from "react";
 import {
   FALLBACK_CHEMISTRY_CHAPTERS,
-  FALLBACK_PHYSICS_CHAPTERS,
-  FALLBACK_MATH_CHAPTERS,
-  FALLBACK_ENGLISH_CHAPTERS,
   ChapterOutlineItem,
 } from "../features/chat/ChatSidebar.tsx";
+import { getChapterOutlineForSubject } from "../curriculum/data/chapterOutlines.ts";
 import { syncStudentProgressToFirestore } from "../features/student/studentStorage.ts";
 import { fetchWithFallback } from "../lib/apiClient.ts";
 import { ZanaStorage, ChatMessage } from "../services/storage.ts";
@@ -53,8 +51,9 @@ export interface AppState {
   // Actions
   setUser: (user: UserProfile) => void;
   setUserRole: (role: UserRole) => void;
-  fetchChapters: (subjectOverride?: string) => Promise<void>;
-  setActiveSubject: (subject: string) => void;
+  fetchChapters: (subjectOverride?: string, gradeOverride?: string) => Promise<void>;
+  setActiveSubject: (subject: string, gradeOverride?: string) => void;
+  setGrade: (grade: string) => void;
   setActiveChapter: (id: number | null) => void;
   addChatMessage: (message: ChatMessage) => void;
   sendChatMessage: (content: string, chapterId?: number) => Promise<void>;
@@ -81,18 +80,24 @@ const DEFAULT_USER: UserProfile = {
   totalScore: 0,
 };
 
-export function getLessonChatKey(subject: string, chapterId: number | string | null): string {
+export function getLessonChatKey(
+  subject: string,
+  chapterId: number | string | null,
+  grade?: string | number
+): string {
   const normSubj = (subject || "chemistry").toLowerCase().trim();
   const ch = chapterId || 1;
-  return `${normSubj}_ch${ch}`;
+  const g = grade ? `_g${grade}` : "";
+  return `${normSubj}${g}_ch${ch}`;
 }
 
 export function loadLessonChatMessages(
   subject: string,
   chapterId: number | string | null,
-  chapterTitle?: string
+  chapterTitle?: string,
+  grade?: string | number
 ): ChatMessage[] {
-  const key = getLessonChatKey(subject, chapterId);
+  const key = getLessonChatKey(subject, chapterId, grade);
   const stored = ZanaStorage.getChatMessages(key);
   if (stored && stored.length > 0) {
     return stored;
@@ -184,20 +189,13 @@ let currentState: AppState = {
     }
   },
 
-  fetchChapters: async (subjectOverride?: string) => {
+  fetchChapters: async (subjectOverride?: string, gradeOverride?: string) => {
     setState({ isLoading: true });
     const targetSubject = (subjectOverride || currentState.user.activeSubject || "chemistry").toLowerCase();
-    const fallback =
-      targetSubject === "physics"
-        ? FALLBACK_PHYSICS_CHAPTERS
-        : targetSubject === "math" || targetSubject === "mathematics"
-        ? FALLBACK_MATH_CHAPTERS
-        : targetSubject === "english"
-        ? FALLBACK_ENGLISH_CHAPTERS
-        : FALLBACK_CHEMISTRY_CHAPTERS;
+    const grade = String(gradeOverride || currentState.user.grade || "12").trim();
+    const fallback = getChapterOutlineForSubject(targetSubject, grade);
 
     try {
-      const grade = currentState.user.grade || "12";
       const res = await fetchWithFallback(`/api/curriculum/${encodeURIComponent(targetSubject)}/${encodeURIComponent(grade)}/outline`, { method: "GET" });
       if (res.ok) {
         const data = await res.json();
@@ -206,7 +204,7 @@ let currentState: AppState = {
           const chapterExists = data.some((c: ChapterOutlineItem) => c.id === currentActive);
           const nextActiveId = chapterExists ? currentActive : (data[0]?.id || 1);
           const activeChObj = data.find((c: ChapterOutlineItem) => c.id === nextActiveId) || data[0];
-          const newMsgs = loadLessonChatMessages(targetSubject, nextActiveId, activeChObj?.title);
+          const newMsgs = loadLessonChatMessages(targetSubject, nextActiveId, activeChObj?.title, grade);
 
           setState({
             chapters: data,
@@ -221,7 +219,7 @@ let currentState: AppState = {
       // fallback
     }
     const nextActiveId = fallback[0]?.id || 1;
-    const newMsgs = loadLessonChatMessages(targetSubject, nextActiveId, fallback[0]?.title);
+    const newMsgs = loadLessonChatMessages(targetSubject, nextActiveId, fallback[0]?.title, grade);
     setState({
       chapters: fallback,
       activeChapter: nextActiveId,
@@ -230,36 +228,56 @@ let currentState: AppState = {
     });
   },
 
-  setActiveSubject: (subject: string) => {
+  setActiveSubject: (subject: string, gradeOverride?: string) => {
     const norm = subject.toLowerCase();
+    const curGrade = currentState.user.grade || "12";
+    const nextGrade = String(gradeOverride || curGrade).trim();
     // Save current lesson chat before switching subject
     const curSubj = currentState.user.activeSubject || "chemistry";
     const curCh = currentState.activeChapter || 1;
-    const prevKey = getLessonChatKey(curSubj, curCh);
+    const prevKey = getLessonChatKey(curSubj, curCh, curGrade);
     ZanaStorage.saveChatMessages(prevKey, currentState.chatMessages);
 
     // Load the selected subject's chapter 1 messages for true chat isolation
-    const newMsgs = loadLessonChatMessages(norm, 1);
+    const newMsgs = loadLessonChatMessages(norm, 1, undefined, nextGrade);
 
     setState({
-      user: { ...currentState.user, activeSubject: norm },
+      user: { ...currentState.user, activeSubject: norm, grade: nextGrade },
       activeChapter: 1,
       chatMessages: newMsgs,
     });
-    void currentState.fetchChapters(norm);
+    void currentState.fetchChapters(norm, nextGrade);
+  },
+
+  setGrade: (grade: string) => {
+    const normGrade = String(grade || "12").trim();
+    const curSubj = currentState.user.activeSubject || "chemistry";
+    const curCh = currentState.activeChapter || 1;
+    const prevKey = getLessonChatKey(curSubj, curCh, currentState.user.grade);
+    ZanaStorage.saveChatMessages(prevKey, currentState.chatMessages);
+
+    const newMsgs = loadLessonChatMessages(curSubj, 1, undefined, normGrade);
+
+    setState({
+      user: { ...currentState.user, grade: normGrade },
+      activeChapter: 1,
+      chatMessages: newMsgs,
+    });
+    void currentState.fetchChapters(curSubj, normGrade);
   },
 
   setActiveChapter: (id) => {
     if (id === null) return;
     // Save current lesson chat before switching chapter
     const curSubj = currentState.user.activeSubject || "chemistry";
+    const curGrade = currentState.user.grade || "12";
     const curCh = currentState.activeChapter || 1;
-    const prevKey = getLessonChatKey(curSubj, curCh);
+    const prevKey = getLessonChatKey(curSubj, curCh, curGrade);
     ZanaStorage.saveChatMessages(prevKey, currentState.chatMessages);
 
     // Load lesson-specific chat for newly selected chapter
     const targetChapter = currentState.chapters.find((c) => c.id === id);
-    const newMsgs = loadLessonChatMessages(curSubj, id, targetChapter?.title);
+    const newMsgs = loadLessonChatMessages(curSubj, id, targetChapter?.title, curGrade);
 
     setState({ activeChapter: id, chatMessages: newMsgs });
   },
@@ -267,8 +285,9 @@ let currentState: AppState = {
   addChatMessage: (msg) => {
     const newMsgs = [...currentState.chatMessages, msg];
     const curSubj = currentState.user.activeSubject || "chemistry";
+    const curGrade = currentState.user.grade || "12";
     const curCh = currentState.activeChapter || 1;
-    ZanaStorage.saveChatMessages(getLessonChatKey(curSubj, curCh), newMsgs);
+    ZanaStorage.saveChatMessages(getLessonChatKey(curSubj, curCh, curGrade), newMsgs);
     setState({ chatMessages: newMsgs });
   },
 
@@ -277,7 +296,8 @@ let currentState: AppState = {
 
     const activeCh = currentState.chapters.find((c) => c.id === (chapterId || currentState.activeChapter)) || currentState.chapters[0];
     const currentSubj = currentState.user.activeSubject || "chemistry";
-    const currentKey = getLessonChatKey(currentSubj, activeCh.id);
+    const currentGrade = currentState.user.grade || "12";
+    const currentKey = getLessonChatKey(currentSubj, activeCh.id, currentGrade);
 
     const userMsg: ChatMessage = {
       id: "usr-" + Date.now(),

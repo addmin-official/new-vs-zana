@@ -113,7 +113,8 @@ app.get("/api/health/curriculum", async (req: Request, res: Response) => {
 // Curriculum Outline Endpoint
 app.get("/api/curriculum/:subject/:grade/outline", (req: Request, res: Response) => {
   const subject = String(req.params.subject || "chemistry");
-  const outline = getChapterOutlineForSubject(subject);
+  const grade = String(req.params.grade || "12");
+  const outline = getChapterOutlineForSubject(subject, grade);
   res.json(outline);
 });
 

@@ -42,9 +42,11 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 import { useStudentMastery } from "../learning/hooks/useStudentMastery.ts";
 import { DifficultyLevel } from "../learning/domain/MasteryTypes.ts";
 import { saveSessionPosition } from "../auth/sessionRecovery.ts";
+import { CurriculumBackboneExplorer } from "../components/CurriculumBackboneExplorer.tsx";
 
 interface DynamicBookViewerProps {
   subject: string;
+  grade?: string;
   stream?: string;
   onSelectTopicForStudy: (title: string, pages: string) => void;
   onNavigateToChat: () => void;
@@ -52,6 +54,7 @@ interface DynamicBookViewerProps {
 
 const DynamicBookViewer: React.FC<DynamicBookViewerProps> = ({
   subject,
+  grade = "12",
   stream,
   onSelectTopicForStudy,
   onNavigateToChat,
@@ -109,6 +112,20 @@ const DynamicBookViewer: React.FC<DynamicBookViewerProps> = ({
       }
     });
   }, [subject, stream]);
+
+  if (grade && grade !== "12") {
+    return (
+      <div className="bg-[#081a2b] border border-cyan-950 rounded-3xl p-4 sm:p-6 shadow-2xl">
+        <CurriculumBackboneExplorer
+          initialGrade={grade as "9" | "10" | "11"}
+          onSelectChapterForStudy={(_subjKey, ch) => {
+            onSelectTopicForStudy(ch.titleKu, ch.pageRangeKu || "");
+            onNavigateToChat();
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <React.Suspense
@@ -376,10 +393,21 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
   }, [user.activeSubject, profile?.activeSubject]);
 
   const currentSubject = (selectedSubject || user.activeSubject || profile?.activeSubject || "chemistry").toLowerCase();
+  const currentGrade = String(user.grade || profile?.grade || "12");
+  const gradeLabel =
+    currentGrade === "9"
+      ? "پۆلی ٩ی بنەڕەتی"
+      : currentGrade === "10"
+      ? "پۆلی ١٠ی ئامادەیی"
+      : currentGrade === "11"
+      ? "پۆلی ١١ی ئامادەیی"
+      : "پۆلی ١٢ی ئامادەیی";
+  const subjectLabel = CHAT_SUBJECT_META[currentSubject]?.label || currentSubject;
+  const fullSubjectTitle = `${subjectLabel} (${gradeLabel})`;
 
   useEffect(() => {
-    void fetchChapters(currentSubject);
-  }, [currentSubject, fetchChapters]);
+    void fetchChapters(currentSubject, currentGrade);
+  }, [currentSubject, currentGrade, fetchChapters]);
 
   useEffect(() => {
     if (isNearBottomRef.current) {
@@ -413,9 +441,9 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
 
   const handleSwitchSubject = (subj: SubjectKey) => {
     setSelectedSubject(subj);
-    setActiveSubject(subj);
+    setActiveSubject(subj, currentGrade);
     onSelectSubject?.(subj);
-    void fetchChapters(subj);
+    void fetchChapters(subj, currentGrade);
   };
 
   const activeChapter = chapters.find((c) => c.id === activeChapterId) || chapters[0];
@@ -734,13 +762,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
           activeChapterId={activeChapterId}
           onSelectChapter={handleSelectChapter}
           className="h-full w-[280px]"
-          subjectTitle={
-            currentSubject === "physics"
-              ? "فیزیای پۆلی ١٢"
-              : currentSubject === "chemistry"
-              ? "کیمیای پۆلی ١٢"
-              : "بیرکاری پۆلی ١٢"
-          }
+          subjectTitle={fullSubjectTitle}
         />
       </div>
 
@@ -772,13 +794,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
               activeChapterId={activeChapterId}
               onSelectChapter={handleSelectChapter}
               className="border-0 shadow-none flex-1"
-              subjectTitle={
-                currentSubject === "physics"
-                  ? "فیزیای پۆلی ١٢"
-                  : currentSubject === "chemistry"
-                  ? "کیمیای پۆلی ١٢"
-                  : "بیرکاری پۆلی ١٢"
-              }
+              subjectTitle={fullSubjectTitle}
             />
           </div>
         </div>
@@ -827,11 +843,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                   <span className="truncate">
                     {activeChapter
                       ? `بەندی ${activeChapter.id}: ${activeChapter.title}`
-                      : currentSubject === "physics"
-                      ? "فیزیای پۆلی ١٢"
-                      : currentSubject === "chemistry"
-                      ? "کیمیای پۆلی ١٢"
-                      : "بیرکاری پۆلی ١٢"}
+                      : fullSubjectTitle}
                   </span>
                   <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0 lg:hidden" />
                 </button>
@@ -1426,6 +1438,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                 <div className="space-y-4">
                   <DynamicBookViewer
                     subject={currentSubject}
+                    grade={currentGrade}
                     stream={profile?.stream}
                     onSelectTopicForStudy={(title, pages) => {
                       setInputContent(`مامۆستا زانا، دەمەوێت لەسەر "${title}" (${pages}) بخوێنم و بە وردی لەگەڵ نموونەی پرسیاری وەزاری بۆم شیبکەیتەوە.`);
@@ -1751,13 +1764,7 @@ export function Chat({ profile, onSelectSubject, onNavigateToSubjects }: ChatPro
                   <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
                     <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
                       <span className="font-bold text-xs text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-1 rounded-full">
-                        {currentSubject === "physics"
-                          ? "فیزیای پۆلی ١٢"
-                          : currentSubject === "chemistry"
-                          ? "کیمیای پۆلی ١٢"
-                          : currentSubject === "math"
-                          ? "بیرکاریی پۆلی ١٢"
-                          : "ئینگلیزیی پۆلی ١٢"} • بەندی {activeChapter?.id}
+                        {fullSubjectTitle} • بەندی {activeChapter?.id}
                       </span>
                       <span className="text-xs text-slate-400 font-sans italic">
                         مەنهەجی فەرمی (لاپەڕە {chapterData.pages})

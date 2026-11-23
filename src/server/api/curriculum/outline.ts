@@ -1,4 +1,5 @@
 import { SUBJECTS_DATA } from "../../../data/subjects.ts";
+import { getChapterOutlineForSubject } from "../../../curriculum/data/chapterOutlines.ts";
 
 export interface ChapterOutlineItem {
   id: number;
@@ -139,17 +140,9 @@ export async function getCurriculumOutline(
   }
 
   // 3. Fallback to Canonical Curriculum Outline
-  if (normSubject === "chemistry" && normGrade === "12") {
-    return CANONICAL_GRADE_12_CHEMISTRY_OUTLINE;
-  }
-  if (normSubject === "physics" && normGrade === "12") {
-    return CANONICAL_GRADE_12_PHYSICS_OUTLINE;
-  }
-  if ((normSubject === "math" || normSubject === "mathematics") && normGrade === "12") {
-    return CANONICAL_GRADE_12_MATH_OUTLINE;
-  }
-  if (normSubject === "english" && normGrade === "12") {
-    return CANONICAL_GRADE_12_ENGLISH_OUTLINE;
+  const canonicalOutline = getChapterOutlineForSubject(normSubject, normGrade);
+  if (canonicalOutline && canonicalOutline.length > 0) {
+    return canonicalOutline;
   }
 
   // Look up in SUBJECTS_DATA

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { StudentProfile, SubjectKey } from "../features/student/studentTypes.ts";
+import { StudentProfile, SubjectKey, StudentGrade } from "../features/student/studentTypes.ts";
 import {
   BookOpen,
   MessageSquare,
@@ -30,7 +30,7 @@ import { CurriculumBackboneExplorer } from "../components/CurriculumBackboneExpl
 
 interface SubjectsScreenProps {
   profile: StudentProfile;
-  onSelectSubject: (subjectId: SubjectKey) => void;
+  onSelectSubject: (subjectId: SubjectKey, grade?: StudentGrade) => void;
   onNavigate: (tab: string) => void;
 }
 
@@ -495,6 +495,48 @@ export const GRADE_9_TEXTBOOKS: TextbookCardItem[] = [
       { id: 4, title: "بەشی ٤: تەندروستی دەروونی و پاراستنی ژینگە", pages: "٧١ - ٩٢", description: "کۆنتڕۆڵکردنی سترێس و توڕەیی، بەکارهێنانی تەندروستی تەکنەلۆژیا، و پاراستنی سەرچاوەکانی ژینگە." },
     ],
   },
+  {
+    id: "g9_kurdish",
+    title: "زمانی کوردی",
+    fullName: "زمانی کوردی و ئەدەب (پۆلی ٩ی بنەڕەتی)",
+    coverImage: "/books/kurdish.png",
+    subjectKey: "kurdish",
+    stream: "both",
+    streamLabel: "بنەڕەتی (گشتی)",
+    grade: "9",
+    chaptersCount: 4,
+    colorTheme: "from-amber-600/20 to-orange-950/40",
+    description: "مەنهەجی فەرمی زمانی کوردی پۆلی ٩ی بنەڕەتی: ڕێزمان (کار، ناو، جێناو، ئامرازەکان)، دەقی ئەدەبی، و ڕێنووسی کوردی بۆ تاقیکردنەوەی نیشتمانی.",
+    outline: [
+      { id: 1, title: "بەشی ١: ڕێزمان - بەشەکانی ئاخاوتن و کار", pages: "٧ - ٣٨", description: "جۆرەکانی کار بەپێی کات (ڕابردوو، ڕانەبردوو، داخوازی)، تێپەڕ و تێنەپەڕ." },
+      { id: 2, title: "بەشی ٢: ناو، هاوەڵناو و جێناوەکان", pages: "٣٩ - ٧٢", description: "پۆلێنی ناو و هاوەڵناو، جێناوە کەسییەکان و لکاوەکان." },
+      { id: 3, title: "بەشی ٣: دەقە ئەدەبییەکان و شیعری نیشتمانی", pages: "٧٣ - ١٠٥", description: "شیعری مامۆستا بێکەس، هێمن، پیرەمێرد، و پەخشانی ئەدەبی." },
+      { id: 4, title: "بەشی ٤: ڕێنووس و پەڕەگرافنووسین", pages: "١٠٦ - ١٣٨", description: "یاساکانی ڕێنووسی یەکگرتووی کوردی، بزوێن و نەبزوێن، و نووسینی بابەت." },
+    ],
+  },
+  {
+    id: "g9_english",
+    title: "ئینگلیزی",
+    fullName: "Sunrise 9 - Student's Book (پۆلی ٩ی بنەڕەتی)",
+    coverImage: "/books/english.png",
+    subjectKey: "english",
+    stream: "both",
+    streamLabel: "بنەڕەتی (گشتی)",
+    grade: "9",
+    chaptersCount: 8,
+    colorTheme: "from-sky-500/20 to-blue-950/40",
+    description: "مەنهەجی فەرمی ئینگلیزی پۆلی ٩ی بنەڕەتی (Sunrise 9 Student's Book): ٨ یونتی سەرەکی بۆ تاقیکردنەوەی نیشتمانی گشتی.",
+    outline: [
+      { id: 1, title: "Unit 1: Welcoming the Future", pages: "4 - 13", description: "Routines, habits, talking about past and future goals." },
+      { id: 2, title: "Unit 2: World Discoveries & History", pages: "14 - 23", description: "Past events, storytelling, famous expeditions." },
+      { id: 3, title: "Unit 3: Protecting the Natural World", pages: "24 - 33", description: "Environment, pollution, conditionals and solutions." },
+      { id: 4, title: "Unit 4: Revision 1", pages: "34 - 39", description: "Review of units 1-3, grammar drills and vocabulary." },
+      { id: 5, title: "Unit 5: Inventions, Media & Technology", pages: "40 - 49", description: "Passive voice, modern communication and science." },
+      { id: 6, title: "Unit 6: Healthy Life & Sports Adventures", pages: "50 - 59", description: "Health advice, modal verbs, sports and fitness." },
+      { id: 7, title: "Unit 7: Travel, Cities & Famous Landmarks", pages: "60 - 69", description: "Present perfect, world destinations and travel." },
+      { id: 8, title: "Unit 8: Revision 2 & Exam Preparation", pages: "70 - 79", description: "Comprehensive preparation for national ministerial exams." },
+    ],
+  },
 ];
 
 export const GRADE_10_TEXTBOOKS: TextbookCardItem[] = [
@@ -559,6 +601,85 @@ export const GRADE_10_TEXTBOOKS: TextbookCardItem[] = [
       { id: 4, title: "Unit 4: Mass Media & Global Communication", pages: "58 - 75", description: "Reported statements and questions, Media collocations, Conducting interviews and writing news reports." },
       { id: 5, title: "Unit 5: Health, Fitness & Balanced Living", pages: "76 - 93", description: "Modal verbs of obligation (must, should, have to), Healthy nutrition, Giving formal advice." },
       { id: 6, title: "Unit 6: Culture, Heritage & Creative Arts", pages: "94 - 111", description: "Literature excerpts, Second Conditional, Descriptive vocabulary, End of year exam practice." },
+    ],
+  },
+  {
+    id: "g10_math",
+    title: "بیرکاری",
+    fullName: "زانست بۆ هەمووان - بیرکاری (پۆلی ١٠ی زانستی)",
+    coverImage: "/books/math.png",
+    subjectKey: "math",
+    stream: "scientific",
+    streamLabel: "زانستی",
+    grade: "10",
+    chaptersCount: 6,
+    colorTheme: "from-emerald-900/20 to-teal-950/40",
+    description: "مەنهەجی فەرمی بیرکاری پۆلی ١٠ی زانستی: نەخشە دووجاکان، پۆلینۆمیاڵ، سێگۆشەزانی، ئەندازەی تەخت، ئامار و ئەگەری سادە و لێکدراو.",
+    outline: [
+      { id: 1, title: "بەشی ١: نەخشە دووجاکان و هاوکێشەی پلە دوو", pages: "٧ - ٤٥", description: "گرافی نەخشەی دووجا، بڕگە، تەوەری هاوجێیی، و شیکارکردن بە دەرهێنانی دووجای تەواو و یاسای گشتی." },
+      { id: 2, title: "بەشی ٢: پۆلینۆمیاڵ و دابەشکردنی فرەجاکان", pages: "٤٦ - ٨٥", description: "دابەشکردنی درێژ و دابەشکردنی دەستکرد، تیۆرمی ماوە، و شیکردنەوەی فرەجاکان بۆ هۆکارەکان." },
+      { id: 3, title: "بەشی ٣: سێگۆشەزانی و ڕێژە سێگۆشەییەکان", pages: "٨٦ - ١٢٥", description: "ڕێژەکانی ساین و کۆساین و تانجێنت لە سێگۆشەی وەستاودا، یاسای ساینەکان و کۆساینەکان." },
+      { id: 4, title: "بەشی ٤: ئەندازەی تەخت و بازنەکان", pages: "١٢٦ - ١٦٠", description: "تایبەتمەندی ژێ و کەوانەکان لە بازنەدا، گۆشەی ناوەندی و گۆشەی چێوەیی، و ڕووبەری کەرتەکان." },
+      { id: 5, title: "بەشی ٥: ئامار و لادانی پێوانەیی", pages: "١٦١ - ١٩٠", description: "ناوەند و ناوەڕاست و باو، لادانی پێوانەیی، و جیاوازی کۆمەڵە دراوەکان." },
+      { id: 6, title: "بەشی ٦: ئەگەری سادە و لێکدراو", pages: "١٩١ - ٢١٥", description: "یاساکانی ئەگەر، ڕووداوە سەربەخۆکان، و هێڵکاری دار بۆ ژماردنی ئەگەرەکان." },
+    ],
+  },
+  {
+    id: "g10_chemistry",
+    title: "کیمیا",
+    fullName: "زانست بۆ هەمووان - کیمیا (پۆلی ١٠ی زانستی)",
+    coverImage: "/books/chemistry.png",
+    subjectKey: "chemistry",
+    stream: "scientific",
+    streamLabel: "زانستی",
+    grade: "10",
+    chaptersCount: 5,
+    colorTheme: "from-purple-900/20 to-slate-950/40",
+    description: "مەنهەجی فەرمی کیمیای پۆلی ١٠ی زانستی: خشتەی خولی و ڕێکخستنی ئەلیکترۆنی، بەستەری کیمیایی، کارلێک لە ئاوەگیراوەکاندا، حیساباتی مۆڵ و هاوسەنگی.",
+    outline: [
+      { id: 1, title: "بەندی ١: خشتەی خولیی توخمەکان و ڕێکخستنی ئەلیکترۆنی", pages: "٧ - ٤٠", description: "بونیاتی ئەتۆم، ئاستەکانی وزە، خشتەی مێندەلیڤ و مۆزلی، و خولی توخمەکان." },
+      { id: 2, title: "بەندی ٢: بەستەری کیمیایی و شێوەی گەردەکان", pages: "٤١ - ٧٥", description: "بەستەری ئایۆنی و هاوبەش، تیۆری VSEPR، و جەمسەری گەردەکان." },
+      { id: 3, title: "بەندی ٣: کارلێکە کیمیاییەکان لە گیراوە ئاوییەکاندا", pages: "٧٦ - ١١٠", description: "نیشتن، کارلێکی ترش و تفت، و هاوکێشەی ئایۆنی پوخت." },
+      { id: 4, title: "بەندی ٤: حیساباتی مۆڵ و یاساکانی گازەکان", pages: "١١١ - ١٤٥", description: "بارستەی مۆڵی، یاسای ئەڤۆگادرۆ، و قەبارەی مۆڵی گازەکان." },
+      { id: 5, title: "بەندی ٥: هاوسەنگیی کارلێکە کیمیاییەکان", pages: "١٤٦ - ١٧٥", description: "کارلێکە پێچەوانەکان، نەگۆڕی هاوسەنگی Kc، و دەستێوەردانی دەرەکی." },
+    ],
+  },
+  {
+    id: "g10_kurdish",
+    title: "زمانی کوردی",
+    fullName: "زمانی کوردی و ئەدەب (پۆلی ١٠ی ئامادەیی)",
+    coverImage: "/books/kurdish.png",
+    subjectKey: "kurdish",
+    stream: "both",
+    streamLabel: "زانستی و گشتی",
+    grade: "10",
+    chaptersCount: 4,
+    colorTheme: "from-amber-600/20 to-orange-950/40",
+    description: "مەنهەجی فەرمی زمانی کوردی پۆلی ١٠: ڕێزمان (وشەسازی و ڕستەسازی)، ئەدەبی کوردی کلاسیک، ڕەوانبێژی، و دەقە هەڵبژێردراوەکان.",
+    outline: [
+      { id: 1, title: "بەشی ١: ڕێزمان و شێوازەکانی ڕستە", pages: "٧ - ٤٠", description: "پێکهاتەی ڕستەی کوردی، جۆرەکانی بکەر و بەرکار، و مۆرفۆلۆجی وشە." },
+      { id: 2, title: "بەشی ٢: ئەدەبی کوردی کلاسیک", pages: "٤١ - ٨٠", description: "مێژووی ئەدەبی کلاسیک، شاعیرانی ناودار (نالی، کوردی، سالم)، و تایبەتمەندی دەقەکان." },
+      { id: 3, title: "بەشی ٣: ڕەوانبێژی و جوانییەکانی دەربڕین", pages: "٨١ - ١١٠", description: "سەروای شیعری، وەزن و کێشی عەرووزی، و لێکچوواندنی ئەدەبی." },
+      { id: 4, title: "بەشی ٤: دەقی ئەدەبی و خوێندنەوەی ڕەخنەیی", pages: "١١١ - ١٤٥", description: "شیکردنەوەی چیرۆک و شیعرە کلاسیک و نوێیەکان لە ڕووی مانا و فۆرمەوە." },
+    ],
+  },
+  {
+    id: "g10_arabic",
+    title: "زمانی عەرەبی",
+    fullName: "اللغة العربية للصف العاشر الثانوي",
+    coverImage: "/books/arabic_1.png",
+    subjectKey: "arabic",
+    stream: "both",
+    streamLabel: "زانستی و گشتی",
+    grade: "10",
+    chaptersCount: 4,
+    colorTheme: "from-teal-800/20 to-emerald-950/40",
+    description: "مەنهەجی زمانی عەرەبی پۆلی ١٠: النصوص الأدبية، القواعد النحوية، البلاغة، وتدريبات الإعراب.",
+    outline: [
+      { id: 1, title: "الوحدة الأولى: النصوص الأدبية وقواعد الجملة", pages: "٥ - ٣٠", description: "نصوص من العصر الجاهلي، المبتدأ والخبر، وتطبيقات نحوية." },
+      { id: 2, title: "الوحدة الثانية: أدب صدر الإسلام والمفاعيل", pages: "٣١ - ٦٠", description: "شعر الفتوحات، المفعول به والمفعول المطلق، والإملاء." },
+      { id: 3, title: "الوحدة الثالثة: الأدب الأموي وقواعد الأفعال", pages: "٦١ - ٩٠", description: "الأفعال الخمسة، إعراب الفعل المضارع المعتل، والبلاغة." },
+      { id: 4, title: "الوحدة الرابعة: المراجعة العامة والإنشاء", pages: "٩١ - ١٢٠", description: "تدريبات شاملة على القواعد وكتابة المقال الأدبي." },
     ],
   },
 ];
@@ -699,11 +820,55 @@ export const GRADE_11_TEXTBOOKS: TextbookCardItem[] = [
       { id: 8, title: "Unit 8: Revision 2 (Units 5-7 Comprehensive Drills)", pages: "70 - 75", description: "Comprehensive review of units 5-7, exam-style exercises, error correction, and vocabulary synthesis." },
     ],
   },
+  {
+    id: "g11_kurdish",
+    title: "زمانی کوردی",
+    fullName: "زمانی کوردی و ئەدەب (پۆلی ١١ی ئامادەیی)",
+    coverImage: "/books/kurdish.png",
+    subjectKey: "kurdish",
+    stream: "both",
+    streamLabel: "زانستی و گشتی",
+    grade: "11",
+    chaptersCount: 4,
+    colorTheme: "from-amber-600/20 to-orange-950/40",
+    description: "مەنهەجی فەرمی زمانی کوردی پۆلی ١١: ڕێزمانی پێشکەوتوو، ئەدەبی قۆناغی بێخود و گۆران، ڕەخنەی ئەدەبی، و دەقی نوێ.",
+    outline: [
+      { id: 1, title: "بەشی ١: ڕێزمان - داڕشتنی وشە و جێناوەکان", pages: "٧ - ٤٢", description: "وشەی لێکدراو و دارێژراو، جێناوە کەسییە سەربەخۆ و لکاوەکان، و ئەرکەکانی لە ڕستەدا." },
+      { id: 2, title: "بەشی ٢: ئەدەبی کوردی قۆناغی نوێبوونەوە", pages: "٤٣ - ٨٥", description: "سەرهەڵدانی شیعری نوێ بە دەستی عەبدوڵڵا گۆران، گۆڕانی وەزن و فۆرم." },
+      { id: 3, title: "بەشی ٣: ڕەوانبێژی - بەدیع و بەیان", pages: "٨٦ - ١١٥", description: "خواستن و کینایە، دروشمی ڕەوانبێژی لە شیعری نوێی کوردیدا." },
+      { id: 4, title: "بەشی ٤: خوێندنەوەی ڕەخنەیی و وتارنووسین", pages: "١١٦ - ١٥٠", description: "بنەماکانی نووسینی وتاری ڕەخنەیی و ئەدەبی لەسەر شاکارەکانی ئەدەب." },
+    ],
+  },
+  {
+    id: "g11_english",
+    title: "ئینگلیزی",
+    fullName: "Sunrise 11 - Student's Book (پۆلی ١١)",
+    coverImage: "/books/english.png",
+    subjectKey: "english",
+    stream: "both",
+    streamLabel: "زانستی و گشتی",
+    grade: "11",
+    chaptersCount: 8,
+    colorTheme: "from-sky-500/20 to-indigo-950/40",
+    description: "مەنهەجی فەرمی ئینگلیزی پۆلی ١١ (Sunrise 11 Student's Book): ٨ یونتی سەرەکی - ڕێزمان، وشەسازی، وتارنووسین، و لێهاتووییەکانی زمانی ئینگلیزی.",
+    outline: [
+      { id: 1, title: "Unit 1: The World Around Us", pages: "4 - 13", description: "Present tenses, state verbs, ecosystems and environmental issues." },
+      { id: 2, title: "Unit 2: Looking Back", pages: "14 - 23", description: "Past narrative tenses, biographies, history and memories." },
+      { id: 3, title: "Unit 3: Breakthroughs & Technology", pages: "24 - 33", description: "Modals of deduction, tech inventions and scientific advances." },
+      { id: 4, title: "Unit 4: Revision 1", pages: "34 - 39", description: "Review of units 1-3, grammar checkpoints and tests." },
+      { id: 5, title: "Unit 5: Culture & Traditions", pages: "40 - 49", description: "Passive voice, relative clauses, heritage festivals and folklore." },
+      { id: 6, title: "Unit 6: Future of Work & Energy", pages: "50 - 59", description: "Future forms, career skills, renewable energy sources." },
+      { id: 7, title: "Unit 7: Health & Lifestyle", pages: "60 - 69", description: "Reported speech, gerunds, balanced physical and mental health." },
+      { id: 8, title: "Unit 8: Revision 2 & Exam Preparation", pages: "70 - 75", description: "Comprehensive exam prep, vocabulary index and sample test papers." },
+    ],
+  },
 ];
 
 export function SubjectsScreen({ profile, onSelectSubject, onNavigate }: SubjectsScreenProps) {
-  // Grade and Stream are strictly locked to the student profile
-  const studentGrade = (profile.grade as "9" | "10" | "11" | "12") || "12";
+  // Grade state initialized from profile, but dynamically switchable by the student
+  const [selectedGrade, setSelectedGrade] = useState<StudentGrade>(
+    (profile.grade as StudentGrade) || "12"
+  );
   const studentStream = profile.stream || "scientific";
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -711,18 +876,19 @@ export function SubjectsScreen({ profile, onSelectSubject, onNavigate }: Subject
   const [activeViewerBook, setActiveViewerBook] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<"cards" | "showcase" | "curriculum_backbone">("cards");
 
-  // Filter textbooks strictly according to the student's locked grade and stream
+  // Filter textbooks according to selectedGrade and stream
   const displayedBooks = useMemo(() => {
-    let list = studentGrade === "9"
-      ? GRADE_9_TEXTBOOKS
-      : studentGrade === "10"
-      ? GRADE_10_TEXTBOOKS
-      : studentGrade === "11"
-      ? GRADE_11_TEXTBOOKS
-      : GRADE_12_TEXTBOOKS;
+    let list =
+      selectedGrade === "9"
+        ? GRADE_9_TEXTBOOKS
+        : selectedGrade === "10"
+        ? GRADE_10_TEXTBOOKS
+        : selectedGrade === "11"
+        ? GRADE_11_TEXTBOOKS
+        : GRADE_12_TEXTBOOKS;
 
     // Filter strictly by scientific stream (Literary stream is locked across UI)
-    if (studentGrade !== "9") {
+    if (selectedGrade !== "9") {
       list = list.filter((b) => b.stream === "scientific" || b.stream === "both");
     }
 
@@ -738,7 +904,7 @@ export function SubjectsScreen({ profile, onSelectSubject, onNavigate }: Subject
     }
 
     return list;
-  }, [studentGrade, searchQuery]);
+  }, [selectedGrade, searchQuery]);
 
   const handleOpenBook = (book: TextbookCardItem) => {
     setSelectedBookForModal(book);
@@ -746,7 +912,7 @@ export function SubjectsScreen({ profile, onSelectSubject, onNavigate }: Subject
 
   const handleStartStudy = (book: TextbookCardItem) => {
     if (book.subjectKey) {
-      onSelectSubject(book.subjectKey);
+      onSelectSubject(book.subjectKey, book.grade as StudentGrade);
     }
     setSelectedBookForModal(null);
     onNavigate("chat");
@@ -796,7 +962,7 @@ export function SubjectsScreen({ profile, onSelectSubject, onNavigate }: Subject
             <div className="flex items-center gap-2 text-xs font-mono text-cyan-400 mb-1.5">
               <span>مەنهەجی فەرمی کوردستان</span>
               <span className="text-slate-500">/</span>
-              <span className="text-slate-300 font-bold">کتێبەکانی پۆلی {studentGrade}</span>
+              <span className="text-slate-300 font-bold">کتێبەکانی پۆلی {selectedGrade}</span>
             </div>
             <h1 className="font-sans font-black text-2xl sm:text-3xl text-white tracking-tight flex items-center gap-2.5">
               <span>کتێب و مەنهەجی خوێندن</span>
@@ -861,6 +1027,45 @@ export function SubjectsScreen({ profile, onSelectSubject, onNavigate }: Subject
           </div>
         </div>
 
+        {/* Grade Selection Tabs (9, 10, 11, 12) */}
+        {!activeViewerBook && (
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+            {(
+              [
+                { grade: "9", label: "پۆلی ٩", subtitle: "بنەڕەتی" },
+                { grade: "10", label: "پۆلی ١٠", subtitle: "ئامادەیی" },
+                { grade: "11", label: "پۆلی ١١", subtitle: "ئامادەیی" },
+                { grade: "12", label: "پۆلی ١٢", subtitle: "ئامادەیی (وەزاری)" },
+              ] as const
+            ).map((g) => {
+              const isSelected = selectedGrade === g.grade;
+              return (
+                <button
+                  key={g.grade}
+                  type="button"
+                  onClick={() => setSelectedGrade(g.grade)}
+                  className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer border shrink-0 ${
+                    isSelected
+                      ? "bg-gradient-to-r from-cyan-500 to-teal-400 text-slate-950 border-cyan-300 shadow-lg shadow-cyan-500/25 font-black scale-[1.02]"
+                      : "bg-[#092238]/80 text-slate-300 hover:text-white border-cyan-900/40 hover:bg-[#0c2d4a]"
+                  }`}
+                >
+                  <span className="text-sm">{g.label}</span>
+                  <span
+                    className={`text-[10px] px-2 py-0.5 rounded-full ${
+                      isSelected
+                        ? "bg-slate-950/20 text-slate-950 font-bold"
+                        : "bg-slate-800 text-slate-400"
+                    }`}
+                  >
+                    {g.subtitle}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* VIEW 0: SIMPLIFIED SUBJECT CARD GRID (2 COLS MOBILE, 3 TABLET, 4 DESKTOP) */}
         {activeView === "cards" && !activeViewerBook && (
           <div className="space-y-6">
@@ -877,7 +1082,7 @@ export function SubjectsScreen({ profile, onSelectSubject, onNavigate }: Subject
                   chaptersCount={book.chaptersCount}
                   masteryPercentage={profile.activeSubject === book.subjectKey ? 75 : 40}
                   onSelect={(subj) => {
-                    onSelectSubject(subj);
+                    onSelectSubject(subj, book.grade as StudentGrade);
                     onNavigate("chat");
                   }}
                 />
@@ -890,9 +1095,9 @@ export function SubjectsScreen({ profile, onSelectSubject, onNavigate }: Subject
         {activeView === "curriculum_backbone" && (
           <div className="bg-[#081a2b] border border-cyan-950 rounded-3xl p-4 sm:p-6 shadow-2xl">
             <CurriculumBackboneExplorer
-              initialGrade={profile.grade || "12"}
+              initialGrade={selectedGrade}
               onSelectChapterForStudy={(subjKey, _ch) => {
-                onSelectSubject(subjKey as SubjectKey);
+                onSelectSubject(subjKey as SubjectKey, selectedGrade);
                 onNavigate("chat");
               }}
             />
@@ -1074,10 +1279,10 @@ export function SubjectsScreen({ profile, onSelectSubject, onNavigate }: Subject
               <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 no-scrollbar">
                 <span className="px-3 py-1.5 rounded-xl bg-cyan-950 border border-cyan-700/60 text-cyan-300 font-bold text-xs flex items-center gap-1.5 shrink-0">
                   <Lock className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>پۆلی {studentGrade === "12" ? "١٢ی ئامادەیی" : studentGrade === "11" ? "١١ی ئامادەیی" : studentGrade === "10" ? "١٠ی ئامادەیی" : studentGrade === "9" ? "٩ی بنەڕەتی" : studentGrade}</span>
+                  <span>پۆلی {selectedGrade === "12" ? "١٢ی ئامادەیی" : selectedGrade === "11" ? "١١ی ئامادەیی" : selectedGrade === "10" ? "١٠ی ئامادەیی" : selectedGrade === "9" ? "٩ی بنەڕەتی" : selectedGrade}</span>
                 </span>
 
-                {studentGrade === "9" ? (
+                {selectedGrade === "9" ? (
                   <span className="px-3 py-1.5 rounded-xl bg-teal-950 border border-teal-700/60 text-teal-300 font-bold text-xs flex items-center gap-1.5 shrink-0">
                     <BookOpen className="w-3.5 h-3.5 text-teal-400" />
                     <span>قۆناغی بنەڕەتی (گشتی)</span>
@@ -1365,7 +1570,7 @@ export function SubjectsScreen({ profile, onSelectSubject, onNavigate }: Subject
                   type="button"
                   onClick={() => {
                     if (selectedBookForModal.subjectKey) {
-                      onSelectSubject(selectedBookForModal.subjectKey);
+                      onSelectSubject(selectedBookForModal.subjectKey, selectedBookForModal.grade as StudentGrade);
                     }
                     setSelectedBookForModal(null);
                     onNavigate("practice");
