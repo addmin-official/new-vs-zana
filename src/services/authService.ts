@@ -414,13 +414,17 @@ export function setupRecaptcha(containerId: string): RecaptchaVerifier | null {
   if (!auth) return null;
   try {
     // Clear any existing reCAPTCHA
-    if ((window as unknown as Record<string, unknown>).recaptchaWidgetId !== undefined) {
+    const existing = (window as unknown as Record<string, RecaptchaVerifier>).__zanaRecaptcha;
+    if (existing) {
       try {
-        const existing = (window as unknown as Record<string, RecaptchaVerifier>).__zanaRecaptcha;
-        if (existing) existing.clear();
+        existing.clear();
       } catch {
         /* ignore */
       }
+    }
+    const container = typeof document !== "undefined" ? document.getElementById(containerId) : null;
+    if (container) {
+      container.innerHTML = "";
     }
     const verifier = new RecaptchaVerifier(auth, containerId, {
       size: "invisible",

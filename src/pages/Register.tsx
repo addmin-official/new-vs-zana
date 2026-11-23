@@ -26,6 +26,7 @@ import {
   setupRecaptcha,
   sendPhoneOtp,
   verifyPhoneOtp,
+  startStudentTrial,
 } from "../services/authService.ts";
 import { createUserDocumentIfMissing } from "../auth/userProfileService.ts";
 import { initializeTrial } from "../auth/trialService.ts";
@@ -147,15 +148,22 @@ export function Register({
     }
   };
 
+  // Normalize Kurdish (٠-٩, ۰-۹) digits to standard ASCII digits
+  const normalizeDigits = (str: string): string => {
+    return str
+      .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 1632))
+      .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776));
+  };
+
   const formatIraqiPhone = (raw: string): string => {
-    const digits = raw.replace(/\D/g, '');
+    const digits = normalizeDigits(raw).replace(/\D/g, '');
     if (digits.startsWith('9647')) return `+${digits}`;
     if (digits.startsWith('07')) return `+964${digits.slice(1)}`;
     if (digits.startsWith('7') && digits.length === 10) return `+964${digits}`;
     return `+${digits}`;
   };
 
-  const isPhoneValid = /^(\+9647|07|7)\d{9}$/.test(phone.replace(/\s/g, ''));
+  const isPhoneValid = /^(\+9647|07|7)\d{9}$/.test(normalizeDigits(phone).replace(/\s/g, ''));
 
   const handlePhoneSendOtp = async () => {
     if (phoneStep1Loading || !isPhoneValid || !fullName.trim()) {
@@ -254,6 +262,18 @@ export function Register({
         level: "intermediate",
         school: schoolName.trim(),
       });
+
+      // Synchronize student profile into D1 database and start trial
+      try {
+        await startStudentTrial(targetUid, {
+          name: fullName || "قوتابی",
+          email: identifier || undefined,
+          grade: selectedGrade,
+          stream: streamVal,
+        });
+      } catch (trialErr) {
+        console.warn("[Register] startStudentTrial warning:", trialErr);
+      }
 
       onRegisterSuccess?.({
         name: fullName || "قوتابی",
@@ -381,7 +401,7 @@ export function Register({
               </button>
             </div>
 
-            <div id="zana-recaptcha-register" className="hidden" />
+            <div id="zana-recaptcha-register" className="fixed bottom-0 right-0 opacity-0 pointer-events-none -z-50" aria-hidden="true" />
 
             {authMethod === 'email' && (
               <form onSubmit={handleAccountCreate} className="space-y-4" noValidate>
@@ -607,7 +627,7 @@ export function Register({
                     maxLength={6}
                     placeholder="------"
                     value={otp}
-                    onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
+                    onChange={e => setOtp(normalizeDigits(e.target.value).replace(/\D/g, ''))}
                     disabled={phoneStep1Loading}
                     className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-center text-white text-2xl font-mono tracking-[0.5em] placeholder-slate-700 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 min-h-[48px]"
                   />

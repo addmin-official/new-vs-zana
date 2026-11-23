@@ -2736,9 +2736,11 @@ export default {
           }
 
           const studentId = verifiedUid;
-          const studentEmail = verifiedEmail;
+          const rawEmail = typeof body?.email === "string" ? body.email.trim() : "";
+          const studentEmail = verifiedEmail || rawEmail;
           const studentName = body?.name?.trim() || "قوتابی";
           const grade = body?.grade?.trim() || "12";
+          const stream = body?.stream?.trim() || "scientific";
 
           const now = Date.now();
           const trialDurationMs = 3 * 24 * 60 * 60 * 1000; // 3 days
@@ -2746,24 +2748,36 @@ export default {
           // 1. Upsert student metadata into students table
           try {
             await env.DB.prepare(
-              `INSERT INTO students (id, firebase_uid, name, email, grade, created_at)
-               VALUES (?, ?, ?, ?, ?, datetime('now'))
+              `INSERT INTO students (id, name, email, grade, stream, password_hash)
+               VALUES (?, ?, ?, ?, ?, 'firebase_auth')
                ON CONFLICT(id) DO UPDATE SET
-                 name = COALESCE(excluded.name, students.name),
-                 email = COALESCE(excluded.email, students.email),
-                 grade = COALESCE(excluded.grade, students.grade)`
-            ).bind(studentId, studentId, studentName, studentEmail, grade).run();
+                 name = CASE WHEN excluded.name != '' THEN excluded.name ELSE students.name END,
+                 email = CASE WHEN excluded.email != '' THEN excluded.email ELSE students.email END,
+                 grade = excluded.grade,
+                 stream = excluded.stream`
+            ).bind(studentId, studentName, studentEmail, grade, stream).run();
           } catch {
             try {
               await env.DB.prepare(
-                `INSERT INTO students (id, firebase_uid, name, grade, created_at)
-                 VALUES (?, ?, ?, ?, datetime('now'))
+                `INSERT INTO students (id, firebase_uid, name, email, grade, created_at)
+                 VALUES (?, ?, ?, ?, ?, datetime('now'))
                  ON CONFLICT(id) DO UPDATE SET
                    name = COALESCE(excluded.name, students.name),
+                   email = COALESCE(excluded.email, students.email),
                    grade = COALESCE(excluded.grade, students.grade)`
-              ).bind(studentId, studentId, studentName, grade).run();
-            } catch (fallbackErr) {
-              console.warn("[trial/start] Could not upsert into students table:", fallbackErr);
+              ).bind(studentId, studentId, studentName, studentEmail, grade).run();
+            } catch {
+              try {
+                await env.DB.prepare(
+                  `INSERT INTO students (id, firebase_uid, name, grade, created_at)
+                   VALUES (?, ?, ?, ?, datetime('now'))
+                   ON CONFLICT(id) DO UPDATE SET
+                     name = COALESCE(excluded.name, students.name),
+                     grade = COALESCE(excluded.grade, students.grade)`
+                ).bind(studentId, studentId, studentName, grade).run();
+              } catch (fallbackErr) {
+                console.warn("[trial/start] Could not upsert into students table:", fallbackErr);
+              }
             }
           }
 

@@ -54,9 +54,12 @@ async function getDocWithTimeout(
 
 interface FirestoreProfileRaw {
   email?: string;
+  phoneNumber?: string;
   school?: string;
+  onboardingCompleted?: boolean;
   profile?: {
     email?: string;
+    phoneNumber?: string;
     school?: string;
     name?: string;
     grade?: string;
@@ -83,17 +86,26 @@ export async function checkUserExists(uid: string): Promise<UserCheckResult> {
       if (userSnap && userSnap.exists()) {
         const raw = (userSnap.data() || {}) as FirestoreProfileRaw;
         const profileData = (raw.profile || raw) as FirestoreProfileRaw;
-        const draft = parseServerProfileDocument(profileData);
-        const identity: VerifiedIdentity = {
-          verifiedUid: uid,
-          isAnonymous: false,
-          email: raw.email || raw.profile?.email,
-        };
-        const loadedProfile = createVerifiedStudentProfile(identity, draft);
-        loadedProfile.school = profileData.school;
-        loadedProfile.onboardingCompleted = true;
-        saveStudentProfile(loadedProfile);
-        return { exists: true, isNewUser: false, profile: loadedProfile };
+        const hasRealProfile = Boolean(
+          raw.onboardingCompleted ||
+          raw.profile?.grade ||
+          (raw.name && raw.name !== "قوتابی") ||
+          (raw.email && raw.grade)
+        );
+
+        if (hasRealProfile) {
+          const draft = parseServerProfileDocument(profileData);
+          const identity: VerifiedIdentity = {
+            verifiedUid: uid,
+            isAnonymous: false,
+            email: raw.email || raw.profile?.email || raw.phoneNumber || raw.profile?.phoneNumber,
+          };
+          const loadedProfile = createVerifiedStudentProfile(identity, draft);
+          loadedProfile.school = profileData.school;
+          loadedProfile.onboardingCompleted = true;
+          saveStudentProfile(loadedProfile);
+          return { exists: true, isNewUser: false, profile: loadedProfile };
+        }
       }
 
       // 2. Fallback check legacy students/{uid} collection for backwards compatibility
@@ -157,7 +169,14 @@ export async function createUserDocumentIfMissing(
   draft: StudentProfileDraft & { school?: string }
 ): Promise<StudentProfile> {
   const check = await checkUserExists(uid);
-  if (check.exists && check.profile) {
+  if (
+    check.exists &&
+    check.profile &&
+    check.profile.onboardingCompleted &&
+    (check.profile.email || !email) &&
+    check.profile.name &&
+    check.profile.name !== "قوتابی"
+  ) {
     return check.profile;
   }
 
@@ -204,6 +223,7 @@ export async function createUserDocumentIfMissing(
         grade: validatedGrade,
         stream: validatedStream,
         school: newProfile.school || "",
+        onboardingCompleted: true,
         lastActive: serverTimestamp(),
         createdAt: serverTimestamp(),
         registeredAt: serverTimestamp(),

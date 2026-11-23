@@ -35,6 +35,8 @@ import {
  ExternalLink,
  AlertCircle,
 } from "lucide-react";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { getFirestoreDb } from "../../services/firebase.ts";
 import { InternalBrainService } from "../../core/brain/InternalBrainService";
 import {
   getBrainStatus,
@@ -164,13 +166,105 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
  const [receiptActionMsg, setReceiptActionMsg] = useState<string | null>(null);
  const [copiedReceiptCode, setCopiedReceiptCode] = useState<string | null>(null);
 
+ const enrichSubscriptionsWithFirestore = async (
+  subs: SubscriptionRecord[]
+ ): Promise<SubscriptionRecord[]> => {
+  const db = getFirestoreDb();
+  if (!db) return subs;
+
+  const missing = subs.filter((s) => !s.user_email || s.user_email.trim() === "");
+  if (missing.length === 0) return subs;
+
+  const results = await Promise.allSettled(
+   missing.map(async (s) => {
+    try {
+     const uRef = doc(db, "users", s.user_id);
+     const uSnap = await getDoc(uRef);
+     if (uSnap.exists()) {
+      const raw = uSnap.data() as {
+       email?: string;
+       displayName?: string;
+       name?: string;
+       phoneNumber?: string;
+       phone?: string;
+       profile?: { email?: string; name?: string; phoneNumber?: string; phone?: string };
+      };
+      const email = raw.email || raw.profile?.email || raw.phoneNumber || raw.profile?.phoneNumber || raw.phone || raw.profile?.phone || "";
+      const name = raw.name || raw.displayName || raw.profile?.name || "";
+      return { userId: s.user_id, email, name };
+     }
+
+     const sRef = doc(db, "students", s.user_id);
+     const sSnap = await getDoc(sRef);
+     if (sSnap.exists()) {
+      const sRaw = sSnap.data() as { email?: string; name?: string; displayName?: string; phoneNumber?: string; phone?: string };
+      const email = sRaw.email || sRaw.phoneNumber || sRaw.phone || "";
+      const name = sRaw.name || sRaw.displayName || "";
+      return { userId: s.user_id, email, name };
+     }
+    } catch (err) {
+     console.warn(`[enrichSubscriptions] lookup failed for ${s.user_id}:`, err);
+    }
+    return { userId: s.user_id, email: "", name: "" };
+   })
+  );
+
+  const lookupMap = new Map<string, { email: string; name: string }>();
+  results.forEach((r) => {
+   if (r.status === "fulfilled" && (r.value.email || r.value.name)) {
+    lookupMap.set(r.value.userId, { email: r.value.email, name: r.value.name });
+   }
+  });
+
+  if (lookupMap.size === 0) return subs;
+
+  return subs.map((s) => {
+   const found = lookupMap.get(s.user_id);
+   if (!found) return s;
+   return {
+    ...s,
+    user_email: s.user_email || (found.email ? found.email : s.user_email),
+    user_name: s.user_name || (found.name ? found.name : s.user_name),
+   };
+  });
+ };
+
+ const handleUpdateStudentEmail = async (userId: string, currentName?: string | null) => {
+  const input = window.prompt(`ئیمەیڵ یان ژمارەی مۆبایل بۆ ئەم قوتابییە (${currentName || userId}) بنووسە:`);
+  if (!input || !input.trim()) return;
+  const trimmed = input.trim();
+  const db = getFirestoreDb();
+  if (!db) {
+   alert("داتابەیسی Firestore بەردەست نییە");
+   return;
+  }
+  try {
+   const isPhone = !trimmed.includes("@");
+   const payload = isPhone ? { phoneNumber: trimmed } : { email: trimmed };
+   const uRef = doc(db, "users", userId);
+   const sRef = doc(db, "students", userId);
+   await Promise.allSettled([
+    setDoc(uRef, { ...payload, updatedAt: new Date().toISOString() }, { merge: true }),
+    setDoc(sRef, { ...payload, updatedAt: new Date().toISOString() }, { merge: true }),
+   ]);
+   setSubscriptions((prev) =>
+    prev.map((sub) => (sub.user_id === userId ? { ...sub, user_email: trimmed } : sub))
+   );
+   setSubActionMessage(`ئیمەیڵی قوتابی ${userId} بە سەرکەوتوویی نوێکرایەوە.`);
+  } catch (err) {
+   console.error("Failed to update student email:", err);
+   alert("کێشەیەک لە نوێکردنەوەی زانیاری ڕوویدا.");
+  }
+ };
+
  const loadSubscriptions = async (silent = false) => {
   if (!silent) setIsLoadingSubs(true);
   setSubActionMessage(null);
   try {
    const data = await getAdminSubscriptions();
    if (data && data.subscriptions) {
-    setSubscriptions(data.subscriptions);
+    const enriched = await enrichSubscriptionsWithFirestore(data.subscriptions);
+    setSubscriptions(enriched);
    }
   } catch (err: unknown) {
    console.warn("[BrainAdminDashboard] Failed to load subscriptions:", err);
@@ -2260,9 +2354,19 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
           <span>{s.user_email}</span>
           </div>
          ) : (
-          <span className="text-[10px] text-slate-500 italic block">
-          (بێ ئیمەیڵی تۆمارکراو)
-          </span>
+          <div className="flex items-center gap-1.5">
+           <span className="text-[10px] text-slate-500 italic">
+           (بێ ئیمەیڵی تۆمارکراو)
+           </span>
+           <button
+            type="button"
+            onClick={() => void handleUpdateStudentEmail(s.user_id, s.user_name)}
+            className="text-[10px] text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
+            title="زیادکردنی ئیمەیڵ بۆ ئەم قوتابییە"
+           >
+            + زیادکردن
+           </button>
+          </div>
          )}
          </div>
         </td>

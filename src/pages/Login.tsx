@@ -52,16 +52,23 @@ export function Login({
   const [phoneLoading, setPhoneLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
 
+  // Normalize Kurdish (٠-٩, ۰-۹) digits to standard ASCII digits
+  const normalizeDigits = (str: string): string => {
+    return str
+      .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 1632))
+      .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776));
+  };
+
   // Format Iraqi phone: 07XX → +9647XX
   const formatIraqiPhone = (raw: string): string => {
-    const digits = raw.replace(/\D/g, '');
+    const digits = normalizeDigits(raw).replace(/\D/g, '');
     if (digits.startsWith('9647')) return `+${digits}`;
     if (digits.startsWith('07')) return `+964${digits.slice(1)}`;
     if (digits.startsWith('7') && digits.length === 10) return `+964${digits}`;
     return `+${digits}`;
   };
 
-  const isPhoneValid = /^(\+9647|07|7)\d{9}$/.test(phone.replace(/\s/g, ''));
+  const isPhoneValid = /^(\+9647|07|7)\d{9}$/.test(normalizeDigits(phone).replace(/\s/g, ''));
 
   // Email format validation (real-time)
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
@@ -313,7 +320,7 @@ export function Login({
             </div>
 
             {/* Invisible reCAPTCHA container */}
-            <div id="zana-recaptcha-container" className="hidden" />
+            <div id="zana-recaptcha-container" className="fixed bottom-0 right-0 opacity-0 pointer-events-none -z-50" aria-hidden="true" />
 
             {authMethod === 'email' && (
               <form onSubmit={handleEmailSubmit} className="space-y-4" noValidate>
@@ -465,7 +472,7 @@ export function Login({
                         maxLength={6}
                         placeholder="------"
                         value={otp}
-                        onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
+                        onChange={e => setOtp(normalizeDigits(e.target.value).replace(/\D/g, ''))}
                         className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-center text-white text-2xl font-mono tracking-[0.5em] placeholder-slate-700 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                       />
                     </div>

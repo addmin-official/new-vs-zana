@@ -50,29 +50,37 @@ export async function initializeTrial(
   const userRef = doc(db, 'users', uid)
   const snap = await getDoc(userRef)
 
-  // Only set if not already initialized
-  if (snap.exists() && snap.data().trialStartedAt) return
+  const isPhone = Boolean(email && !email.includes('@'))
+  const emailPayload = email
+    ? isPhone
+      ? { phoneNumber: email }
+      : { email }
+    : {}
+
+  // Only set trial dates if not already initialized
+  if (snap.exists() && snap.data().trialStartedAt) {
+    if (email && (!snap.data().email && !snap.data().phoneNumber)) {
+      await setDoc(userRef, emailPayload, { merge: true }).catch(() => {})
+    }
+    return
+  }
 
   const now = new Date()
   const expiresAt = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000)
 
-  await updateDoc(userRef, {
+  const trialData = {
+    ...emailPayload,
     subscriptionStatus: 'trial_active',
     trialStartedAt: Timestamp.fromDate(now),
     trialExpiresAt: Timestamp.fromDate(expiresAt),
     queriesUsedToday: 0,
     queriesResetDate: now.toISOString().split('T')[0],  // 'YYYY-MM-DD'
     updatedAt: serverTimestamp(),
-  }).catch(async () => {
+  }
+
+  await updateDoc(userRef, trialData).catch(async () => {
     // If updateDoc fails (doc might not exist yet), try setDoc merge
-    await setDoc(userRef, {
-      subscriptionStatus: 'trial_active',
-      trialStartedAt: Timestamp.fromDate(now),
-      trialExpiresAt: Timestamp.fromDate(expiresAt),
-      queriesUsedToday: 0,
-      queriesResetDate: now.toISOString().split('T')[0],
-      updatedAt: serverTimestamp(),
-    }, { merge: true })
+    await setDoc(userRef, trialData, { merge: true })
   })
 }
 
