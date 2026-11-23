@@ -3,7 +3,15 @@
  * Prevents re-registration by detecting returning users from Firestore and local cache
  */
 
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  serverTimestamp,
+  DocumentReference,
+  DocumentSnapshot,
+  DocumentData,
+} from "firebase/firestore";
 import { getFirestoreDb } from "../services/firebase.ts";
 import { StudentProfile, StudentProfileDraft, VerifiedIdentity } from "../features/student/studentTypes.ts";
 import {
@@ -23,6 +31,43 @@ export interface UserCheckResult {
 }
 
 /**
+ * Resiliently fetches a Firestore document with a strict timeout.
+ * Prevents page reloads and slow network from hanging indefinitely.
+ */
+async function getDocWithTimeout(
+  docRef: DocumentReference<DocumentData, DocumentData>,
+  timeoutMs = 2000
+): Promise<DocumentSnapshot<DocumentData, DocumentData> | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), timeoutMs);
+  });
+  try {
+    return await Promise.race([
+      getDoc(docRef),
+      timeoutPromise,
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+interface FirestoreProfileRaw {
+  email?: string;
+  school?: string;
+  profile?: {
+    email?: string;
+    school?: string;
+    name?: string;
+    grade?: string;
+    stream?: string;
+  };
+  name?: string;
+  grade?: string;
+  stream?: string;
+}
+
+/**
  * Checks whether a student profile already exists in Firestore (users/{uid} or students/{uid})
  * or local storage, preventing duplicate registration loops.
  */
@@ -31,13 +76,13 @@ export async function checkUserExists(uid: string): Promise<UserCheckResult> {
 
   if (db && uid) {
     try {
-      // 1. Check primary users/{uid} collection
+      // 1. Check primary users/{uid} collection with timeout to avoid reload freeze
       const userDocRef = doc(db, "users", uid);
-      const userSnap = await getDoc(userDocRef);
+      const userSnap = await getDocWithTimeout(userDocRef, 2000);
 
-      if (userSnap.exists()) {
-        const raw = userSnap.data();
-        const profileData = raw.profile || raw;
+      if (userSnap && userSnap.exists()) {
+        const raw = (userSnap.data() || {}) as FirestoreProfileRaw;
+        const profileData = (raw.profile || raw) as FirestoreProfileRaw;
         const draft = parseServerProfileDocument(profileData);
         const identity: VerifiedIdentity = {
           verifiedUid: uid,
@@ -53,10 +98,10 @@ export async function checkUserExists(uid: string): Promise<UserCheckResult> {
 
       // 2. Fallback check legacy students/{uid} collection for backwards compatibility
       const studentDocRef = doc(db, "students", uid);
-      const studentSnap = await getDoc(studentDocRef);
+      const studentSnap = await getDocWithTimeout(studentDocRef, 2000);
 
-      if (studentSnap.exists()) {
-        const raw = studentSnap.data();
+      if (studentSnap && studentSnap.exists()) {
+        const raw = (studentSnap.data() || {}) as FirestoreProfileRaw;
         const draft = parseServerProfileDocument(raw);
         const identity: VerifiedIdentity = {
           verifiedUid: uid,

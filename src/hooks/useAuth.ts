@@ -27,12 +27,17 @@ export function useAuth() {
 
   // Initialize and listen to Firebase auth state persistence
   useEffect(() => {
+    // If student profile already exists in local cache, ensure loading is released immediately
+    if (useAuthStore.getState().profile) {
+      useAuthStore.getState().setIsLoading(false);
+    }
+
     let timer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
       if (useAuthStore.getState().isLoading) {
         setAuthTimedOut(true);
         useAuthStore.getState().setIsLoading(false);
       }
-    }, 10000);
+    }, 2500);
 
     const auth = getFirebaseAuth();
     if (!auth || !isFirebaseConfigured()) {

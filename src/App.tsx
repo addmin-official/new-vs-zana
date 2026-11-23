@@ -1,4 +1,4 @@
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { AppShell } from "./components/AppShell.tsx";
 import { LoadingScreen } from "./screens/LoadingScreen.tsx";
@@ -153,6 +153,18 @@ export default function App() {
   // Authentication & Initialization State
   const [currentUser, setCurrentUser] = useState<User | null>(() => getCurrentUser());
   const [authLoading, setAuthLoading] = useState<boolean>(() => {
+    // If student already has a completed local profile, render instantly with zero refresh lag
+    const localProfile = getStudentProfile();
+    if (localProfile && localProfile.onboardingCompleted) {
+      return false;
+    }
+    // If explicitly on an auth screen (/login, /register, etc.), the screen manages its own view
+    if (typeof window !== "undefined") {
+      const p = window.location.pathname.replace(/\/+$/, "");
+      if (p === "/login" || p === "/register" || p === "/forgot-password" || p === "/welcome") {
+        return false;
+      }
+    }
     if (!isFirebaseConfigured()) return false;
     const auth = getFirebaseAuth();
     if (!auth) return false;
@@ -162,6 +174,15 @@ export default function App() {
   const [isExitingLoading, setIsExitingLoading] = useState<boolean>(false);
   const [activeProfile, setActiveProfile] = useState<StudentProfile | null>(() => getStudentProfile());
   const [authTimedOut, setAuthTimedOut] = useState(false);
+
+  const smoothFinishLoading = useCallback(() => {
+    setIsExitingLoading(true);
+    setTimeout(() => {
+      setAuthLoading(false);
+      setIsExitingLoading(false);
+      setAuthTimedOut(false);
+    }, 200);
+  }, []);
   const [authScreen, setAuthScreen] = useState<"welcome" | "login" | "register" | "forgot-password">(() => {
     if (typeof window !== "undefined") {
       const p = window.location.pathname.replace(/\/+$/, "");
@@ -221,32 +242,23 @@ export default function App() {
     }
   };
 
-  // 10s Auth loading timeout guard
+  // 2.5s Auth loading safety fallback guard to completely prevent UI lockup on reload
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     if (authLoading) {
       timer = setTimeout(() => {
-        setAuthTimedOut(true);
-      }, 10000);
+        // Automatically unlock UI after 2.5s if auth takes too long
+        smoothFinishLoading();
+      }, 2500);
     }
     return () => {
       if (timer) clearTimeout(timer);
     };
-  }, [authLoading]);
+  }, [authLoading, smoothFinishLoading]);
 
   // Auth State Listeners & Returning User Auto-Detection with Smooth Transition
   useEffect(() => {
     let isMounted = true;
-
-    const smoothFinishLoading = () => {
-      if (!isMounted) return;
-      setIsExitingLoading(true);
-      setTimeout(() => {
-        if (!isMounted) return;
-        setAuthLoading(false);
-        setIsExitingLoading(false);
-      }, 250);
-    };
 
     const unsubCustom = subscribeToAuthChanges((u) => {
       if (!isMounted) return;
@@ -265,6 +277,12 @@ export default function App() {
         const effectiveUser = u || getCurrentUser();
         setCurrentUser(effectiveUser);
         setAuthTimedOut(false);
+
+        // If local profile is already valid, finish loading immediately to prevent blocking the UI
+        const localProf = getStudentProfile();
+        if (localProf && localProf.onboardingCompleted) {
+          smoothFinishLoading();
+        }
 
         // Returning user detection: load Firestore profile without forcing re-registration
         if (effectiveUser && !effectiveUser.isAnonymous) {
@@ -306,7 +324,7 @@ export default function App() {
       unsubCustom();
       unsubFirebase();
     };
-  }, []);
+  }, [smoothFinishLoading]);
 
   // Save session recovery position as student studies
   useEffect(() => {
@@ -485,16 +503,7 @@ export default function App() {
         isTimedOut={authTimedOut}
         isExiting={isExitingLoading}
         onRetry={() => {
-          setAuthTimedOut(false);
-          setAuthLoading(true);
-          setLoadingMessage("چاوەڕێبکە... پشکنینی ناسنامە");
-          const auth = getFirebaseAuth();
-          if (auth) {
-            setCurrentUser(auth.currentUser);
-          }
-          setTimeout(() => {
-            setAuthLoading(false);
-          }, 300);
+          smoothFinishLoading();
         }}
       />
     );

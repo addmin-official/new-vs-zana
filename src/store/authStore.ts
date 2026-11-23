@@ -29,7 +29,7 @@ let currentAuthState: AuthState = {
   user: getCurrentUser(),
   profile: getStudentProfile(),
   isAuthenticated: Boolean(getCurrentUser()),
-  isLoading: true,
+  isLoading: !Boolean(getStudentProfile()),
   isNewUser: false,
   authError: null,
   sessionRecoveryNotice: getSessionRecovery(),
