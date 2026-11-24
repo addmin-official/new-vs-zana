@@ -1276,6 +1276,28 @@ app.post("/api/admin/subscriptions/reset-trial", async (req: Request, res: Respo
   });
 });
 
+app.post("/api/admin/subscriptions/update-student", async (req: Request, res: Response) => {
+  if (!(await checkExpressAdmin(req))) {
+    return res.status(403).json({ error: "Unauthorized", detail: "دەستگەیشتن تەنها بۆ ئادمینە." });
+  }
+  return res.status(501).json({
+    ok: false,
+    error: "ئەم کردارەی ئادمین پێویستی بە داتابەیسی بەرهەمهێنانی D1 هەیە و لە Express dev mode بەردەست نییە.",
+    code: "UNAVAILABLE_IN_DEV",
+  });
+});
+
+app.post("/api/admin/subscriptions/delete", async (req: Request, res: Response) => {
+  if (!(await checkExpressAdmin(req))) {
+    return res.status(403).json({ error: "Unauthorized", detail: "دەستگەیشتن تەنها بۆ ئادمینە." });
+  }
+  return res.status(501).json({
+    ok: false,
+    error: "ئەم کردارەی ئادمین پێویستی بە داتابەیسی بەرهەمهێنانی D1 هەیە و لە Express dev mode بەردەست نییە.",
+    code: "UNAVAILABLE_IN_DEV",
+  });
+});
+
 app.all("/api/study-rooms*", async (req: Request, res: Response) => {
   try {
     const fullUrl = `${req.protocol}://${req.get("host") || "localhost"}${req.originalUrl}`;

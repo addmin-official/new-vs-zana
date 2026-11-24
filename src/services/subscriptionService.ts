@@ -5,13 +5,61 @@
 
 import { getFirebaseAuth } from "./firebase.ts";
 
+export type SubscriptionUiState =
+  | "trial_active"
+  | "trial_expired"
+  | "subscription_active"
+  | "subscription_cancelled"
+  | "expired"
+  | "database_unavailable"
+  | "auth_expired"
+  | "network_error";
+
 export interface StudentSubscriptionStatus {
   ok: boolean;
-  status: "trial" | "active" | "expired";
+  status: "trial" | "active" | "expired" | "trial_active" | "trial_expired" | "subscription_active" | "unavailable";
   trial_started_at: number;
   trial_ends_at: number;
   plan_id: string | null;
   days_remaining: number;
+  time_remaining_ms?: number;
+  server_time?: number;
+  trial_active?: boolean;
+  subscription_active?: boolean;
+  is_expired?: boolean;
+  error?: string;
+  code?: string;
+  detail?: string;
+  locked_features?: string[];
+  errorCategory?: "trial_expired" | "subscription_inactive" | "database_unavailable" | "auth_expired" | "network_error";
+}
+
+export type SubscriptionStatusResponse = StudentSubscriptionStatus;
+
+export interface OnboardStudentPayload {
+  fullName?: string;
+  name?: string;
+  email?: string;
+  schoolName: string;
+  grade?: string;
+  stream?: string;
+}
+
+export interface ServerStudentProfileResponse {
+  ok: boolean;
+  exists: boolean;
+  onboardingCompleted: boolean;
+  student?: {
+    id: string;
+    name: string;
+    email: string;
+    schoolName: string;
+    grade: string;
+    stream: string;
+  } | null;
+  subscription?: StudentSubscriptionStatus | null;
+  error?: string;
+  detail?: string;
 }
 
 export interface SubmitReceiptPayload {
@@ -75,26 +123,137 @@ async function getAuthHeaders(extraHeaders: Record<string, string> = {}): Promis
 }
 
 /**
- * Fetch live subscription status for a given student User ID from D1
+ * Fetch live subscription status for a given student User ID from D1.
+ * Strict: Fails closed on error and NEVER fabricates a fake trial!
  */
 export async function getSubscriptionStatus(userId?: string): Promise<StudentSubscriptionStatus> {
   try {
     const headers = await getAuthHeaders();
     const query = userId ? `?userId=${encodeURIComponent(userId)}` : "";
     const res = await fetch(`/api/subscription/status${query}`, { headers });
+
+    if (res.status === 401) {
+      return {
+        ok: false,
+        status: "unavailable",
+        trial_started_at: 0,
+        trial_ends_at: 0,
+        plan_id: null,
+        days_remaining: 0,
+        is_expired: false,
+        trial_active: false,
+        subscription_active: false,
+        code: "AUTH_EXPIRED",
+        errorCategory: "auth_expired",
+        error: "کاتی چوونەژوورەوەت بەسەرچووە. تکایە سەرلەنوێ بچۆ ژوورەوە.",
+      };
+    }
+
+    if (res.status === 503) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string; detail?: string };
+      return {
+        ok: false,
+        status: "unavailable",
+        trial_started_at: 0,
+        trial_ends_at: 0,
+        plan_id: null,
+        days_remaining: 0,
+        is_expired: false,
+        trial_active: false,
+        subscription_active: false,
+        code: "DATABASE_UNAVAILABLE",
+        errorCategory: "database_unavailable",
+        error: data.detail || data.error || "سێرڤەری داتابەیس لەم کاتەدا بەردەست نییە. تکایە کەمێکی تر هەوڵ بدەرەوە.",
+      };
+    }
+
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}`);
     }
-    return await res.json();
-  } catch (err) {
-    console.warn("[subscriptionService] getSubscriptionStatus error:", err);
+
+    const data = await res.json();
+    return {
+      ok: true,
+      ...data,
+    };
+  } catch (err: unknown) {
+    console.warn("[subscriptionService] getSubscriptionStatus network/server error:", err);
+    // Explicit error state — NEVER fabricate a fake trial!
     return {
       ok: false,
-      status: "trial",
-      trial_started_at: Date.now(),
-      trial_ends_at: Date.now() + 3 * 86400000,
+      status: "unavailable",
+      trial_started_at: 0,
+      trial_ends_at: 0,
       plan_id: null,
-      days_remaining: 3,
+      days_remaining: 0,
+      is_expired: false,
+      trial_active: false,
+      subscription_active: false,
+      code: "NETWORK_ERROR",
+      errorCategory: "network_error",
+      error: "پەیوەندی لەگەڵ سێرڤەر نییە. تکایە هێڵی ئینتەرنێتەکەت بپشکنە.",
+    };
+  }
+}
+
+/**
+ * Onboard student with Full Name, Email, and School Name.
+ */
+export async function onboardStudent(
+  payload: OnboardStudentPayload
+): Promise<{ ok: boolean; message?: string; error?: string; detail?: string }> {
+  const headers = await getAuthHeaders();
+  const res = await fetch("/api/student/onboard", {
+    method: "POST",
+    headers,
+    body: JSON.stringify(payload),
+  });
+  const data = (await res.json().catch(() => ({}))) as {
+    ok?: boolean;
+    message?: string;
+    error?: string;
+    detail?: string;
+  };
+  if (!res.ok) {
+    return {
+      ok: false,
+      error: data.error || "ONBOARD_FAILED",
+      detail: data.detail || "تۆمارکردنی زانیارییەکان سەرکەوتوو نەبوو.",
+    };
+  }
+  return { ok: true, message: data.message };
+}
+
+/**
+ * Fetch authoritative student profile from server D1 database.
+ * Used on login and session startup to identify returning users and bypass onboarding.
+ */
+export async function fetchServerStudentProfile(): Promise<ServerStudentProfileResponse> {
+  try {
+    const headers = await getAuthHeaders();
+    const res = await fetch("/api/student/profile", {
+      method: "GET",
+      headers,
+    });
+    if (!res.ok) {
+      const errorData = (await res.json().catch(() => ({}))) as { error?: string; detail?: string };
+      return {
+        ok: false,
+        exists: false,
+        onboardingCompleted: false,
+        error: errorData.error || "FETCH_PROFILE_FAILED",
+        detail: errorData.detail,
+      };
+    }
+    const data = (await res.json()) as ServerStudentProfileResponse;
+    return data;
+  } catch (err: unknown) {
+    return {
+      ok: false,
+      exists: false,
+      onboardingCompleted: false,
+      error: "NETWORK_ERROR",
+      detail: (err as Error)?.message || "Failed to fetch student profile from server",
     };
   }
 }

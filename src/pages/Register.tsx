@@ -28,6 +28,8 @@ import {
   verifyPhoneOtp,
   startStudentTrial,
 } from "../services/authService.ts";
+import { formatIraqiPhone, isIraqiPhoneValid, normalizeDigits } from "../services/phoneUtils.ts";
+import { onboardStudent } from "../services/subscriptionService.ts";
 import { createUserDocumentIfMissing } from "../auth/userProfileService.ts";
 import { initializeTrial } from "../auth/trialService.ts";
 import { StudentGrade, AcademicStream } from "../features/student/studentTypes.ts";
@@ -135,11 +137,40 @@ export function Register({
       return;
     }
 
+    // Helper to guarantee student identity is committed to both Firestore and D1 immediately
+    const persistStudentImmediately = async (targetUid: string, identifier: string | null, name: string) => {
+      const streamVal = selectedGrade === "9" || selectedGrade === "10" ? "general" : selectedStream;
+      try {
+        await createUserDocumentIfMissing(targetUid, identifier, {
+          name: name || "قوتابی",
+          grade: selectedGrade || "12",
+          stream: streamVal,
+          activeSubject: "chemistry",
+          level: "intermediate",
+          school: schoolName.trim(),
+        });
+      } catch (err) {
+        console.warn("[Register] createUserDocumentIfMissing notice:", err);
+      }
+
+      try {
+        await startStudentTrial(targetUid, {
+          name: name || "قوتابی",
+          email: identifier || undefined,
+          grade: selectedGrade || "12",
+          stream: streamVal,
+        });
+      } catch (trialErr) {
+        console.warn("[Register] startStudentTrial notice:", trialErr);
+      }
+    };
+
     setLoading(true);
     try {
       const user = await registerWithEmail(trimmedEmail, password, trimmedName);
       setCreatedUid(user.uid);
       await initializeTrial(user.uid, trimmedEmail);
+      await persistStudentImmediately(user.uid, trimmedEmail, trimmedName);
       setCurrentStep(2);
     } catch (err: unknown) {
       setErrorMessage(getErrorMessage(err));
@@ -148,22 +179,7 @@ export function Register({
     }
   };
 
-  // Normalize Kurdish (٠-٩, ۰-۹) digits to standard ASCII digits
-  const normalizeDigits = (str: string): string => {
-    return str
-      .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 1632))
-      .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776));
-  };
-
-  const formatIraqiPhone = (raw: string): string => {
-    const digits = normalizeDigits(raw).replace(/\D/g, '');
-    if (digits.startsWith('9647')) return `+${digits}`;
-    if (digits.startsWith('07')) return `+964${digits.slice(1)}`;
-    if (digits.startsWith('7') && digits.length === 10) return `+964${digits}`;
-    return `+${digits}`;
-  };
-
-  const isPhoneValid = /^(\+9647|07|7)\d{9}$/.test(normalizeDigits(phone).replace(/\s/g, ''));
+  const isPhoneValid = isIraqiPhoneValid(phone);
 
   const handlePhoneSendOtp = async () => {
     if (phoneStep1Loading || !isPhoneValid || !fullName.trim()) {
@@ -179,7 +195,7 @@ export function Register({
       setPhoneStep1Loading(false);
       return;
     }
-    const result = await sendPhoneOtp(formatIraqiPhone(phone), verifier);
+    const result = await sendPhoneOtp(phone, verifier);
     if (result.success) {
       setOtpSent(true);
       setResendCooldown(60);
@@ -196,15 +212,32 @@ export function Register({
   const handlePhoneVerifyAndProceed = async () => {
     if (phoneStep1Loading || otp.length < 6) return;
     setPhoneStep1Loading(true);
-    setErrorMessage(null);
-    const result = await verifyPhoneOtp(otp);
+    const streamVal = selectedGrade === "9" || selectedGrade === "10" ? "general" : selectedStream;
+    const result = await verifyPhoneOtp(otp, {
+      name: fullName.trim() || "قوتابی",
+      grade: selectedGrade || "12",
+      stream: streamVal,
+    });
     if (result.user) {
       setCreatedUid(result.user.uid);
-      // Initialize trial period immediately
-      await initializeTrial(
-        result.user.uid,
-        result.user.phoneNumber || phone
-      );
+      const phoneIdentifier = result.user.phoneNumber || formatIraqiPhone(phone);
+      // Initialize trial period immediately in memory and D1/Firestore
+      await initializeTrial(result.user.uid, phoneIdentifier);
+      const streamVal = selectedGrade === "9" || selectedGrade === "10" ? "general" : selectedStream;
+      await createUserDocumentIfMissing(result.user.uid, phoneIdentifier, {
+        name: fullName.trim() || "قوتابی",
+        grade: selectedGrade || "12",
+        stream: streamVal,
+        activeSubject: "chemistry",
+        level: "intermediate",
+        school: schoolName.trim(),
+      }).catch(() => {});
+      await startStudentTrial(result.user.uid, {
+        name: fullName.trim() || "قوتابی",
+        email: phoneIdentifier,
+        grade: selectedGrade || "12",
+        stream: streamVal,
+      }).catch(() => {});
       setCurrentStep(2);
     } else {
       setErrorMessage(result.error || 'کۆدی دڵنیایی هەڵەیە');
@@ -225,6 +258,22 @@ export function Register({
       if (user.email) {
         setEmail(user.email);
       }
+      const streamVal = selectedGrade === "9" || selectedGrade === "10" ? "general" : selectedStream;
+      await initializeTrial(user.uid, user.email || user.uid);
+      await createUserDocumentIfMissing(user.uid, user.email || null, {
+        name: user.displayName || fullName || "قوتابی",
+        grade: selectedGrade || "12",
+        stream: streamVal,
+        activeSubject: "chemistry",
+        level: "intermediate",
+        school: schoolName.trim(),
+      }).catch(() => {});
+      await startStudentTrial(user.uid, {
+        name: user.displayName || fullName || "قوتابی",
+        email: user.email || undefined,
+        grade: selectedGrade || "12",
+        stream: streamVal,
+      }).catch(() => {});
       setCurrentStep(2);
     } catch (err: unknown) {
       setErrorMessage(getErrorMessage(err));
@@ -236,17 +285,22 @@ export function Register({
   // Handle Step 2 Profile Submission
   const handleProfileSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
     if (!selectedGrade) {
       setErrorMessage("تکایە پۆلەکەت دیاریبکە");
       return;
     }
-    setErrorMessage(null);
+    if (!schoolName.trim() || schoolName.trim().length < 2) {
+      setErrorMessage("تکایە ناوی قوتابخانەکەت بنووسە (لانیکەم ٢ پیت).");
+      return;
+    }
     setCurrentStep(3);
   };
 
   // Handle Step 3 Finalization & Dashboard Launch
   const handleFinalizeRegistration = async () => {
     setLoading(true);
+    setErrorMessage(null);
     try {
       const targetUid = createdUid || "guest_" + Date.now();
       const streamVal = selectedGrade === "9" || selectedGrade === "10" ? "general" : selectedStream;
@@ -263,16 +317,19 @@ export function Register({
         school: schoolName.trim(),
       });
 
-      // Synchronize student profile into D1 database and start trial
-      try {
-        await startStudentTrial(targetUid, {
-          name: fullName || "قوتابی",
-          email: identifier || undefined,
-          grade: selectedGrade,
-          stream: streamVal,
-        });
-      } catch (trialErr) {
-        console.warn("[Register] startStudentTrial warning:", trialErr);
+      // Synchronize student profile permanently into D1 database via onboardStudent
+      const onboardResult = await onboardStudent({
+        name: fullName.trim() || "قوتابی",
+        email: identifier || undefined,
+        grade: selectedGrade,
+        stream: streamVal,
+        schoolName: schoolName.trim(),
+      });
+
+      if (!onboardResult.ok) {
+        setErrorMessage(onboardResult.detail || onboardResult.error || "کێشەیەک لە پاشەکەوتکردنی زانیارییەکان ڕوویدا.");
+        setLoading(false);
+        return;
       }
 
       onRegisterSuccess?.({
@@ -808,10 +865,10 @@ export function Register({
               </div>
             )}
 
-            {/* School Name (Optional) */}
+            {/* School Name */}
             <div className="space-y-1.5 pt-2">
               <label htmlFor={schoolInputId} className="block text-xs font-bold text-slate-300">
-                ناوی قوتابخانە (ئارەزوومەندانە)
+                ناوی قوتابخانە <span className="text-rose-400" aria-hidden="true">*</span>
               </label>
               <div className="relative">
                 <input
@@ -825,6 +882,7 @@ export function Register({
                 <School className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true" />
               </div>
             </div>
+
 
             {/* Back & Next Navigation Buttons */}
             <div className="flex items-center gap-3 pt-3">

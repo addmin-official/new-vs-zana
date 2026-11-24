@@ -7,6 +7,7 @@ import {
  AlertTriangle,
  RotateCcw,
  Sparkles,
+ GraduationCap,
  Search,
  Play,
  Check,
@@ -34,6 +35,7 @@ import {
  FileText,
  ExternalLink,
  AlertCircle,
+ Trash2,
 } from "lucide-react";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { getFirestoreDb } from "../../services/firebase.ts";
@@ -49,6 +51,8 @@ import {
   getAdminSubscriptions,
   activateUserSubscription,
   resetUserTrial,
+  updateAdminStudentProfile,
+  deleteAdminSubscription,
   getAdminPaymentReceipts,
   reviewPaymentReceipt,
   type SubscriptionRecord,
@@ -189,30 +193,36 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
        phone?: string;
        profile?: { email?: string; name?: string; phoneNumber?: string; phone?: string };
       };
-      const email = raw.email || raw.profile?.email || raw.phoneNumber || raw.profile?.phoneNumber || raw.phone || raw.profile?.phone || "";
+      const rawIdentifier = raw.email || raw.profile?.email || "";
+      const rawPhone = raw.phoneNumber || raw.profile?.phoneNumber || raw.phone || raw.profile?.phone || "";
+      const email = rawIdentifier.includes("@") ? rawIdentifier : "";
+      const phone = rawPhone || (!rawIdentifier.includes("@") ? rawIdentifier : "");
       const name = raw.name || raw.displayName || raw.profile?.name || "";
-      return { userId: s.user_id, email, name };
+      return { userId: s.user_id, email, phone, name };
      }
 
      const sRef = doc(db, "students", s.user_id);
      const sSnap = await getDoc(sRef);
      if (sSnap.exists()) {
       const sRaw = sSnap.data() as { email?: string; name?: string; displayName?: string; phoneNumber?: string; phone?: string };
-      const email = sRaw.email || sRaw.phoneNumber || sRaw.phone || "";
+      const rawIdentifier = sRaw.email || "";
+      const rawPhone = sRaw.phoneNumber || sRaw.phone || "";
+      const email = rawIdentifier.includes("@") ? rawIdentifier : "";
+      const phone = rawPhone || (!rawIdentifier.includes("@") ? rawIdentifier : "");
       const name = sRaw.name || sRaw.displayName || "";
-      return { userId: s.user_id, email, name };
+      return { userId: s.user_id, email, phone, name };
      }
     } catch (err) {
      console.warn(`[enrichSubscriptions] lookup failed for ${s.user_id}:`, err);
     }
-    return { userId: s.user_id, email: "", name: "" };
+    return { userId: s.user_id, email: "", phone: "", name: "" };
    })
   );
 
-  const lookupMap = new Map<string, { email: string; name: string }>();
+  const lookupMap = new Map<string, { email: string; phone: string; name: string }>();
   results.forEach((r) => {
-   if (r.status === "fulfilled" && (r.value.email || r.value.name)) {
-    lookupMap.set(r.value.userId, { email: r.value.email, name: r.value.name });
+   if (r.status === "fulfilled" && (r.value.email || r.value.phone || r.value.name)) {
+    lookupMap.set(r.value.userId, { email: r.value.email, phone: r.value.phone, name: r.value.name });
    }
   });
 
@@ -224,6 +234,7 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
    return {
     ...s,
     user_email: s.user_email || (found.email ? found.email : s.user_email),
+    user_phone: s.user_phone || (found.phone ? found.phone : s.user_phone),
     user_name: s.user_name || (found.name ? found.name : s.user_name),
    };
   });
@@ -233,27 +244,41 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
   const input = window.prompt(`ئیمەیڵ یان ژمارەی مۆبایل بۆ ئەم قوتابییە (${currentName || userId}) بنووسە:`);
   if (!input || !input.trim()) return;
   const trimmed = input.trim();
-  const db = getFirestoreDb();
-  if (!db) {
-   alert("داتابەیسی Firestore بەردەست نییە");
-   return;
-  }
   try {
-   const isPhone = !trimmed.includes("@");
-   const payload = isPhone ? { phoneNumber: trimmed } : { email: trimmed };
-   const uRef = doc(db, "users", userId);
-   const sRef = doc(db, "students", userId);
-   await Promise.allSettled([
-    setDoc(uRef, { ...payload, updatedAt: new Date().toISOString() }, { merge: true }),
-    setDoc(sRef, { ...payload, updatedAt: new Date().toISOString() }, { merge: true }),
-   ]);
+   // 1. Update D1 database authoritatively via Cloudflare Worker
+   await updateAdminStudentProfile(userId, { email: trimmed, name: currentName || undefined });
+
+   // 2. Also sync to Firestore if available
+   const db = getFirestoreDb();
+   if (db) {
+    const isPhone = !trimmed.includes("@");
+    const payload = isPhone ? { phoneNumber: trimmed } : { email: trimmed };
+    const uRef = doc(db, "users", userId);
+    const sRef = doc(db, "students", userId);
+    await Promise.allSettled([
+     setDoc(uRef, { ...payload, updatedAt: new Date().toISOString() }, { merge: true }),
+     setDoc(sRef, { ...payload, updatedAt: new Date().toISOString() }, { merge: true }),
+    ]);
+   }
+
    setSubscriptions((prev) =>
     prev.map((sub) => (sub.user_id === userId ? { ...sub, user_email: trimmed } : sub))
    );
-   setSubActionMessage(`ئیمەیڵی قوتابی ${userId} بە سەرکەوتوویی نوێکرایەوە.`);
+   setSubActionMessage(`ئیمەیڵی قوتابی ${userId} بە سەرکەوتوویی لە داتابەیسی سێرڤەر (D1) نوێکرایەوە.`);
   } catch (err) {
    console.error("Failed to update student email:", err);
-   alert("کێشەیەک لە نوێکردنەوەی زانیاری ڕوویدا.");
+   alert(`کێشەیەک لە نوێکردنەوەی زانیاری ڕوویدا: ${err instanceof Error ? err.message : String(err)}`);
+  }
+ };
+
+ const handleDeleteSubscription = async (userId: string) => {
+  if (!window.confirm(`ئایا دڵنیایت لە سڕینەوەی ئەم تۆمارەی بەشداریکردن (${userId})؟`)) return;
+  try {
+   await deleteAdminSubscription(userId);
+   setSubscriptions((prev) => prev.filter((s) => s.user_id !== userId));
+   setSubActionMessage(`تۆماری (${userId}) بە سەرکەوتوویی سڕایەوە.`);
+  } catch (err) {
+   alert(`هەڵە لە سڕینەوە: ${err instanceof Error ? err.message : String(err)}`);
   }
  };
 
@@ -2349,14 +2374,28 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
           <span>{s.user_name || "قوتابی تۆمارکراو"}</span>
          </div>
          {s.user_email ? (
-          <div className="text-[11px] text-slate-400 font-mono flex items-center gap-1" dir="ltr">
-          <Mail className="w-3 h-3 text-slate-500 shrink-0" />
+          <div className="text-[11px] text-emerald-300 font-mono flex items-center gap-1" dir="ltr">
+          <Mail className="w-3 h-3 text-emerald-400 shrink-0" />
           <span>{s.user_email}</span>
+          </div>
+         ) : s.user_phone ? (
+          <div className="text-[11px] text-cyan-300 font-mono flex items-center gap-1" dir="ltr">
+          <Phone className="w-3 h-3 text-cyan-400 shrink-0" />
+          <span>{s.user_phone}</span>
+          <span className="text-[9px] px-1 py-0.2 rounded bg-cyan-950/80 text-cyan-400 border border-cyan-800/60 font-sans">
+           مۆبایل
+          </span>
+          </div>
+         ) : s.user_id.startsWith("guest_") ? (
+          <div className="flex items-center gap-1.5">
+           <span className="text-[10px] text-amber-400/90 font-sans bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-800/50">
+           مێوانی تاقیکاری (Guest)
+           </span>
           </div>
          ) : (
           <div className="flex items-center gap-1.5">
-           <span className="text-[10px] text-slate-500 italic">
-           (بێ ئیمەیڵی تۆمارکراو)
+           <span className="text-[10px] text-slate-400 italic">
+           (هێشتا ئیمەیڵ هاوکات نەکراوە)
            </span>
            <button
             type="button"
@@ -2366,6 +2405,12 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
            >
             + زیادکردن
            </button>
+          </div>
+         )}
+         {s.school_name && (
+          <div className="text-[10px] text-indigo-300 font-sans flex items-center gap-1">
+           <GraduationCap className="w-3 h-3 text-indigo-400 shrink-0" />
+           <span>{s.school_name}</span>
           </div>
          )}
          </div>
@@ -2444,6 +2489,15 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
           title="نوێکردنەوە بۆ ٣ ڕۆژی تاقیکردنەوە"
          >
           نوێکردنەوە
+         </button>
+         <button
+          type="button"
+          onClick={() => handleDeleteSubscription(s.user_id)}
+          className="px-2 py-1 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 hover:text-rose-200 border border-rose-800/50 text-[10px] font-bold transition cursor-pointer flex items-center gap-1"
+          title="سڕینەوەی ئەم تۆماری بەشداریکردنە"
+         >
+          <Trash2 className="w-3 h-3" />
+          <span>سڕینەوە</span>
          </button>
          </div>
         </td>

@@ -4,6 +4,7 @@ import { UserProfile } from "../store/appStore.ts";
 import { SoundToggle } from "./SoundToggle.tsx";
 import { ThemeToggle } from "./ThemeToggle.tsx";
 import { useIsAdmin } from "../hooks/useIsAdmin.ts";
+import { TrialCountdownPill } from "./trial/TrialCountdownPill.tsx";
 
 export const SUBJECT_HEADER_METADATA: Record<string, { label: string; icon: string }> = {
   chemistry: { label: "کیمیا", icon: "⚗️" },
@@ -31,6 +32,10 @@ export interface HeaderProps {
   onOpenNotifications?: () => void;
   unreadNotificationsCount?: number;
   onOpenBrain?: () => void;
+  onOpenSubscription?: () => void;
+  trialEndsAt?: number | null;
+  serverTime?: number | null;
+  subscriptionStatus?: string;
 }
 
 export function Header({
@@ -45,6 +50,10 @@ export function Header({
   onOpenNotifications,
   unreadNotificationsCount,
   onOpenBrain,
+  onOpenSubscription,
+  trialEndsAt,
+  serverTime,
+  subscriptionStatus,
 }: HeaderProps) {
   const { isAdmin } = useIsAdmin();
 
@@ -165,6 +174,16 @@ export function Header({
               </span>
             )}
           </button>
+        )}
+
+        {/* Trial Countdown Pill */}
+        {!isAdmin && isPermanentUser && (
+          <TrialCountdownPill
+            trialEndsAt={trialEndsAt}
+            serverTime={serverTime}
+            status={subscriptionStatus || "trial"}
+            onClick={onOpenSubscription}
+          />
         )}
 
         {/* Student Mini Badge */}

@@ -238,8 +238,14 @@ export async function verifyFirebaseIdToken(
     const hasAdminClaim = payload.admin === true || payload.role === 'SuperAdmin' || payload.role === 'super_admin' || payload.role === 'admin';
     const isAuthorizedEmail = Boolean(email && options.configuredEmails?.includes(email));
 
-    if (isStudentRole || (!isAuthorizedEmail && !hasAdminClaim)) {
-      return { ok: false, error: 'Unauthorized: User is not an authorized administrator' };
+    // Security Hardening: An email address alone must NEVER grant administrator privileges.
+    // Must possess cryptographically verifiable admin claim and cannot have student role.
+    if (isStudentRole || !hasAdminClaim) {
+      return { ok: false, error: 'Unauthorized: User lacks required administrator claim (email alone cannot grant admin privileges)' };
+    }
+
+    if (options.configuredEmails && options.configuredEmails.length > 0 && !isAuthorizedEmail && payload.admin !== true && payload.role !== 'SuperAdmin') {
+      return { ok: false, error: 'Unauthorized: User email is not in the authorized administrator registry' };
     }
 
     return {
@@ -331,11 +337,17 @@ export async function verifyFirebaseIdToken(
   }
 
   // 10. Role and Admin Rights Enforcement
-  const hasAdminClaim = payload.admin === true || payload.role === 'SuperAdmin' || payload.role === 'super_admin';
+  const hasAdminClaim = payload.admin === true || payload.role === 'SuperAdmin' || payload.role === 'super_admin' || payload.role === 'admin';
   const isAuthorizedEmail = Boolean(email && options.configuredEmails?.includes(email));
 
-  if (!isAuthorizedEmail && !hasAdminClaim) {
-    return { ok: false, error: 'Unauthorized: Authenticated user lacks administrative privileges' };
+  // Security Hardening: An email address alone must NEVER grant administrator privileges.
+  if (!hasAdminClaim) {
+    return { ok: false, error: 'Unauthorized: Authenticated user lacks administrative claims (email alone cannot grant admin privileges)' };
+  }
+
+  // If specific emails configured, ensure non-superadmins are in the allowed list
+  if (options.configuredEmails && options.configuredEmails.length > 0 && !isAuthorizedEmail && payload.admin !== true && payload.role !== 'SuperAdmin') {
+    return { ok: false, error: 'Unauthorized: Authenticated user email is not in the authorized administrator registry' };
   }
 
   return {

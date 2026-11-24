@@ -1,63 +1,85 @@
-import React, { useEffect, useState } from 'react'
-import { Clock, Zap, X } from 'lucide-react'
-import { getTrialInfo, getTrialStatusLabel, TrialInfo } from '../../auth/trialService.ts'
-import { useAppStore } from '../../store/appStore.ts'
+import React, { useEffect, useState } from "react";
+import { Clock, Lock, X, CreditCard } from "lucide-react";
+import { getSubscriptionStatus, type SubscriptionStatusResponse } from "../../services/subscriptionService.ts";
+import { useTrialCountdown } from "../../hooks/useTrialCountdown.ts";
+import { useAppStore } from "../../store/appStore.ts";
 
-export function TrialBanner() {
-  const user = useAppStore(s => s.user)
-  const [trial, setTrial] = useState<TrialInfo | null>(null)
-  const [dismissed, setDismissed] = useState(false)
+export interface TrialBannerProps {
+  onOpenSubscription?: () => void;
+}
+
+export function TrialBanner({ onOpenSubscription }: TrialBannerProps) {
+  const user = useAppStore((s) => s.user);
+  const [subStatus, setSubStatus] = useState<SubscriptionStatusResponse | null>(null);
+  const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    const uid = user?.id || (user as unknown as { uid?: string })?.uid
-    if (!uid) return
-    void getTrialInfo(uid, user?.email || undefined)
-      .then(setTrial)
-      .catch(() => {})
-  }, [user])
+    const uid = user?.id || (user as unknown as { uid?: string })?.uid;
+    if (!uid || uid === "default-guest") return;
+    void getSubscriptionStatus(uid)
+      .then(setSubStatus)
+      .catch(() => {});
+  }, [user]);
 
-  if (!trial || dismissed) return null
-  if (trial.status === 'admin' || trial.status === 'subscribed') return null
-  // Only show banner in last 24h of trial OR after trial expires
-  const shouldShow = trial.daysRemaining <= 1 || trial.isExpired
-  if (!shouldShow) return null
+  const {
+    formattedCountdown,
+    isExpired,
+    isUrgent,
+    baghdadExpirationFormatted,
+  } = useTrialCountdown(subStatus?.trial_ends_at, subStatus?.server_time);
 
-  const isExpired = trial.isExpired
+  if (!subStatus || dismissed || subStatus.status === "unavailable") return null;
+  if (subStatus.status === "active" && !isExpired) return null;
+
+  // Show banner only when genuinely expired or within urgent window (e.g. 1 day left)
+  const shouldShow = isExpired || subStatus.status === "expired" || isUrgent || subStatus.days_remaining <= 1;
+  if (!shouldShow) return null;
+
+  const expiredEffective = isExpired || subStatus.status === "expired";
 
   return (
-    <div className={`relative flex items-center gap-3 px-4 py-2.5 text-sm ${
-      isExpired
-        ? 'bg-rose-950 border-b border-rose-800 text-rose-200'
-        : 'bg-amber-950 border-b border-amber-800 text-amber-200'
-    }`}
+    <div
+      role="alert"
+      className={`relative flex items-center justify-between gap-3 px-4 py-2.5 text-xs sm:text-sm font-sans transition-all ${
+        expiredEffective
+          ? "bg-rose-950/90 border-b border-rose-800 text-rose-200"
+          : "bg-amber-950/90 border-b border-amber-800 text-amber-200"
+      }`}
+      dir="rtl"
     >
-      {isExpired
-        ? <Zap size={15} className="text-rose-400 flex-shrink-0" />
-        : <Clock size={15} className="text-amber-400 flex-shrink-0" />
-      }
-      <span className="flex-1">
-        {isExpired
-          ? `کاتی تاقیکردنەوەت تەواو بوو. ئەمڕۆ ${trial.queriesUsedToday}/${trial.dailyLimitAfterTrial} پرسیاری خۆڕایت ماوە.`
-          : getTrialStatusLabel(trial)
-        }
-      </span>
-      {isExpired && (
+      <div className="flex items-center gap-2 min-w-0">
+        {expiredEffective ? (
+          <Lock className="w-4 h-4 text-rose-400 shrink-0" />
+        ) : (
+          <Clock className="w-4 h-4 text-amber-400 shrink-0 animate-pulse" />
+        )}
+        <span className="truncate">
+          {expiredEffective
+            ? `ماوەی تاقیکردنەوەی خۆڕایی (٣ ڕۆژ) کۆتایی پێهات (${baghdadExpirationFormatted}). تاقیگەکان قوفڵ کراون.`
+            : `ئاگاداری: تەنها ${formattedCountdown} لە تاقیکردنەوەی خۆڕایی ماوەتەوە (${baghdadExpirationFormatted}).`}
+        </span>
+      </div>
+
+      <div className="flex items-center gap-2 shrink-0">
+        {onOpenSubscription && (
+          <button
+            type="button"
+            onClick={onOpenSubscription}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-xs transition cursor-pointer"
+          >
+            <CreditCard className="w-3.5 h-3.5" />
+            <span>نوێکردنەوە</span>
+          </button>
+        )}
         <button
           type="button"
-          className="bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold px-3 py-1 rounded-lg transition-colors"
-          onClick={() => { window.location.href = '/subscription' }}
+          onClick={() => setDismissed(true)}
+          className="text-current opacity-60 hover:opacity-100 p-1 rounded-md transition cursor-pointer"
+          aria-label="داخستن"
         >
-          بەشداربوون
+          <X className="w-4 h-4" />
         </button>
-      )}
-      <button
-        type="button"
-        onClick={() => setDismissed(true)}
-        className="text-current opacity-50 hover:opacity-100 transition-opacity"
-        aria-label="داخستن"
-      >
-        <X size={14} />
-      </button>
+      </div>
     </div>
-  )
+  );
 }

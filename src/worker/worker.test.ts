@@ -479,6 +479,7 @@ test("Worker - missing GEMINI_API_KEY on AI endpoint returns safe Kurdish error 
   });
 
   const envWithoutKey: Env = {
+    ...createMockEnv(),
     ALLOWED_ORIGINS: "https://zana.idggov.tech",
     FIREBASE_PROJECT_ID: "gen-lang-client-0009572581",
     GEMINI_API_KEY: "",
@@ -1047,6 +1048,7 @@ test("Worker - Uses Firebase AI endpoint with generateContent", async () => {
     });
 
     const envWithAqKey: Env = {
+      ...createMockEnv(),
       ALLOWED_ORIGINS: "https://zana.idggov.tech",
       FIREBASE_PROJECT_ID: "zana-edu-prod",
       GEMINI_API_KEY: "AQ.example-vertex-key-12345",

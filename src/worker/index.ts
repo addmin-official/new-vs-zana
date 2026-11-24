@@ -39,7 +39,6 @@ import {
 } from "../planning/index.ts";
 import { handleStudyPlanRoute } from "../server/api/study/plan.ts";
 import { handlePracticeSnapshotRoute, handlePracticeEvaluateRoute } from "../server/api/study/practice.ts";
-import { handleStudentProfileRoute } from "../server/api/student/profile.ts";
 import { handleFeedbackRoute } from "../server/api/feedback.ts";
 import { handleTelemetryExportRoute } from "../server/api/internal/telemetryExport.ts";
 import { handleHealthRoute, handleCurriculumHealthRoute } from "../server/api/health.ts";
@@ -55,9 +54,13 @@ import {
 } from "../core/brain/durable/AdminCommandCoordinator.ts";
 import { AdminD1Repository, type D1DatabaseLike } from "../core/brain/storage/AdminD1Repository.ts";
 import { enforceAiRateLimit } from "../server/middleware/rateLimiter.ts";
-import { verifyAuthWorker } from "../server/middleware/authMiddleware.ts";
+import { verifyAuthWorker, type AuthenticatedUser } from "../server/middleware/authMiddleware.ts";
 import { applySecurityHeaders } from "../server/middleware/security.ts";
 import { validateProductionEnv } from "../server/config/envValidator.ts";
+import { createOtpSession, verifyOtpSession } from "../server/auth/otpService.ts";
+import { resolveSmsProvider } from "../server/sms/ISmsProvider.ts";
+import { mintFirebaseCustomToken } from "../server/auth/customTokenService.ts";
+import { formatIraqiPhone, isIraqiPhoneValid } from "../services/phoneUtils.ts";
 
 export { AdminCommandDO };
 
@@ -126,6 +129,16 @@ export interface Env {
   ADMIN_COMMAND_DO?: DurableObjectNamespaceLike;
   DB?: D1DatabaseLike;
   AUDIT_HMAC_SECRET?: string;
+  FIREBASE_SERVICE_ACCOUNT_KEY?: string;
+  SMS_PROVIDER?: string;
+  TWILIO_ACCOUNT_SID?: string;
+  TWILIO_AUTH_TOKEN?: string;
+  TWILIO_FROM?: string;
+  INFOBIP_API_KEY?: string;
+  INFOBIP_BASE_URL?: string;
+  INFOBIP_SENDER_ID?: string;
+  SMS_WEBHOOK_URL?: string;
+  SMS_WEBHOOK_KEY?: string;
   [key: string]: unknown;
 }
 
@@ -460,13 +473,26 @@ export function parseAnswerSubmission(value: unknown): AnswerSubmission {
 }
 
 export interface SubscriptionStatusResult {
-  status: "trial" | "active" | "expired" | "unavailable";
+  status: "trial" | "active" | "expired" | "inactive" | "unavailable";
   error?: string;
+  code?: string;
+}
+
+function isMissingColumnError(err: unknown): boolean {
+  const msg = String((err as Error)?.message || err || "").toLowerCase();
+  return msg.includes("no such column") || msg.includes("has no column named");
+}
+
+function isUniqueConstraintError(err: unknown): boolean {
+  const msg = String((err as Error)?.message || err || "").toLowerCase();
+  return msg.includes("unique constraint") || msg.includes("constraint failed");
 }
 
 export async function checkSubscription(
   env: Env,
-  userId: string
+  userId: string,
+  userEmail?: string,
+  userName?: string
 ): Promise<SubscriptionStatusResult> {
   if (!env.DB) {
     return { status: "unavailable", error: "Database binding missing" };
@@ -474,27 +500,118 @@ export async function checkSubscription(
 
   const now = Date.now();
   const trialDurationMs = 3 * 24 * 60 * 60 * 1000; // 3 days
+  const normalizedEmail = (userEmail || "").trim().toLowerCase();
+
+  // Automatically synchronize student metadata into D1 when identity claims are known
+  if (normalizedEmail) {
+    const emailToStore = normalizedEmail;
+    const nameToStore = (userName || "").trim() || "قوتابی";
+    try {
+      await env.DB.prepare(
+        `INSERT INTO students (id, name, email, grade, stream, password_hash)
+         VALUES (?, ?, ?, '12', 'scientific', 'firebase_auth')
+         ON CONFLICT(id) DO UPDATE SET
+           name = CASE WHEN excluded.name != '' THEN excluded.name ELSE students.name END,
+           email = CASE WHEN excluded.email != '' THEN excluded.email ELSE students.email END`
+      ).bind(userId, nameToStore, emailToStore).run();
+    } catch (err1) {
+      if (isMissingColumnError(err1)) {
+        try {
+          await env.DB.prepare(
+            `INSERT INTO students (id, firebase_uid, name, email, grade, created_at)
+             VALUES (?, ?, ?, ?, '12', datetime('now'))
+             ON CONFLICT(id) DO UPDATE SET
+               name = COALESCE(NULLIF(excluded.name, ''), students.name),
+               email = COALESCE(NULLIF(excluded.email, ''), students.email)`
+          ).bind(userId, userId, nameToStore, emailToStore).run();
+        } catch (err2) {
+          console.warn("[checkSubscription] student auto-upsert notice:", err2);
+        }
+      } else {
+        console.warn("[checkSubscription] student auto-upsert notice:", err1);
+      }
+    }
+
+    try {
+      await env.DB.prepare(
+        `INSERT INTO users (id, email, name, role, grade, stream)
+         VALUES (?, ?, ?, 'student', '12', 'scientific')
+         ON CONFLICT(id) DO UPDATE SET
+           name = CASE WHEN excluded.name != '' THEN excluded.name ELSE users.name END,
+           email = CASE WHEN excluded.email != '' THEN excluded.email ELSE users.email END`
+      ).bind(userId, emailToStore, nameToStore).run();
+    } catch (err) {
+      console.warn("[checkSubscription] user auto-upsert notice:", err);
+    }
+  }
 
   try {
-    const stmt = env.DB.prepare(
-      "SELECT user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at FROM subscriptions WHERE user_id = ?"
-    );
-    const sub = await stmt.bind(userId).first<{
-      user_id: string;
-      status: string;
-      trial_started_at: number;
-      trial_ends_at: number;
-      plan_id: string | null;
-      updated_at: number;
-    }>();
+    let sub = null;
+    try {
+      sub = await env.DB.prepare(
+        "SELECT user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at FROM subscriptions WHERE user_id = ? OR (? != '' AND email IS NOT NULL AND LOWER(TRIM(email)) = ?) ORDER BY CASE WHEN user_id = ? THEN 0 ELSE 1 END, trial_started_at ASC LIMIT 1"
+      ).bind(userId, normalizedEmail, normalizedEmail, userId).first<{
+        user_id: string;
+        status: string;
+        trial_started_at: number;
+        trial_ends_at: number;
+        plan_id: string | null;
+        updated_at: number;
+      }>();
+    } catch (err) {
+      if (!isMissingColumnError(err)) throw err;
+      sub = await env.DB.prepare(
+        "SELECT user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at FROM subscriptions WHERE user_id = ? LIMIT 1"
+      ).bind(userId).first<{
+        user_id: string;
+        status: string;
+        trial_started_at: number;
+        trial_ends_at: number;
+        plan_id: string | null;
+        updated_at: number;
+      }>();
+    }
 
     if (!sub) {
       const trialEndsAt = now + trialDurationMs;
-      const insertRes = await env.DB.prepare(
-        `INSERT INTO subscriptions (user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at)
-         VALUES (?, 'trial', ?, ?, 'free_trial_3d', ?)
-         ON CONFLICT(user_id) DO NOTHING`
-      ).bind(userId, now, trialEndsAt, now).run();
+      let insertRes;
+      try {
+        insertRes = await env.DB.prepare(
+          `INSERT INTO subscriptions (user_id, email, status, trial_started_at, trial_ends_at, plan_id, updated_at)
+           VALUES (?, ?, 'trial', ?, ?, 'free_trial_3d', ?)
+           ON CONFLICT(user_id) DO NOTHING`
+        ).bind(userId, normalizedEmail || null, now, trialEndsAt, now).run();
+      } catch (insertErr) {
+        if (isMissingColumnError(insertErr)) {
+          insertRes = await env.DB.prepare(
+            `INSERT INTO subscriptions (user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at)
+             VALUES (?, 'trial', ?, ?, 'free_trial_3d', ?)
+             ON CONFLICT(user_id) DO NOTHING`
+          ).bind(userId, now, trialEndsAt, now).run();
+        } else if (isUniqueConstraintError(insertErr) && normalizedEmail) {
+          const racedEmailSub = await env.DB.prepare(
+            "SELECT user_id, status, trial_started_at, trial_ends_at FROM subscriptions WHERE email IS NOT NULL AND LOWER(TRIM(email)) = ? ORDER BY trial_started_at ASC LIMIT 1"
+          ).bind(normalizedEmail).first<{
+            user_id: string;
+            status: string;
+            trial_started_at: number;
+            trial_ends_at: number;
+          }>();
+          if (racedEmailSub) {
+            if (racedEmailSub.status === "inactive") return { status: "inactive" };
+            if (now > racedEmailSub.trial_ends_at || racedEmailSub.status === "expired") {
+              return { status: "expired" };
+            }
+            if (racedEmailSub.user_id !== userId) {
+              return { status: "expired", code: "TRIAL_ALREADY_USED" };
+            }
+            return { status: (racedEmailSub.status as "trial" | "active" | "expired") || "trial" };
+          }
+          throw insertErr;
+        } else {
+          throw insertErr;
+        }
+      }
 
       const changes = (insertRes as unknown as { meta?: { changes?: number } })?.meta?.changes ?? 1;
       if (changes === 0) {
@@ -510,6 +627,7 @@ export async function checkSubscription(
         }>();
 
         if (raced) {
+          if (raced.status === "inactive") return { status: "inactive" };
           if (now > raced.trial_ends_at) return { status: "expired" };
           return { status: (raced.status as "trial" | "active" | "expired") || "trial" };
         }
@@ -518,11 +636,25 @@ export async function checkSubscription(
       return { status: "trial" };
     }
 
+    if (sub.user_id === userId && normalizedEmail) {
+      try {
+        await env.DB.prepare(
+          "UPDATE subscriptions SET email = ? WHERE user_id = ? AND (email IS NULL OR email = '')"
+        ).bind(normalizedEmail, userId).run();
+      } catch {
+        // ignore if email column not migrated yet or already owned
+      }
+    }
+
+    if (sub.status === "inactive") {
+      return { status: "inactive" };
+    }
+
     if (sub.status === "active") {
       if (now > sub.trial_ends_at) {
         await env.DB.prepare(
           "UPDATE subscriptions SET status = 'expired', updated_at = ? WHERE user_id = ?"
-        ).bind(now, userId).run();
+        ).bind(now, sub.user_id).run();
         return { status: "expired" };
       }
       return { status: "active" };
@@ -532,7 +664,7 @@ export async function checkSubscription(
       if (now > sub.trial_ends_at) {
         await env.DB.prepare(
           "UPDATE subscriptions SET status = 'expired', updated_at = ? WHERE user_id = ?"
-        ).bind(now, userId).run();
+        ).bind(now, sub.user_id).run();
 
         return { status: "expired" };
       }
@@ -562,6 +694,137 @@ async function getWorkerAuthenticatedStudentId(req: Request, env: Env): Promise<
   } catch {
     throw new Error("UNAUTHORIZED");
   }
+}
+
+export interface EntitlementCheckResult {
+  user: AuthenticatedUser;
+  studentId: string;
+  subscription: SubscriptionStatusResult;
+}
+
+/**
+ * Strict server-side administrator authorization helper.
+ * An email address alone must NEVER grant administrator privileges.
+ * Dual-verification: Requires cryptographically verified custom claim AND authorized admin email.
+ */
+export function isAuthoritativeAdmin(user: AuthenticatedUser): boolean {
+  if (!user) return false;
+  const role = user.claims?.role;
+  const adminFlag = user.claims?.admin;
+  const hasAdminClaim =
+    role === "admin" ||
+    role === "SuperAdmin" ||
+    role === "super_admin" ||
+    adminFlag === true;
+  const email = (user.email || "").toLowerCase();
+  const isAuthorizedEmail = email === "addmin.official.idg@gmail.com";
+  return Boolean(hasAdminClaim && isAuthorizedEmail);
+}
+
+/**
+ * Verifies that the incoming request is authenticated AND has valid active entitlement
+ * (either an active 3-day trial or an active paid subscription).
+ * Fails closed (503) if the database binding is unavailable.
+ * Returns 403 SUBSCRIPTION_REQUIRED with locked feature metadata if expired.
+ * Authoritative admin users strictly bypass entitlement checks.
+ */
+export async function verifyEntitlementWorker(
+  request: Request,
+  env: Env,
+  responseHeaders: Headers
+): Promise<EntitlementCheckResult | Response> {
+  const authResult = await verifyAuthWorker(request, env, responseHeaders);
+  if (authResult instanceof Response) return authResult;
+
+  const user = authResult.user;
+  const studentId = user.uid;
+
+  // Strict double-check admin bypass: requires verified custom claim AND authorized admin email
+  const isAdmin = isAuthoritativeAdmin(user);
+  if (isAdmin) {
+    return {
+      user,
+      studentId,
+      subscription: { status: "active" },
+    };
+  }
+
+  // Fail-closed when DB binding is missing
+  if (!env.DB) {
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        error: "سێرڤسی بەشداریکردن لەبەردەستدا نییە (داتابەیس بەردەست نییە).",
+        code: "DATABASE_UNAVAILABLE",
+      }),
+      { status: 503, headers: responseHeaders }
+    );
+  }
+
+  const subResult = await checkSubscription(env, studentId, user.email, user.claims?.name);
+
+  if (subResult.status === "unavailable") {
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        error: "DATABASE_UNAVAILABLE",
+        message: "سێرڤەری داتابەیس لەم کاتەدا بەردەست نییە. تکایە کەمێکی تر هەوڵ بدەرەوە.",
+        code: "DATABASE_UNAVAILABLE",
+        detail: subResult.error,
+      }),
+      { status: 503, headers: responseHeaders }
+    );
+  }
+
+  if (subResult.status === "inactive") {
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        error: "SUBSCRIPTION_INACTIVE",
+        message: "هەژمارەکەت لەم کاتەدا ناچالاکە. تکایە پەیوەندی بە بەڕێوەبەرەوە بکە.",
+        code: "SUBSCRIPTION_INACTIVE",
+        status: "inactive",
+        locked_features: ["labs", "pedagogy", "practice", "assessment", "rooms", "chat"],
+      }),
+      { status: 403, headers: responseHeaders }
+    );
+  }
+
+  if (subResult.status === "expired") {
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        error: "ماوەی تاقیکردنەوەی خۆڕایی (٣ ڕۆژ) یاخود بەشداریکردنەکەت کۆتایی هاتووە. تکایە بەشداریکردنەکەت نوێ بکەرەوە بۆ دەستگەیشتن بە تاقیگە و وانەکان.",
+        message: "ماوەی تاقیکردنەوەی خۆڕایی (٣ ڕۆژ) یاخود بەشداریکردنەکەت کۆتایی هاتووە. تکایە بەشداریکردنەکەت نوێ بکەرەوە بۆ دەستگەیشتن بە تاقیگە و وانەکان.",
+        code: "SUBSCRIPTION_REQUIRED",
+        errorCode: "TRIAL_EXPIRED",
+        status: "expired",
+        locked_features: ["labs", "pedagogy", "practice", "assessment", "rooms", "chat"],
+      }),
+      { status: 403, headers: responseHeaders }
+    );
+  }
+
+  return {
+    user,
+    studentId,
+    subscription: subResult,
+  };
+}
+
+export async function getWorkerAuthenticatedStudentWithEntitlement(req: Request, env: Env): Promise<string> {
+  const uid = await getWorkerAuthenticatedStudentId(req, env);
+  if (!env.DB) {
+    throw new Error("DATABASE_UNAVAILABLE");
+  }
+  const subResult = await checkSubscription(env, uid);
+  if (subResult.status === "unavailable") {
+    throw new Error("DATABASE_UNAVAILABLE");
+  }
+  if (subResult.status === "expired") {
+    throw new Error("SUBSCRIPTION_REQUIRED");
+  }
+  return uid;
 }
 
 function getPersistenceMode(env: Env): "production" | "development" | "test" {
@@ -913,11 +1176,295 @@ export default {
         }
       }
 
+      // POST /api/auth/phone/send-otp
+      if (pathname === "/api/auth/phone/send-otp" && request.method === "POST") {
+        if (!env.DB) {
+          return new Response(JSON.stringify({ ok: false, error: "DB_NOT_CONFIGURED", detail: "داتابەیس بەردەست نییە." }), {
+            status: 500,
+            headers: responseHeaders,
+          });
+        }
+
+        const clientIp = request.headers.get("CF-Connecting-IP") || request.headers.get("x-forwarded-for") || "127.0.0.1";
+        if (isRateLimited(`phone_otp_req:${clientIp}`, 10, 60 * 1000)) {
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              error: "TOO_MANY_REQUESTS",
+              detail: "تکایە کەمێک چاوەڕوان بە پێش ناردنی داواکاری نوێ.",
+            }),
+            { status: 429, headers: responseHeaders }
+          );
+        }
+
+        const body = (await request.json().catch(() => ({}))) as { phone?: string };
+        const rawPhone = body?.phone;
+        if (!rawPhone || typeof rawPhone !== "string") {
+          return new Response(
+            JSON.stringify({ ok: false, error: "MISSING_PHONE", detail: "ژمارەی مۆبایل داواکراوە." }),
+            { status: 400, headers: responseHeaders }
+          );
+        }
+
+        const phoneE164 = formatIraqiPhone(rawPhone);
+        if (!isIraqiPhoneValid(phoneE164)) {
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              error: "INVALID_PHONE_NUMBER",
+              detail: "ژمارەی مۆبایل دروست نییە. فۆرماتی پێویست: 07501234567 یان 07701234567",
+            }),
+            { status: 400, headers: responseHeaders }
+          );
+        }
+
+        const pepper = (env.AUDIT_HMAC_SECRET as string) || (env.ADMIN_TELEMETRY_SECRET as string) || "zana_otp_secure_pepper";
+        const sessionRes = await createOtpSession(env.DB, phoneE164, clientIp, pepper);
+
+        if (!sessionRes.ok) {
+          const status = sessionRes.error === "COOLDOWN_ACTIVE" ? 429 : 400;
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              error: sessionRes.error,
+              detail: sessionRes.errorKu,
+              cooldownSeconds: sessionRes.cooldownSeconds,
+            }),
+            { status, headers: responseHeaders }
+          );
+        }
+
+        // Resolve SMS Provider
+        const smsProvider = resolveSmsProvider(env as Record<string, unknown>);
+        if (smsProvider.name === "disabled" || !smsProvider.isConfigured) {
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              status: "disabled",
+              error: "SMS_PROVIDER_NOT_CONFIGURED",
+              detail: "دەروازەی کورتەنامەی مۆبایل لە ئێستادا لە قۆناغی وەرگرتنی ڕەزامەندی کۆمپانیاکانی پەیوەندیدایە (CMC). تکایە بە ئیمەیڵ یاخود گووگڵ بەشدار بە.",
+              verificationId: sessionRes.verificationId,
+            }),
+            { status: 503, headers: responseHeaders }
+          );
+        }
+
+        const smsResult = await smsProvider.sendOtp({
+          to: phoneE164,
+          otp: sessionRes.otp!,
+        });
+
+        if (!smsResult.success) {
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              status: smsResult.status,
+              error: smsResult.error || "SMS_DELIVERY_FAILED",
+              detail: "ناردنی کۆدی کورتەنامە لەلایەن تۆڕی پەیوەندییەوە سەرکەوتوو نەبوو. تکایە دواتر هەوڵ بدەرەوە.",
+            }),
+            { status: 502, headers: responseHeaders }
+          );
+        }
+
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            verificationId: sessionRes.verificationId,
+            phone: phoneE164,
+            cooldownSeconds: sessionRes.cooldownSeconds || 60,
+            expiresInSeconds: sessionRes.expiresInSeconds || 300,
+            message: "کۆدی پشتڕاستکردنەوە بە کورتەنامە نێردرا.",
+          }),
+          { status: 200, headers: responseHeaders }
+        );
+      }
+
+      // POST /api/auth/phone/verify-otp
+      if (pathname === "/api/auth/phone/verify-otp" && request.method === "POST") {
+        if (!env.DB) {
+          return new Response(JSON.stringify({ ok: false, error: "DB_NOT_CONFIGURED", detail: "داتابەیس بەردەست نییە." }), {
+            status: 500,
+            headers: responseHeaders,
+          });
+        }
+
+        const clientIp = request.headers.get("CF-Connecting-IP") || request.headers.get("x-forwarded-for") || "127.0.0.1";
+        if (isRateLimited(`phone_otp_verify:${clientIp}`, 15, 60 * 1000)) {
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              error: "TOO_MANY_REQUESTS",
+              detail: "تکایە کەمێک چاوەڕوان بە پێش ناردنی کۆد.",
+            }),
+            { status: 429, headers: responseHeaders }
+          );
+        }
+
+        const body = (await request.json().catch(() => ({}))) as {
+          verificationId?: string;
+          code?: string;
+          name?: string;
+          grade?: string | number;
+          stream?: string;
+        };
+
+        const { verificationId, code } = body;
+        if (!verificationId || !code) {
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              error: "MISSING_FIELDS",
+              detail: "کۆدی دڵنیایی و ناسنامەی پشتڕاستکردنەوە پێویستن.",
+            }),
+            { status: 400, headers: responseHeaders }
+          );
+        }
+
+        const pepper = (env.AUDIT_HMAC_SECRET as string) || (env.ADMIN_TELEMETRY_SECRET as string) || "zana_otp_secure_pepper";
+        const verifyRes = await verifyOtpSession(env.DB, verificationId, code, pepper);
+
+        if (!verifyRes.ok) {
+          const status = verifyRes.error === "ATTEMPTS_EXHAUSTED" ? 403 : 400;
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              error: verifyRes.error,
+              detail: verifyRes.errorKu,
+              attemptsRemaining: verifyRes.attemptsRemaining,
+            }),
+            { status, headers: responseHeaders }
+          );
+        }
+
+        const verifiedPhone = verifyRes.phoneE164!;
+
+        // Find existing student by phone
+        let targetUid = "";
+        let studentName = (body.name || "").trim() || "قوتابی";
+        const studentGrade = String(body.grade || "12");
+        const studentStream = (body.stream || "scientific").trim();
+
+        try {
+          const existingStudent = await env.DB.prepare(
+            "SELECT id, name, grade, email FROM students WHERE phone = ? LIMIT 1"
+          ).bind(verifiedPhone).first<{ id: string; name: string; grade: string; email: string }>();
+
+          if (existingStudent?.id) {
+            targetUid = existingStudent.id;
+            if (existingStudent.name && !body.name) {
+              studentName = existingStudent.name;
+            }
+          } else {
+            const existingUser = await env.DB.prepare(
+              "SELECT id, name, grade, email FROM users WHERE phone = ? LIMIT 1"
+            ).bind(verifiedPhone).first<{ id: string; name: string; grade: string; email: string }>();
+
+            if (existingUser?.id) {
+              targetUid = existingUser.id;
+              if (existingUser.name && !body.name) {
+                studentName = existingUser.name;
+              }
+            } else {
+              targetUid = `ph_${verifiedPhone.replace("+", "")}`;
+            }
+          }
+
+          // Persist or update student in D1
+          try {
+            await env.DB.prepare(
+              `INSERT INTO students (id, name, grade, stream, phone, password_hash)
+               VALUES (?, ?, ?, ?, ?, 'phone_auth')
+               ON CONFLICT(id) DO UPDATE SET
+                 phone = excluded.phone,
+                 name = CASE WHEN excluded.name != '' THEN excluded.name ELSE students.name END,
+                 grade = excluded.grade,
+                 stream = excluded.stream`
+            ).bind(targetUid, studentName, studentGrade, studentStream, verifiedPhone).run();
+          } catch {
+            try {
+              await env.DB.prepare(
+                `INSERT INTO students (id, firebase_uid, name, grade, phone, created_at)
+                 VALUES (?, ?, ?, ?, ?, datetime('now'))
+                 ON CONFLICT(id) DO UPDATE SET
+                   phone = excluded.phone,
+                   name = COALESCE(NULLIF(excluded.name, ''), students.name)`
+              ).bind(targetUid, targetUid, studentName, studentGrade, verifiedPhone).run();
+            } catch (errFallback) {
+              console.warn("[verify-otp] students table fallback error:", errFallback);
+            }
+          }
+
+          try {
+            await env.DB.prepare(
+              `INSERT INTO users (id, name, role, grade, stream, phone)
+               VALUES (?, ?, 'student', ?, ?, ?)
+               ON CONFLICT(id) DO UPDATE SET
+                 phone = excluded.phone,
+                 name = CASE WHEN excluded.name != '' THEN excluded.name ELSE users.name END`
+            ).bind(targetUid, studentName, studentGrade, studentStream, verifiedPhone).run();
+          } catch (errUsers) {
+            console.warn("[verify-otp] users table upsert error:", errUsers);
+          }
+
+          // Ensure trial subscription exists in subscriptions table
+          await checkSubscription(env, targetUid, undefined);
+        } catch (dbErr) {
+          console.error("[verify-otp] Database reconciliation error:", dbErr);
+        }
+
+        // Mint Firebase Custom Token if service account is provided
+        let customToken: string | undefined = undefined;
+        if (env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+          const mintRes = await mintFirebaseCustomToken({
+            serviceAccountJson: env.FIREBASE_SERVICE_ACCOUNT_KEY as string,
+            uid: targetUid,
+            claims: {
+              phone_number: verifiedPhone,
+              role: "student",
+            },
+          });
+          if (mintRes.ok) {
+            customToken = mintRes.customToken;
+          } else {
+            console.warn("[verify-otp] Minting custom token failed:", mintRes.error);
+          }
+        }
+
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            uid: targetUid,
+            phone: verifiedPhone,
+            customToken: customToken || null,
+            message: "ژمارەی مۆبایل بە سەرکەوتوویی پشتڕاستکرایەوە.",
+          }),
+          { status: 200, headers: responseHeaders }
+        );
+      }
+
+      // GET & POST /api/pedagogy/* (Pedagogical Hub: Feynman, Leitner, Dialectic, Metacognitive, Soma)
+      if (pathname.startsWith("/api/pedagogy")) {
+        const entitlementResult = await verifyEntitlementWorker(request, env, responseHeaders);
+        if (entitlementResult instanceof Response) return entitlementResult;
+        const studentId = entitlementResult.studentId;
+
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            studentId,
+            feature: "pedagogy_hub",
+            status: "active",
+            entitled: true,
+          }),
+          { status: 200, headers: responseHeaders }
+        );
+      }
+
       // POST /api/chat
       if (pathname === "/api/chat" && request.method === "POST") {
-        const authResult = await verifyAuthWorker(request, env, responseHeaders);
-        if (authResult instanceof Response) return authResult;
-        const studentId = authResult.user.uid;
+        const entitlementResult = await verifyEntitlementWorker(request, env, responseHeaders);
+        if (entitlementResult instanceof Response) return entitlementResult;
+        const studentId = entitlementResult.studentId;
 
         let chatReq: ChatRequest;
         try {
@@ -954,20 +1501,6 @@ export default {
           throw new Error("GEMINI_API_KEY is required.");
         }
 
-        const sub = await checkSubscription(env, studentId);
-        if (sub.status === "expired") {
-          return new Response(
-            JSON.stringify({
-              error: "TRIAL_EXPIRED",
-              message: "تکایە بەشداری بکە بۆ بەردەوامبوون",
-            }),
-            {
-              status: 403,
-              headers: responseHeaders,
-            }
-          );
-        }
-
         const chatResult = await ProviderAdapter.chat(env.GEMINI_API_KEY, chatReq, env);
 
         return new Response(
@@ -981,9 +1514,9 @@ export default {
 
       // POST /api/assessment
       if (pathname === "/api/assessment" && request.method === "POST") {
-        const authResult = await verifyAuthWorker(request, env, responseHeaders);
-        if (authResult instanceof Response) return authResult;
-        const studentId = authResult.user.uid;
+        const entitlementResult = await verifyEntitlementWorker(request, env, responseHeaders);
+        if (entitlementResult instanceof Response) return entitlementResult;
+        const studentId = entitlementResult.studentId;
 
         let assessReq: AssessmentRequest;
         try {
@@ -1046,9 +1579,9 @@ export default {
 
       // POST /api/report & /api/reports
       if ((pathname === "/api/report" || pathname === "/api/reports") && request.method === "POST") {
-        const authResult = await verifyAuthWorker(request, env, responseHeaders);
-        if (authResult instanceof Response) return authResult;
-        const studentId = authResult.user.uid;
+        const entitlementResult = await verifyEntitlementWorker(request, env, responseHeaders);
+        if (entitlementResult instanceof Response) return entitlementResult;
+        const studentId = entitlementResult.studentId;
 
         let reportReq: ReportRequest;
         try {
@@ -1097,9 +1630,9 @@ export default {
 
       // POST /api/study/ask
       if (pathname === "/api/study/ask" && request.method === "POST") {
-        const authResult = await verifyAuthWorker(request, env, responseHeaders);
-        if (authResult instanceof Response) return authResult;
-        const studentId = authResult.user.uid;
+        const entitlementResult = await verifyEntitlementWorker(request, env, responseHeaders);
+        if (entitlementResult instanceof Response) return entitlementResult;
+        const studentId = entitlementResult.studentId;
 
         let askReq: AskRequest;
         try {
@@ -1149,9 +1682,9 @@ export default {
 
       // POST /api/study/vision
       if (pathname === "/api/study/vision" && request.method === "POST") {
-        const authResult = await verifyAuthWorker(request, env, responseHeaders);
-        if (authResult instanceof Response) return authResult;
-        const studentId = authResult.user.uid;
+        const entitlementResult = await verifyEntitlementWorker(request, env, responseHeaders);
+        if (entitlementResult instanceof Response) return entitlementResult;
+        const studentId = entitlementResult.studentId;
 
         try {
           await enforceAiRateLimit(env, studentId);
@@ -1245,12 +1778,9 @@ export default {
 
       // GET /api/learning/mastery
       if (pathname === "/api/learning/mastery" && request.method === "GET") {
-        let studentId: string;
-        try {
-          studentId = await getWorkerAuthenticatedStudentId(request, env);
-        } catch {
-          return new Response(JSON.stringify({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." }), { status: 401, headers: responseHeaders });
-        }
+        const entitlementResult = await verifyEntitlementWorker(request, env, responseHeaders);
+        if (entitlementResult instanceof Response) return entitlementResult;
+        const studentId = entitlementResult.studentId;
 
         const reqStudentId = url.searchParams.get("studentId");
         if (reqStudentId && reqStudentId !== studentId) {
@@ -1264,12 +1794,9 @@ export default {
 
       // GET /api/learning/mastery/:conceptId
       if (pathname.startsWith("/api/learning/mastery/") && request.method === "GET") {
-        let studentId: string;
-        try {
-          studentId = await getWorkerAuthenticatedStudentId(request, env);
-        } catch {
-          return new Response(JSON.stringify({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." }), { status: 401, headers: responseHeaders });
-        }
+        const entitlementResult = await verifyEntitlementWorker(request, env, responseHeaders);
+        if (entitlementResult instanceof Response) return entitlementResult;
+        const studentId = entitlementResult.studentId;
 
         const reqStudentId = url.searchParams.get("studentId");
         if (reqStudentId && reqStudentId !== studentId) {
@@ -1289,12 +1816,9 @@ export default {
 
       // GET /api/learning/recommendations
       if (pathname === "/api/learning/recommendations" && request.method === "GET") {
-        let studentId: string;
-        try {
-          studentId = await getWorkerAuthenticatedStudentId(request, env);
-        } catch {
-          return new Response(JSON.stringify({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." }), { status: 401, headers: responseHeaders });
-        }
+        const entitlementResult = await verifyEntitlementWorker(request, env, responseHeaders);
+        if (entitlementResult instanceof Response) return entitlementResult;
+        const studentId = entitlementResult.studentId;
 
         const reqStudentId = url.searchParams.get("studentId");
         if (reqStudentId && reqStudentId !== studentId) {
@@ -1309,12 +1833,9 @@ export default {
 
       // POST /api/learning/events
       if (pathname === "/api/learning/events" && request.method === "POST") {
-        let studentId: string;
-        try {
-          studentId = await getWorkerAuthenticatedStudentId(request, env);
-        } catch {
-          return new Response(JSON.stringify({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." }), { status: 401, headers: responseHeaders });
-        }
+        const entitlementResult = await verifyEntitlementWorker(request, env, responseHeaders);
+        if (entitlementResult instanceof Response) return entitlementResult;
+        const studentId = entitlementResult.studentId;
 
         let bodyObj: Record<string, unknown>;
         let type: LearningEventType;
@@ -1349,12 +1870,9 @@ export default {
 
       // POST /api/learning/streak/complete-task
       if (pathname === "/api/learning/streak/complete-task" && request.method === "POST") {
-        let studentId: string;
-        try {
-          studentId = await getWorkerAuthenticatedStudentId(request, env);
-        } catch {
-          return new Response(JSON.stringify({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." }), { status: 401, headers: responseHeaders });
-        }
+        const entitlementResult = await verifyEntitlementWorker(request, env, responseHeaders);
+        if (entitlementResult instanceof Response) return entitlementResult;
+        const studentId = entitlementResult.studentId;
 
         const lp = new PersistentLearningRecordProvider(env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV, getPersistenceMode(env));
         let taskDate: string | undefined;
@@ -1371,12 +1889,9 @@ export default {
 
       // POST /api/learning/attempts
       if (pathname === "/api/learning/attempts" && request.method === "POST") {
-        let studentId: string;
-        try {
-          studentId = await getWorkerAuthenticatedStudentId(request, env);
-        } catch {
-          return new Response(JSON.stringify({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." }), { status: 401, headers: responseHeaders });
-        }
+        const entitlementResult = await verifyEntitlementWorker(request, env, responseHeaders);
+        if (entitlementResult instanceof Response) return entitlementResult;
+        const studentId = entitlementResult.studentId;
 
         let conceptId: string;
         let isCorrect: boolean;
@@ -1517,12 +2032,9 @@ export default {
 
       // POST /api/learning/sessions/start
       if (pathname === "/api/learning/sessions/start" && request.method === "POST") {
-        let studentId: string;
-        try {
-          studentId = await getWorkerAuthenticatedStudentId(request, env);
-        } catch {
-          return new Response(JSON.stringify({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." }), { status: 401, headers: responseHeaders });
-        }
+        const entitlementResult = await verifyEntitlementWorker(request, env, responseHeaders);
+        if (entitlementResult instanceof Response) return entitlementResult;
+        const studentId = entitlementResult.studentId;
 
         const session: LearningSession = {
           id: "ses_" + Math.random().toString(36).substring(2, 11) + "_" + Date.now(),
@@ -1540,12 +2052,9 @@ export default {
 
       // POST /api/learning/sessions/:sessionId/end
       if (pathname.startsWith("/api/learning/sessions/") && pathname.endsWith("/end") && request.method === "POST") {
-        let studentId: string;
-        try {
-          studentId = await getWorkerAuthenticatedStudentId(request, env);
-        } catch {
-          return new Response(JSON.stringify({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." }), { status: 401, headers: responseHeaders });
-        }
+        const entitlementResult = await verifyEntitlementWorker(request, env, responseHeaders);
+        if (entitlementResult instanceof Response) return entitlementResult;
+        const studentId = entitlementResult.studentId;
 
         const parts = pathname.split("/");
         const sessionId = decodeURIComponent(parts[parts.length - 2]);
@@ -1580,12 +2089,9 @@ export default {
 
       // POST /api/assessment/start
       if (pathname === "/api/assessment/start" && request.method === "POST") {
-        let studentId: string;
-        try {
-          studentId = await getWorkerAuthenticatedStudentId(request, env);
-        } catch {
-          return new Response(JSON.stringify({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." }), { status: 401, headers: responseHeaders });
-        }
+        const entitlementResult = await verifyEntitlementWorker(request, env, responseHeaders);
+        if (entitlementResult instanceof Response) return entitlementResult;
+        const studentId = entitlementResult.studentId;
 
         let unitId: string;
         let subjectId: string;
@@ -1674,12 +2180,9 @@ export default {
 
       // POST /api/assessment/submit
       if (pathname === "/api/assessment/submit" && request.method === "POST") {
-        let studentId: string;
-        try {
-          studentId = await getWorkerAuthenticatedStudentId(request, env);
-        } catch {
-          return new Response(JSON.stringify({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." }), { status: 401, headers: responseHeaders });
-        }
+        const entitlementResult = await verifyEntitlementWorker(request, env, responseHeaders);
+        if (entitlementResult instanceof Response) return entitlementResult;
+        const studentId = entitlementResult.studentId;
 
         let attemptId: string;
         let questionId: string;
@@ -1719,12 +2222,9 @@ export default {
 
       // POST /api/assessment/finish
       if (pathname === "/api/assessment/finish" && request.method === "POST") {
-        let studentId: string;
-        try {
-          studentId = await getWorkerAuthenticatedStudentId(request, env);
-        } catch {
-          return new Response(JSON.stringify({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." }), { status: 401, headers: responseHeaders });
-        }
+        const entitlementResult = await verifyEntitlementWorker(request, env, responseHeaders);
+        if (entitlementResult instanceof Response) return entitlementResult;
+        const studentId = entitlementResult.studentId;
 
         let attemptId: string;
         let blueprint: AssessmentBlueprint;
@@ -1760,12 +2260,9 @@ export default {
 
       // GET /api/assessment/attempts/:attemptId
       if (pathname.startsWith("/api/assessment/attempts/") && request.method === "GET") {
-        let studentId: string;
-        try {
-          studentId = await getWorkerAuthenticatedStudentId(request, env);
-        } catch {
-          return new Response(JSON.stringify({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." }), { status: 401, headers: responseHeaders });
-        }
+        const entitlementResult = await verifyEntitlementWorker(request, env, responseHeaders);
+        if (entitlementResult instanceof Response) return entitlementResult;
+        const studentId = entitlementResult.studentId;
 
         const parts = pathname.split("/");
         const attemptId = decodeURIComponent(parts[parts.length - 1]);
@@ -1788,6 +2285,8 @@ export default {
 
       // GET /api/assessment/questions?subject=...&grade=...
       if (pathname === "/api/assessment/questions" && request.method === "GET") {
+        const entitlementResult = await verifyEntitlementWorker(request, env, responseHeaders);
+        if (entitlementResult instanceof Response) return entitlementResult;
         const subjectParam = url.searchParams.get("subject") || "chemistry";
         const gradeParam = parseInt(url.searchParams.get("grade") || "12", 10);
         const questions = getQuestionsBySubject(subjectParam, gradeParam);
@@ -1796,12 +2295,9 @@ export default {
 
       // Planning routes
       if (pathname.startsWith("/api/planning")) {
-        let studentId: string;
-        try {
-          studentId = await getWorkerAuthenticatedStudentId(request, env);
-        } catch {
-          return new Response(JSON.stringify({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." }), { status: 401, headers: responseHeaders });
-        }
+        const entitlementResult = await verifyEntitlementWorker(request, env, responseHeaders);
+        if (entitlementResult instanceof Response) return entitlementResult;
+        const studentId = entitlementResult.studentId;
 
         try {
           const kv = env.LEARNING_RECORDS_KV || env.ZANA_LEARNING_KV;
@@ -1952,22 +2448,205 @@ export default {
 
       // GET /api/study/plan
       if (pathname === "/api/study/plan" && request.method === "GET") {
+        const entitlementResult = await verifyEntitlementWorker(request, env, responseHeaders);
+        if (entitlementResult instanceof Response) return entitlementResult;
         return handleStudyPlanRoute(request, env as never);
       }
 
       // POST /api/study/practice/snapshot
       if (pathname === "/api/study/practice/snapshot" && request.method === "POST") {
+        const entitlementResult = await verifyEntitlementWorker(request, env, responseHeaders);
+        if (entitlementResult instanceof Response) return entitlementResult;
         return handlePracticeSnapshotRoute(request, env as never);
       }
 
       // POST /api/study/practice/evaluate
       if (pathname === "/api/study/practice/evaluate" && request.method === "POST") {
+        const entitlementResult = await verifyEntitlementWorker(request, env, responseHeaders);
+        if (entitlementResult instanceof Response) return entitlementResult;
         return handlePracticeEvaluateRoute(request, env as never);
       }
 
       // GET /api/student/profile
       if (pathname === "/api/student/profile" && request.method === "GET") {
-        return handleStudentProfileRoute(request, env as never);
+        if (!env.DB) {
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              exists: false,
+              onboardingCompleted: false,
+              error: "DATABASE_UNAVAILABLE",
+              detail: "داتابەیسی بەرهەمهێنان بەردەست نییە. زانیارییەکان لەم کاتەدا ناکرێت بخوێندرێنەوە.",
+            }),
+            { status: 503, headers: responseHeaders }
+          );
+        }
+
+        const authResult = await verifyAuthWorker(request, env, responseHeaders);
+        if (authResult instanceof Response) return authResult;
+
+        const verifiedUid = authResult.user.uid;
+        const verifiedEmail = (authResult.user.email || "").trim().toLowerCase();
+
+        try {
+          let student = null;
+          try {
+            student = await env.DB.prepare(
+              `SELECT s.id, s.name, s.email, s.school_name, s.grade, u.stream
+               FROM students s
+               LEFT JOIN users u ON (u.id = s.id OR u.id = s.firebase_uid)
+               WHERE s.id = ? OR s.firebase_uid = ?
+               LIMIT 1`
+            ).bind(verifiedUid, verifiedUid).first<{
+              id: string;
+              name: string;
+              email: string;
+              school_name: string | null;
+              grade: string | null;
+              stream: string | null;
+            }>();
+          } catch (stuErr) {
+            if (!isMissingColumnError(stuErr) && !String((stuErr as Error)?.message || stuErr).toLowerCase().includes("no such table")) {
+              throw stuErr;
+            }
+            try {
+              student = await env.DB.prepare(
+                `SELECT id, name, email, school_name, grade
+                 FROM students
+                 WHERE id = ? OR firebase_uid = ?
+                 LIMIT 1`
+              ).bind(verifiedUid, verifiedUid).first<{
+                id: string;
+                name: string;
+                email: string;
+                school_name: string | null;
+                grade: string | null;
+                stream?: string | null;
+              }>();
+            } catch (stuErr2) {
+              if (!isMissingColumnError(stuErr2)) throw stuErr2;
+              student = await env.DB.prepare(
+                `SELECT id, name, email, school_name, grade
+                 FROM students
+                 WHERE id = ?
+                 LIMIT 1`
+              ).bind(verifiedUid).first<{
+                id: string;
+                name: string;
+                email: string;
+                school_name: string | null;
+                grade: string | null;
+                stream?: string | null;
+              }>();
+            }
+          }
+
+          if (!student || !student.school_name || student.school_name.trim().length === 0) {
+            return new Response(
+              JSON.stringify({
+                ok: true,
+                exists: Boolean(student),
+                onboardingCompleted: false,
+                student: student
+                  ? {
+                      id: student.id,
+                      name: student.name,
+                      email: student.email,
+                      schoolName: student.school_name || "",
+                      grade: student.grade || "12",
+                      stream: student.stream || "scientific",
+                    }
+                  : null,
+                subscription: null,
+              }),
+              { status: 200, headers: responseHeaders }
+            );
+          }
+
+          let sub = null;
+          try {
+            sub = await env.DB.prepare(
+              `SELECT status, trial_started_at, trial_ends_at, plan_id, updated_at
+               FROM subscriptions
+               WHERE user_id = ? OR (? != '' AND email IS NOT NULL AND LOWER(TRIM(email)) = ?)
+               ORDER BY CASE WHEN user_id = ? THEN 0 ELSE 1 END, trial_started_at ASC
+               LIMIT 1`
+            ).bind(verifiedUid, verifiedEmail, verifiedEmail, verifiedUid).first<{
+              status: string;
+              trial_started_at: number;
+              trial_ends_at: number;
+              plan_id: string | null;
+              updated_at: number;
+            }>();
+          } catch (subErr) {
+            if (!isMissingColumnError(subErr)) throw subErr;
+            sub = await env.DB.prepare(
+              `SELECT status, trial_started_at, trial_ends_at, plan_id, updated_at
+               FROM subscriptions
+               WHERE user_id = ?
+               LIMIT 1`
+            ).bind(verifiedUid).first<{
+              status: string;
+              trial_started_at: number;
+              trial_ends_at: number;
+              plan_id: string | null;
+              updated_at: number;
+            }>();
+          }
+
+          const now = Date.now();
+          let subStatus: "trial" | "active" | "expired" | "inactive" | "unavailable" = "trial";
+          if (sub) {
+            if (sub.status === "inactive") {
+              subStatus = "inactive";
+            } else if (sub.status === "active") {
+              subStatus = now > sub.trial_ends_at ? "expired" : "active";
+            } else if (sub.status === "trial") {
+              subStatus = now > sub.trial_ends_at ? "expired" : "trial";
+            } else {
+              subStatus = (sub.status as "trial" | "active" | "expired" | "inactive") || "expired";
+            }
+          }
+
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              exists: true,
+              onboardingCompleted: true,
+              student: {
+                id: student.id,
+                name: student.name,
+                email: student.email,
+                schoolName: student.school_name,
+                grade: student.grade || "12",
+                stream: student.stream || "scientific",
+              },
+              subscription: sub
+                ? {
+                    ok: true,
+                    status: subStatus,
+                    trial_started_at: sub.trial_started_at,
+                    trial_ends_at: sub.trial_ends_at,
+                    plan_id: sub.plan_id,
+                    days_remaining: Math.max(0, Math.ceil((sub.trial_ends_at - now) / (1000 * 60 * 60 * 24))),
+                    server_time: now,
+                  }
+                : null,
+            }),
+            { status: 200, headers: responseHeaders }
+          );
+        } catch (dbErr: unknown) {
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              exists: false,
+              onboardingCompleted: false,
+              error: "DATABASE_UNAVAILABLE",
+              detail: (dbErr as Error)?.message || "داتابەیسی بەرهەمهێنان بەردەست نییە. زانیارییەکان لەم کاتەدا ناکرێت بخوێندرێنەوە.",
+            }),
+            { status: 503, headers: responseHeaders }
+          );
+        }
       }
 
       // POST /api/feedback
@@ -2359,15 +3038,32 @@ export default {
           try {
             res = await env.DB.prepare(
               `SELECT s.user_id, s.status, s.trial_started_at, s.trial_ends_at, s.plan_id, s.updated_at,
-                      COALESCE(st.name, '') as user_name, COALESCE(st.email, '') as user_email
+                      COALESCE(NULLIF(st.name, ''), NULLIF(u.name, ''), '') as user_name,
+                      COALESCE(NULLIF(st.email, ''), NULLIF(u.email, ''), '') as user_email,
+                      COALESCE(NULLIF(st.phone, ''), NULLIF(u.phone, ''), '') as user_phone,
+                      COALESCE(NULLIF(st.school_name, ''), NULLIF(u.school_name, ''), '') as school_name
                FROM subscriptions s
-               LEFT JOIN students st ON s.user_id = st.id
+               LEFT JOIN students st ON (s.user_id = st.id OR s.user_id = st.firebase_uid)
+               LEFT JOIN users u ON (s.user_id = u.id)
                ORDER BY s.updated_at DESC LIMIT 200`
             ).bind().all<unknown>();
           } catch {
-            res = await env.DB.prepare(
-              "SELECT user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at FROM subscriptions ORDER BY updated_at DESC LIMIT 200"
-            ).bind().all<unknown>();
+            try {
+              res = await env.DB.prepare(
+                `SELECT s.user_id, s.status, s.trial_started_at, s.trial_ends_at, s.plan_id, s.updated_at,
+                        COALESCE(NULLIF(st.name, ''), '') as user_name,
+                        COALESCE(NULLIF(st.email, ''), '') as user_email,
+                        COALESCE(NULLIF(st.phone, ''), '') as user_phone,
+                        COALESCE(NULLIF(st.school_name, ''), '') as school_name
+                 FROM subscriptions s
+                 LEFT JOIN students st ON (s.user_id = st.id OR s.user_id = st.firebase_uid)
+                 ORDER BY s.updated_at DESC LIMIT 200`
+              ).bind().all<unknown>();
+            } catch {
+              res = await env.DB.prepare(
+                "SELECT user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at FROM subscriptions ORDER BY updated_at DESC LIMIT 200"
+              ).bind().all<unknown>();
+            }
           }
           return new Response(
             JSON.stringify({ ok: true, subscriptions: res?.results || [] }),
@@ -2466,6 +3162,126 @@ export default {
             JSON.stringify({
               ok: true,
               message: `ماوەی تاقیکردنەوەی هەژماری (${targetUserId}) بە سەرکەوتوویی بۆ ٣ ڕۆژ نوێکرایەوە.`,
+            }),
+            { status: 200, headers: responseHeaders }
+          );
+        } catch (dbErr: unknown) {
+          return new Response(
+            JSON.stringify({ error: "DATABASE_ERROR", detail: (dbErr as Error)?.message || String(dbErr) }),
+            { status: 500, headers: responseHeaders }
+          );
+        }
+      }
+
+      // POST /api/admin/subscriptions/update-student
+      if (pathname === "/api/admin/subscriptions/update-student" && request.method === "POST") {
+        if (!env.DB) {
+          return new Response(JSON.stringify({ error: "DB binding not configured" }), {
+            status: 500,
+            headers: responseHeaders,
+          });
+        }
+        try {
+          const body = (await request.json().catch(() => ({}))) as {
+            userId?: string;
+            email?: string;
+            name?: string;
+            grade?: string;
+            stream?: string;
+          };
+          const targetUserId = body?.userId?.trim();
+          if (!targetUserId) {
+            return new Response(JSON.stringify({ error: "userId is required" }), {
+              status: 400,
+              headers: responseHeaders,
+            });
+          }
+
+          const emailToSave = body?.email?.trim() || "";
+          const nameToSave = body?.name?.trim() || "قوتابی";
+          const gradeToSave = body?.grade?.trim() || "12";
+          const streamToSave = body?.stream?.trim() || "scientific";
+
+          try {
+            await env.DB.prepare(
+              `INSERT INTO students (id, name, email, grade, stream, password_hash)
+               VALUES (?, ?, ?, ?, ?, 'firebase_auth')
+               ON CONFLICT(id) DO UPDATE SET
+                 name = CASE WHEN excluded.name != '' THEN excluded.name ELSE students.name END,
+                 email = excluded.email,
+                 grade = excluded.grade,
+                 stream = excluded.stream`
+            ).bind(targetUserId, nameToSave, emailToSave, gradeToSave, streamToSave).run();
+          } catch {
+            try {
+              await env.DB.prepare(
+                `INSERT INTO students (id, firebase_uid, name, email, grade, created_at)
+                 VALUES (?, ?, ?, ?, ?, datetime('now'))
+                 ON CONFLICT(id) DO UPDATE SET
+                   name = COALESCE(NULLIF(excluded.name, ''), students.name),
+                   email = excluded.email,
+                   grade = COALESCE(NULLIF(excluded.grade, ''), students.grade)`
+              ).bind(targetUserId, targetUserId, nameToSave, emailToSave, gradeToSave).run();
+            } catch (fallbackErr) {
+              console.warn("[update-student] students fallback error:", fallbackErr);
+            }
+          }
+
+          try {
+            await env.DB.prepare(
+              `INSERT INTO users (id, email, name, role, grade, stream)
+               VALUES (?, ?, ?, 'student', ?, ?)
+               ON CONFLICT(id) DO UPDATE SET
+                 name = CASE WHEN excluded.name != '' THEN excluded.name ELSE users.name END,
+                 email = excluded.email,
+                 grade = excluded.grade,
+                 stream = excluded.stream`
+            ).bind(targetUserId, emailToSave, nameToSave, gradeToSave, streamToSave).run();
+          } catch (usersErr) {
+            console.warn("[update-student] users upsert notice:", usersErr);
+          }
+
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              message: `زانیارییەکانی قوتابی (${targetUserId}) بە سەرکەوتوویی لە داتابەیسی D1 نوێکرایەوە.`,
+            }),
+            { status: 200, headers: responseHeaders }
+          );
+        } catch (dbErr: unknown) {
+          return new Response(
+            JSON.stringify({ error: "DATABASE_ERROR", detail: (dbErr as Error)?.message || String(dbErr) }),
+            { status: 500, headers: responseHeaders }
+          );
+        }
+      }
+
+      // POST /api/admin/subscriptions/delete
+      if (pathname === "/api/admin/subscriptions/delete" && request.method === "POST") {
+        if (!env.DB) {
+          return new Response(JSON.stringify({ error: "DB binding not configured" }), {
+            status: 500,
+            headers: responseHeaders,
+          });
+        }
+        try {
+          const body = (await request.json().catch(() => ({}))) as { userId?: string };
+          const targetUserId = body?.userId?.trim();
+          if (!targetUserId) {
+            return new Response(JSON.stringify({ error: "userId is required" }), {
+              status: 400,
+              headers: responseHeaders,
+            });
+          }
+
+          await env.DB.prepare(
+            "DELETE FROM subscriptions WHERE user_id = ?"
+          ).bind(targetUserId).run();
+
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              message: `تۆماری بەشداریکردنی (${targetUserId}) بە سەرکەوتوویی سڕایەوە.`,
             }),
             { status: 200, headers: responseHeaders }
           );
@@ -2698,6 +3514,321 @@ export default {
         }
       }
 
+      // POST /api/student/onboard
+      if (pathname === "/api/student/onboard" && request.method === "POST") {
+        if (!env.DB) {
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              error: "DATABASE_UNAVAILABLE",
+              detail: "داتابەیسی بەرهەمهێنان بەردەست نییە. تۆمارکردن لەم کاتەدا ناکرێت.",
+            }),
+            { status: 503, headers: responseHeaders }
+          );
+        }
+
+        // Must be authenticated via Firebase ID token
+        const authResult = await verifyAuthWorker(request, env, responseHeaders);
+        if (authResult instanceof Response) return authResult;
+
+        const verifiedUid = authResult.user.uid;
+        const verifiedEmail = authResult.user.email || "";
+
+        try {
+          const body = (await request.json().catch(() => ({}))) as {
+            name?: string;
+            email?: string;
+            grade?: string;
+            stream?: string;
+            schoolName?: string;
+          };
+
+          const rawEmail = typeof body?.email === "string" ? body.email.trim() : "";
+          const normalizedEmail = (verifiedEmail || rawEmail).trim().toLowerCase();
+
+          if (!normalizedEmail) {
+            return new Response(
+              JSON.stringify({
+                ok: false,
+                error: "EMAIL_REQUIRED",
+                detail: "ئیمەیڵ پێویستە بۆ تەواوکردنی تۆمارکردن.",
+              }),
+              { status: 400, headers: responseHeaders }
+            );
+          }
+
+          const studentName = body?.name?.trim() || "";
+          if (!studentName || studentName.length < 2) {
+            return new Response(
+              JSON.stringify({
+                ok: false,
+                error: "INVALID_NAME",
+                detail: "تکایە ناوی سیانی بە دروستی بنووسە (لانیکەم ٢ پیت).",
+              }),
+              { status: 400, headers: responseHeaders }
+            );
+          }
+
+          const rawSchoolName = body?.schoolName?.trim() || "";
+          if (!rawSchoolName || rawSchoolName.length < 2) {
+            return new Response(
+              JSON.stringify({
+                ok: false,
+                error: "INVALID_SCHOOL_NAME",
+                detail: "تکایە ناوی قوتابخانەکەت بە دروستی بنووسە (لانیکەم ٢ پیت).",
+              }),
+              { status: 400, headers: responseHeaders }
+            );
+          }
+
+          const grade = body?.grade?.trim() || "12";
+          const stream = body?.stream?.trim() || "scientific";
+
+          // Enforce one registration per email: Reject if email already linked to another student UID
+          let duplicateStudent = null;
+          try {
+            duplicateStudent = await env.DB.prepare(
+              "SELECT id, firebase_uid FROM students WHERE LOWER(TRIM(email)) = ? AND id != ? AND (firebase_uid IS NULL OR firebase_uid != ?) LIMIT 1"
+            ).bind(normalizedEmail, verifiedUid, verifiedUid).first<{ id: string; firebase_uid?: string }>();
+          } catch (dupErr) {
+            if (!isMissingColumnError(dupErr)) throw dupErr;
+            duplicateStudent = await env.DB.prepare(
+              "SELECT id FROM students WHERE LOWER(TRIM(email)) = ? AND id != ? LIMIT 1"
+            ).bind(normalizedEmail, verifiedUid).first<{ id: string }>();
+          }
+
+          if (duplicateStudent) {
+            return new Response(
+              JSON.stringify({
+                ok: false,
+                error: "EMAIL_ALREADY_REGISTERED",
+                detail: "ئەم ئیمەیڵە پێشتر بەکارهاتووە. تکایە بچۆ ژوورەوە یان ئیمەیڵێکی تر بەکاربێنە.",
+              }),
+              { status: 409, headers: responseHeaders }
+            );
+          }
+
+          // Check for existing subscription for this UID or email
+          let existingSub = null;
+          try {
+            existingSub = await env.DB.prepare(
+              "SELECT user_id, status, trial_started_at, trial_ends_at, plan_id FROM subscriptions WHERE user_id = ? OR (? != '' AND email IS NOT NULL AND LOWER(TRIM(email)) = ?) ORDER BY CASE WHEN user_id = ? THEN 0 ELSE 1 END, trial_started_at ASC LIMIT 1"
+            ).bind(verifiedUid, normalizedEmail, normalizedEmail, verifiedUid).first<{
+              user_id: string;
+              status: string;
+              trial_started_at: number;
+              trial_ends_at: number;
+              plan_id: string | null;
+            }>();
+          } catch (subErr) {
+            if (!isMissingColumnError(subErr)) throw subErr;
+            existingSub = await env.DB.prepare(
+              "SELECT user_id, status, trial_started_at, trial_ends_at, plan_id FROM subscriptions WHERE user_id = ? LIMIT 1"
+            ).bind(verifiedUid).first<{
+              user_id: string;
+              status: string;
+              trial_started_at: number;
+              trial_ends_at: number;
+              plan_id: string | null;
+            }>();
+          }
+
+          // Enforce one trial per email: Reject if trial already activated under another UID
+          if (existingSub && existingSub.user_id !== verifiedUid) {
+            return new Response(
+              JSON.stringify({
+                ok: false,
+                error: "TRIAL_ALREADY_USED",
+                detail: "ئەم ئیمەیڵە پێشتر ماوەی خۆڕایی ٣ ڕۆژەی وەرگرتووە لەسەر هەژمارێکی تر.",
+              }),
+              { status: 409, headers: responseHeaders }
+            );
+          }
+
+          // Upsert student record permanently
+          try {
+            await env.DB.prepare(
+              `INSERT INTO students (id, name, email, grade, stream, school_name, password_hash)
+               VALUES (?, ?, ?, ?, ?, ?, 'firebase_auth')
+               ON CONFLICT(id) DO UPDATE SET
+                 name = CASE WHEN excluded.name != '' THEN excluded.name ELSE students.name END,
+                 email = CASE WHEN excluded.email != '' THEN excluded.email ELSE students.email END,
+                 grade = excluded.grade,
+                 stream = excluded.stream,
+                 school_name = excluded.school_name`
+            ).bind(
+              verifiedUid,
+              studentName,
+              normalizedEmail,
+              grade,
+              stream,
+              rawSchoolName
+            ).run();
+          } catch (stuErr1) {
+            if (isUniqueConstraintError(stuErr1)) {
+              return new Response(
+                JSON.stringify({
+                  ok: false,
+                  error: "EMAIL_ALREADY_REGISTERED",
+                  detail: "ئەم ئیمەیڵە پێشتر بەکارهاتووە. تکایە بچۆ ژوورەوە یان ئیمەیڵێکی تر بەکاربێنە.",
+                }),
+                { status: 409, headers: responseHeaders }
+              );
+            }
+            if (!isMissingColumnError(stuErr1)) throw stuErr1;
+            try {
+              await env.DB.prepare(
+                `INSERT INTO students (id, firebase_uid, name, email, grade, school_name, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+                 ON CONFLICT(id) DO UPDATE SET
+                   name = COALESCE(NULLIF(excluded.name, ''), students.name),
+                   email = COALESCE(NULLIF(excluded.email, ''), students.email),
+                   grade = COALESCE(NULLIF(excluded.grade, ''), students.grade),
+                   school_name = COALESCE(NULLIF(excluded.school_name, ''), students.school_name)`
+              ).bind(
+                verifiedUid,
+                verifiedUid,
+                studentName,
+                normalizedEmail,
+                grade,
+                rawSchoolName
+              ).run();
+            } catch (errFallback) {
+              if (isUniqueConstraintError(errFallback)) {
+                return new Response(
+                  JSON.stringify({
+                    ok: false,
+                    error: "EMAIL_ALREADY_REGISTERED",
+                    detail: "ئەم ئیمەیڵە پێشتر بەکارهاتووە. تکایە بچۆ ژوورەوە یان ئیمەیڵێکی تر بەکاربێنە.",
+                  }),
+                  { status: 409, headers: responseHeaders }
+                );
+              }
+              throw errFallback;
+            }
+          }
+
+          // Also upsert users table
+          try {
+            await env.DB.prepare(
+              `INSERT INTO users (id, email, name, role, grade, stream, school_name)
+               VALUES (?, ?, ?, 'student', ?, ?, ?)
+               ON CONFLICT(id) DO UPDATE SET
+                 name = CASE WHEN excluded.name != '' THEN excluded.name ELSE users.name END,
+                 email = CASE WHEN excluded.email != '' THEN excluded.email ELSE users.email END,
+                 grade = excluded.grade,
+                 stream = excluded.stream,
+                 school_name = excluded.school_name`
+            ).bind(
+              verifiedUid,
+              normalizedEmail,
+              studentName,
+              grade,
+              stream,
+              rawSchoolName
+            ).run();
+          } catch (errUsers) {
+            if (!isMissingColumnError(errUsers) && !isUniqueConstraintError(errUsers)) {
+              throw errUsers;
+            }
+            console.warn("[student/onboard] users upsert notice:", errUsers);
+          }
+
+          // One-time 3-day (72-hour) free trial initialization
+          const now = Date.now();
+          const trialDurationMs = 3 * 24 * 60 * 60 * 1000;
+          let startedAt: number;
+          let endsAt: number;
+          let currentStatus: string;
+
+          if (existingSub) {
+            // Existing subscription: PRESERVE original timestamps, NEVER reset!
+            startedAt = existingSub.trial_started_at;
+            endsAt = existingSub.trial_ends_at;
+            currentStatus = existingSub.status === "inactive" ? "inactive" : (now > endsAt ? "expired" : existingSub.status);
+            try {
+              await env.DB.prepare(
+                "UPDATE subscriptions SET email = ? WHERE user_id = ? AND (email IS NULL OR email = '')"
+              ).bind(normalizedEmail, verifiedUid).run();
+            } catch {
+              // ignore if email column not present or already owned
+            }
+          } else {
+            // Brand-new registration: Initialize 72-hour trial
+            startedAt = now;
+            endsAt = now + trialDurationMs;
+            currentStatus = "trial";
+            let insertRes;
+            try {
+              insertRes = await env.DB.prepare(
+                `INSERT INTO subscriptions (user_id, email, status, trial_started_at, trial_ends_at, plan_id, updated_at)
+                 VALUES (?, ?, 'trial', ?, ?, 'free_trial_3d', ?)
+                 ON CONFLICT(user_id) DO NOTHING`
+              ).bind(verifiedUid, normalizedEmail, startedAt, endsAt, now).run();
+            } catch (insErr) {
+              if (isUniqueConstraintError(insErr)) {
+                return new Response(
+                  JSON.stringify({
+                    ok: false,
+                    error: "TRIAL_ALREADY_USED",
+                    detail: "ئەم ئیمەیڵە پێشتر ماوەی خۆڕایی ٣ ڕۆژەی وەرگرتووە لەسەر هەژمارێکی تر.",
+                  }),
+                  { status: 409, headers: responseHeaders }
+                );
+              }
+              if (!isMissingColumnError(insErr)) throw insErr;
+              insertRes = await env.DB.prepare(
+                `INSERT INTO subscriptions (user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at)
+                 VALUES (?, 'trial', ?, ?, 'free_trial_3d', ?)
+                 ON CONFLICT(user_id) DO NOTHING`
+              ).bind(verifiedUid, startedAt, endsAt, now).run();
+            }
+
+            const changes = (insertRes as unknown as { meta?: { changes?: number } })?.meta?.changes ?? 1;
+            if (changes === 0) {
+              const raced = await env.DB.prepare(
+                "SELECT user_id, status, trial_started_at, trial_ends_at, plan_id FROM subscriptions WHERE user_id = ?"
+              ).bind(verifiedUid).first<{
+                user_id: string;
+                status: string;
+                trial_started_at: number;
+                trial_ends_at: number;
+                plan_id: string | null;
+              }>();
+              if (raced) {
+                startedAt = raced.trial_started_at;
+                endsAt = raced.trial_ends_at;
+                currentStatus = raced.status === "inactive" ? "inactive" : (now > endsAt ? "expired" : raced.status);
+              }
+            }
+          }
+
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              status: currentStatus,
+              trial_started_at: startedAt,
+              trial_ends_at: endsAt,
+              server_time: now,
+              time_remaining_ms: Math.max(0, endsAt - now),
+              school_name: rawSchoolName,
+              message: "زانیارییەکانت بە سەرکەوتوویی تۆمار کران و ماوەی تاقیکردنەوەی ٣ ڕۆژەت بۆ کارا کرا!",
+            }),
+            { status: 200, headers: responseHeaders }
+          );
+        } catch (err: unknown) {
+          console.error("[student/onboard error]", err);
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              error: "DATABASE_UNAVAILABLE",
+              detail: (err as Error)?.message || "داتابەیسی بەرهەمهێنان لەم کاتەدا بەردەست نییە. تۆمارکردن لەم کاتەدا ناکرێت.",
+            }),
+            { status: 503, headers: responseHeaders }
+          );
+        }
+      }
+
       // POST /api/trial/start (and /api/students/register)
       if ((pathname === "/api/trial/start" || pathname === "/api/students/register") && request.method === "POST") {
         if (!env.DB) {
@@ -2737,13 +3868,76 @@ export default {
 
           const studentId = verifiedUid;
           const rawEmail = typeof body?.email === "string" ? body.email.trim() : "";
-          const studentEmail = verifiedEmail || rawEmail;
+          const normalizedEmail = (verifiedEmail || rawEmail).trim().toLowerCase();
           const studentName = body?.name?.trim() || "قوتابی";
           const grade = body?.grade?.trim() || "12";
           const stream = body?.stream?.trim() || "scientific";
 
           const now = Date.now();
           const trialDurationMs = 3 * 24 * 60 * 60 * 1000; // 3 days
+
+          // Enforce one registration per email across UIDs
+          if (normalizedEmail) {
+            let duplicateStudent = null;
+            try {
+              duplicateStudent = await env.DB.prepare(
+                "SELECT id, firebase_uid FROM students WHERE LOWER(TRIM(email)) = ? AND id != ? AND (firebase_uid IS NULL OR firebase_uid != ?) LIMIT 1"
+              ).bind(normalizedEmail, studentId, studentId).first<{ id: string; firebase_uid?: string }>();
+            } catch (dupErr) {
+              if (!isMissingColumnError(dupErr)) throw dupErr;
+              duplicateStudent = await env.DB.prepare(
+                "SELECT id FROM students WHERE LOWER(TRIM(email)) = ? AND id != ? LIMIT 1"
+              ).bind(normalizedEmail, studentId).first<{ id: string }>();
+            }
+            if (duplicateStudent) {
+              return new Response(
+                JSON.stringify({
+                  ok: false,
+                  error: "EMAIL_ALREADY_REGISTERED",
+                  detail: "ئەم ئیمەیڵە پێشتر بەکارهاتووە. تکایە بچۆ ژوورەوە یان ئیمەیڵێکی تر بەکاربێنە.",
+                }),
+                { status: 409, headers: responseHeaders }
+              );
+            }
+          }
+
+          // Check for existing subscription for this UID or normalized email
+          let existingSub = null;
+          try {
+            existingSub = await env.DB.prepare(
+              "SELECT user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at FROM subscriptions WHERE user_id = ? OR (? != '' AND email IS NOT NULL AND LOWER(TRIM(email)) = ?) ORDER BY CASE WHEN user_id = ? THEN 0 ELSE 1 END, trial_started_at ASC LIMIT 1"
+            ).bind(studentId, normalizedEmail, normalizedEmail, studentId).first<{
+              user_id: string;
+              status: string;
+              trial_started_at: number;
+              trial_ends_at: number;
+              plan_id: string | null;
+              updated_at: number;
+            }>();
+          } catch (subErr) {
+            if (!isMissingColumnError(subErr)) throw subErr;
+            existingSub = await env.DB.prepare(
+              "SELECT user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at FROM subscriptions WHERE user_id = ? LIMIT 1"
+            ).bind(studentId).first<{
+              user_id: string;
+              status: string;
+              trial_started_at: number;
+              trial_ends_at: number;
+              plan_id: string | null;
+              updated_at: number;
+            }>();
+          }
+
+          if (existingSub && existingSub.user_id !== studentId) {
+            return new Response(
+              JSON.stringify({
+                ok: false,
+                error: "TRIAL_ALREADY_USED",
+                detail: "ئەم ئیمەیڵە پێشتر ماوەی خۆڕایی ٣ ڕۆژەی وەرگرتووە لەسەر هەژمارێکی تر.",
+              }),
+              { status: 409, headers: responseHeaders }
+            );
+          }
 
           // 1. Upsert student metadata into students table
           try {
@@ -2755,45 +3949,69 @@ export default {
                  email = CASE WHEN excluded.email != '' THEN excluded.email ELSE students.email END,
                  grade = excluded.grade,
                  stream = excluded.stream`
-            ).bind(studentId, studentName, studentEmail, grade, stream).run();
-          } catch {
+            ).bind(studentId, studentName, normalizedEmail, grade, stream).run();
+          } catch (stuErr1) {
+            if (isUniqueConstraintError(stuErr1)) {
+              return new Response(
+                JSON.stringify({
+                  ok: false,
+                  error: "EMAIL_ALREADY_REGISTERED",
+                  detail: "ئەم ئیمەیڵە پێشتر بەکارهاتووە. تکایە بچۆ ژوورەوە یان ئیمەیڵێکی تر بەکاربێنە.",
+                }),
+                { status: 409, headers: responseHeaders }
+              );
+            }
+            if (!isMissingColumnError(stuErr1)) throw stuErr1;
             try {
               await env.DB.prepare(
                 `INSERT INTO students (id, firebase_uid, name, email, grade, created_at)
                  VALUES (?, ?, ?, ?, ?, datetime('now'))
                  ON CONFLICT(id) DO UPDATE SET
-                   name = COALESCE(excluded.name, students.name),
-                   email = COALESCE(excluded.email, students.email),
-                   grade = COALESCE(excluded.grade, students.grade)`
-              ).bind(studentId, studentId, studentName, studentEmail, grade).run();
-            } catch {
-              try {
-                await env.DB.prepare(
-                  `INSERT INTO students (id, firebase_uid, name, grade, created_at)
-                   VALUES (?, ?, ?, ?, datetime('now'))
-                   ON CONFLICT(id) DO UPDATE SET
-                     name = COALESCE(excluded.name, students.name),
-                     grade = COALESCE(excluded.grade, students.grade)`
-                ).bind(studentId, studentId, studentName, grade).run();
-              } catch (fallbackErr) {
-                console.warn("[trial/start] Could not upsert into students table:", fallbackErr);
+                   name = COALESCE(NULLIF(excluded.name, ''), students.name),
+                   email = COALESCE(NULLIF(excluded.email, ''), students.email),
+                   grade = COALESCE(NULLIF(excluded.grade, ''), students.grade)`
+              ).bind(studentId, studentId, studentName, normalizedEmail, grade).run();
+            } catch (stuErr2) {
+              if (isUniqueConstraintError(stuErr2)) {
+                return new Response(
+                  JSON.stringify({
+                    ok: false,
+                    error: "EMAIL_ALREADY_REGISTERED",
+                    detail: "ئەم ئیمەیڵە پێشتر بەکارهاتووە. تکایە بچۆ ژوورەوە یان ئیمەیڵێکی تر بەکاربێنە.",
+                  }),
+                  { status: 409, headers: responseHeaders }
+                );
               }
+              throw stuErr2;
             }
           }
 
           // 2. ONE-TIME TRIAL LIFECYCLE: Prevent repeated trial resets or extensions
-          const existingSub = await env.DB.prepare(
-            "SELECT user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at FROM subscriptions WHERE user_id = ?"
-          ).bind(studentId).first<{
-            user_id: string;
-            status: string;
-            trial_started_at: number;
-            trial_ends_at: number;
-            plan_id: string | null;
-            updated_at: number;
-          }>();
-
           if (existingSub) {
+            if (normalizedEmail) {
+              try {
+                await env.DB.prepare(
+                  "UPDATE subscriptions SET email = ? WHERE user_id = ? AND (email IS NULL OR email = '')"
+                ).bind(normalizedEmail, studentId).run();
+              } catch {
+                // ignore if email column not present
+              }
+            }
+
+            if (existingSub.status === "inactive") {
+              return new Response(
+                JSON.stringify({
+                  ok: false,
+                  error: "SUBSCRIPTION_INACTIVE",
+                  detail: "هەژمارەکەت لەم کاتەدا ناچالاکە. تکایە پەیوەندی بە بەڕێوەبەرەوە بکە.",
+                  status: "inactive",
+                  trial_started_at: existingSub.trial_started_at,
+                  trial_ends_at: existingSub.trial_ends_at,
+                }),
+                { status: 403, headers: responseHeaders }
+              );
+            }
+
             // Case A: User already has an active paid subscription
             if (existingSub.status === "active") {
               if (now > existingSub.trial_ends_at) {
@@ -2861,13 +4079,33 @@ export default {
             );
           }
 
-          // Case D: First-time student — atomic insert with ON CONFLICT DO NOTHING
+          // Case D: First-time student — atomic insert with ON CONFLICT DO NOTHING and normalized email
           const trialEndsAt = now + trialDurationMs;
-          const insertRes = await env.DB.prepare(
-            `INSERT INTO subscriptions (user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at)
-             VALUES (?, 'trial', ?, ?, 'free_trial_3d', ?)
-             ON CONFLICT(user_id) DO NOTHING`
-          ).bind(studentId, now, trialEndsAt, now).run();
+          let insertRes;
+          try {
+            insertRes = await env.DB.prepare(
+              `INSERT INTO subscriptions (user_id, email, status, trial_started_at, trial_ends_at, plan_id, updated_at)
+               VALUES (?, ?, 'trial', ?, ?, 'free_trial_3d', ?)
+               ON CONFLICT(user_id) DO NOTHING`
+            ).bind(studentId, normalizedEmail || null, now, trialEndsAt, now).run();
+          } catch (insErr) {
+            if (isUniqueConstraintError(insErr)) {
+              return new Response(
+                JSON.stringify({
+                  ok: false,
+                  error: "TRIAL_ALREADY_USED",
+                  detail: "ئەم ئیمەیڵە پێشتر ماوەی خۆڕایی ٣ ڕۆژەی وەرگرتووە لەسەر هەژمارێکی تر.",
+                }),
+                { status: 409, headers: responseHeaders }
+              );
+            }
+            if (!isMissingColumnError(insErr)) throw insErr;
+            insertRes = await env.DB.prepare(
+              `INSERT INTO subscriptions (user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at)
+               VALUES (?, 'trial', ?, ?, 'free_trial_3d', ?)
+               ON CONFLICT(user_id) DO NOTHING`
+            ).bind(studentId, now, trialEndsAt, now).run();
+          }
 
           const changes = (insertRes as unknown as { meta?: { changes?: number } })?.meta?.changes ?? 1;
           if (changes === 0) {
@@ -2900,8 +4138,8 @@ export default {
         } catch (dbErr: unknown) {
           console.error("[trial/start error]", dbErr);
           return new Response(
-            JSON.stringify({ error: "DATABASE_ERROR", detail: (dbErr as Error)?.message || String(dbErr) }),
-            { status: 500, headers: responseHeaders }
+            JSON.stringify({ error: "DATABASE_UNAVAILABLE", detail: (dbErr as Error)?.message || String(dbErr) }),
+            { status: 503, headers: responseHeaders }
           );
         }
       }
@@ -2945,7 +4183,10 @@ export default {
           );
         }
         try {
-          const subResult = await checkSubscription(env, userId);
+          const targetEmail = userId === verifiedUid ? (authResult.user.email || authResult.user.claims?.phone_number) : undefined;
+          const targetName = userId === verifiedUid ? authResult.user.claims?.name : undefined;
+          const normalizedTargetEmail = (targetEmail || "").trim().toLowerCase();
+          const subResult = await checkSubscription(env, userId, targetEmail, targetName);
           if (subResult.status === "unavailable") {
             return new Response(
               JSON.stringify({
@@ -2958,28 +4199,56 @@ export default {
             );
           }
 
-          const row = await env.DB.prepare(
-            "SELECT status, trial_started_at, trial_ends_at, plan_id, updated_at FROM subscriptions WHERE user_id = ?"
-          ).bind(userId).first<{
-            status: string;
-            trial_started_at: number;
-            trial_ends_at: number;
-            plan_id: string | null;
-            updated_at: number;
-          }>();
+          let row = null;
+          try {
+            row = await env.DB.prepare(
+              "SELECT status, trial_started_at, trial_ends_at, plan_id, updated_at FROM subscriptions WHERE user_id = ? OR (? != '' AND email IS NOT NULL AND LOWER(TRIM(email)) = ?) ORDER BY CASE WHEN user_id = ? THEN 0 ELSE 1 END, trial_started_at ASC LIMIT 1"
+            ).bind(userId, normalizedTargetEmail, normalizedTargetEmail, userId).first<{
+              status: string;
+              trial_started_at: number;
+              trial_ends_at: number;
+              plan_id: string | null;
+              updated_at: number;
+            }>();
+          } catch (rowErr) {
+            if (!isMissingColumnError(rowErr)) throw rowErr;
+            row = await env.DB.prepare(
+              "SELECT status, trial_started_at, trial_ends_at, plan_id, updated_at FROM subscriptions WHERE user_id = ?"
+            ).bind(userId).first<{
+              status: string;
+              trial_started_at: number;
+              trial_ends_at: number;
+              plan_id: string | null;
+              updated_at: number;
+            }>();
+          }
 
           const now = Date.now();
-          const endsAt = row?.trial_ends_at || (now + 3 * 86400000);
-          const daysRemaining = Math.max(0, Math.ceil((endsAt - now) / (24 * 60 * 60 * 1000)));
+          const fallbackEnd = (subResult.status === "expired" || subResult.status === "inactive") ? 0 : (now + 3 * 86400000);
+          const endsAt = row?.trial_ends_at ?? fallbackEnd;
+          const daysRemaining = subResult.status === "expired" || subResult.status === "inactive"
+            ? 0
+            : Math.max(0, Math.ceil((endsAt - now) / (24 * 60 * 60 * 1000)));
+          const timeRemainingMs = subResult.status === "expired" || subResult.status === "inactive"
+            ? 0
+            : Math.max(0, endsAt - now);
+          const isExpired = subResult.status === "expired" || (subResult.status !== "inactive" && endsAt <= now);
+          const trialActive = subResult.status === "trial" && endsAt > now;
+          const subscriptionActive = subResult.status === "active" && endsAt > now;
 
           return new Response(
             JSON.stringify({
               ok: true,
               status: subResult.status,
-              trial_started_at: row?.trial_started_at || now,
+              trial_started_at: row?.trial_started_at ?? 0,
               trial_ends_at: endsAt,
               plan_id: row?.plan_id || null,
               days_remaining: daysRemaining,
+              server_time: now,
+              time_remaining_ms: timeRemainingMs,
+              trial_active: trialActive,
+              subscription_active: subscriptionActive,
+              is_expired: isExpired,
             }),
             { status: 200, headers: responseHeaders }
           );
@@ -3165,7 +4434,8 @@ export default {
 
         // If specific userId requested, prevent snooping other users' receipts
         const reqUserId = url.searchParams.get("userId")?.trim();
-        if (reqUserId && reqUserId !== verifiedUserId && authResult.user.email !== "addmin.official.idg@gmail.com") {
+        const isRequesterAdmin = isAuthoritativeAdmin(authResult.user);
+        if (reqUserId && reqUserId !== verifiedUserId && !isRequesterAdmin) {
           return new Response(
             JSON.stringify({
               error: "FORBIDDEN",
@@ -3687,6 +4957,8 @@ export default {
 
       // /api/study-rooms*
       if (pathname.startsWith("/api/study-rooms")) {
+        const entitlementResult = await verifyEntitlementWorker(request, env, responseHeaders);
+        if (entitlementResult instanceof Response) return entitlementResult;
         const roomsRes = await handleStudyRoomsRoute(request);
         // Ensure CORS headers applied
         const mergedHeaders = new Headers(roomsRes.headers);

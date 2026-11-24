@@ -148,6 +148,8 @@ export interface SubscriptionRecord {
   updated_at: number;
   user_name?: string | null;
   user_email?: string | null;
+  user_phone?: string | null;
+  school_name?: string | null;
 }
 
 export async function getAdminSubscriptions(): Promise<{ ok: boolean; subscriptions: SubscriptionRecord[] }> {
@@ -184,6 +186,35 @@ export async function resetUserTrial(
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { detail?: string; error?: string };
     throw new Error(data.detail || data.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function updateAdminStudentProfile(
+  userId: string,
+  data: { email?: string; name?: string; grade?: string; stream?: string }
+): Promise<{ ok: boolean; message: string }> {
+  const res = await adminFetch("/api/admin/subscriptions/update-student", {
+    method: "POST",
+    body: JSON.stringify({ userId, ...data }),
+  });
+  if (!res.ok) {
+    const errData = (await res.json().catch(() => ({}))) as { detail?: string; error?: string };
+    throw new Error(errData.detail || errData.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function deleteAdminSubscription(
+  userId: string
+): Promise<{ ok: boolean; message: string }> {
+  const res = await adminFetch("/api/admin/subscriptions/delete", {
+    method: "POST",
+    body: JSON.stringify({ userId }),
+  });
+  if (!res.ok) {
+    const errData = (await res.json().catch(() => ({}))) as { detail?: string; error?: string };
+    throw new Error(errData.detail || errData.error || `HTTP ${res.status}`);
   }
   return res.json();
 }

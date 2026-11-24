@@ -48,9 +48,11 @@ describe("Admin Guard and 3-Layer Protection System", () => {
     assert.strictEqual(res.ok, true);
   });
 
-  test("verifyAdmin - Accepts token for designated admin email addmin.official.idg@gmail.com", async () => {
+  test("verifyAdmin - Accepts token for designated admin email addmin.official.idg@gmail.com with custom claim", async () => {
     const token = createMockToken({
       email: "addmin.official.idg@gmail.com",
+      admin: true,
+      role: "admin",
       sub: "admin-uid-999",
       aud: "gen-lang-client-0009572581",
       iss: "https://securetoken.google.com/gen-lang-client-0009572581",
@@ -63,6 +65,23 @@ describe("Admin Guard and 3-Layer Protection System", () => {
     assert.strictEqual(res.ok, true);
     assert.strictEqual(res.email, "addmin.official.idg@gmail.com");
     assert.strictEqual(res.uid, "admin-uid-999");
+  });
+
+  test("verifyAdmin - Strictly rejects designated admin email addmin.official.idg@gmail.com if custom admin claim is missing (anti-spoofing)", async () => {
+    const token = createMockToken({
+      email: "addmin.official.idg@gmail.com",
+      role: "student",
+      sub: "spoofed-uid-999",
+      aud: "gen-lang-client-0009572581",
+      iss: "https://securetoken.google.com/gen-lang-client-0009572581",
+    });
+    const req = new Request("https://example.com/api/admin/brain/status", {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const res = await verifyAdmin(req, {});
+    assert.strictEqual(res.ok, false);
+    assert.match(res.error || "", /email alone cannot grant admin privileges/i);
   });
 
   test("verifyAdmin - Accepts token with custom claim admin: true", async () => {

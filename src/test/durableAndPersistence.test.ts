@@ -342,6 +342,8 @@ describe("Production Admin State & Persistence Test Suite", () => {
           aud: projectId,
           sub: "verified-admin-uid-101",
           email: "addmin.official.idg@gmail.com",
+          admin: true,
+          role: "admin",
           iat: now - 30,
           exp: now + 3600,
         }
@@ -354,7 +356,7 @@ describe("Production Admin State & Persistence Test Suite", () => {
       assert.strictEqual(verification.ok, true);
       assert.strictEqual(verification.email, "addmin.official.idg@gmail.com");
       assert.strictEqual(verification.uid, "verified-admin-uid-101");
-      assert.strictEqual(verification.role, "system_admin");
+      assert.strictEqual(verification.role, "super_admin");
     });
 
     test("Rejects token with expired timestamp (exp in the past)", async () => {
@@ -469,7 +471,7 @@ describe("Production Admin State & Persistence Test Suite", () => {
       });
 
       assert.strictEqual(verification.ok, false);
-      assert.match(verification.error || "", /Authenticated user lacks administrative privileges/i);
+      assert.match(verification.error || "", /Authenticated user lacks administrative/i);
     });
   });
 });

@@ -13,11 +13,15 @@ import {
   ApplicationVerifier,
   ConfirmationResult,
   signInWithPhoneNumber as firebaseSignInWithPhoneNumber,
+  PhoneAuthProvider,
+  linkWithCredential,
+  signInWithCustomToken,
 } from "firebase/auth";
 import { getFirebaseAuth } from "./firebase.ts";
 import { verifyFirebaseIdToken, VerifiedTokenClaims } from "../server/auth/tokenVerification.ts";
+import { formatIraqiPhone, isIraqiPhoneValid, normalizeDigits } from "./phoneUtils.ts";
 
-export { verifyFirebaseIdToken, type VerifiedTokenClaims };
+export { verifyFirebaseIdToken, type VerifiedTokenClaims, formatIraqiPhone, isIraqiPhoneValid, normalizeDigits };
 
 export const FIREBASE_ERRORS_KU: Record<string, string> = {
   "auth/user-not-found": "ئەم ئیمەیڵە تۆمار نەکراوە.",
@@ -29,15 +33,23 @@ export const FIREBASE_ERRORS_KU: Record<string, string> = {
   "auth/email-already-in-use": "ئەم ئیمەیڵە پێشتر تۆمار کراوە.",
   "auth/weak-password": "وشەی نهێنی دەبێت لانیکەم ٦ پیت بێت.",
   "auth/too-many-requests": "هەوڵی زۆر دراوە. تکایە کەمێکی تر تاقی بکەرەوە.",
-  "auth/invalid-phone-number": "ژمارەی مۆبایل دروست نییە. فۆرماتی پێویستی: +9647XXXXXXXX",
-  "auth/code-expired": "کۆدی دڵنیایی کاتی تەواو بووە. دووبارە هەوڵ بدە.",
+  "auth/invalid-phone-number": "ژمارەی مۆبایل دروست نییە. فۆرماتی پێویست: +9647XXXXXXXX",
+  "auth/code-expired": "کۆدی دڵنیایی کاتی تەواو بووە. تکایە لە سەرەتاوە هەوڵ بدەوە.",
   "auth/invalid-verification-code": "کۆدی دڵنیایی هەڵەیە. تکایە دووبارە بپشکنە.",
   "auth/missing-phone-number": "تکایە ژمارەی مۆبایلەکەت بنووسە.",
-  "auth/quota-exceeded": "زۆر جار هەوڵی نێردنی کۆد دراوە. دواتر تاقی بکەرەوە.",
+  "auth/missing-verification-code": "تکایە کۆدی دڵنیایی بنووسە.",
+  "auth/missing-verification-id": "ناسنامەی دڵنیایی نەدۆزرایەوە. تکایە سەرلەنوێ کۆد داوا بکە.",
+  "auth/quota-exceeded": "زۆر جار هەوڵی نێردنی کورتەنامە دراوە. دواتر تاقی بکەرەوە (پێویستی بە پلانی فایەربەیس هەیە).",
+  "auth/captcha-check-failed": "پشکنینی دڵنیایی (reCAPTCHA) سەرکەوتوو نەبوو. تکایە دووبارە هەوڵ بدەوە.",
+  "auth/invalid-app-credential": "ناسنامەی بەرنامە لە فایەربەیس نادروستە یان ڕێگەپێنەدراوە.",
+  "auth/session-expired": "کاتی ئەم دانیشتنە بەسەرچووە. تکایە لە سەرەتاوە داوای کۆد بکەرەوە.",
+  "auth/phone-number-already-exists": "ئەم ژمارە مۆبایلە پێشتر لەگەڵ هەژمارێکی تر تۆمار کراوە.",
+  "auth/credential-already-in-use": "ئەم زانیارییە پێشتر لەگەڵ هەژمارێکی تر بەستراوەتەوە.",
+  "auth/app-not-authorized": "ئەم دۆمەینە لە فایەربەیس مۆڵەتی ناردنی کورتەنامەی پێنەدراوە (Authorized Domains).",
   "auth/popup-closed-by-user": "پەنجەرەی چوونەژوورەوە لەلایەن تۆوە داخرایەوە.",
   "auth/popup-blocked": "پەنجەرەی پۆپ-ئەپ بەربەست کراوە. تکایە ڕێگە بە پەنجەرەکە بدە.",
   "auth/cancelled-popup-request": "داواکاری چوونەژوورەوە هەڵوەشێنرایەوە.",
-  "auth/operation-not-allowed": "چوونەژوورەوە بەم شێوازە لە ئێستادا ناچالاکە.",
+  "auth/operation-not-allowed": "چوونەژوورەوە بەم شێوازە لە ئێستادا ناچالاکە (Sign-in Method لە فایەربەیس چالاک بکە).",
   "auth/admin-restricted-operation": "ئەم کردەیە پێویستی بە مۆڵەتی باڵاترە.",
   "auth/invalid-api-key": "کلیل (API Key)ی فایەربەیس دیاری نەکراوە یان نادروستە.",
   "auth/api-key-not-valid": "کلیل (API Key)ی فایەربەیس دیاری نەکراوە یان نادروستە.",
@@ -406,6 +418,34 @@ export async function startStudentTrial(
 let _confirmationResult: ConfirmationResult | null = null;
 
 /**
+ * Clear existing reCAPTCHA widget and container DOM
+ */
+export function clearRecaptcha(containerId?: string): void {
+  try {
+    const win = typeof window !== "undefined" ? (window as unknown as Record<string, unknown>) : null;
+    const existing = win?.__zanaRecaptcha as { clear?: () => void } | undefined;
+    if (existing && typeof existing.clear === "function") {
+      try {
+        existing.clear();
+      } catch {
+        /* ignore */
+      }
+    }
+    if (win) {
+      delete win.__zanaRecaptcha;
+    }
+    if (containerId && typeof document !== "undefined") {
+      const container = document.getElementById(containerId);
+      if (container) {
+        container.innerHTML = "";
+      }
+    }
+  } catch (e) {
+    console.warn("[Phone Auth] clearRecaptcha error:", e);
+  }
+}
+
+/**
  * Setup invisible reCAPTCHA verifier.
  * containerId: ID of a div in the DOM (can be hidden)
  */
@@ -413,29 +453,21 @@ export function setupRecaptcha(containerId: string): RecaptchaVerifier | null {
   const auth = getFirebaseAuth();
   if (!auth) return null;
   try {
-    // Clear any existing reCAPTCHA
-    const existing = (window as unknown as Record<string, RecaptchaVerifier>).__zanaRecaptcha;
-    if (existing) {
-      try {
-        existing.clear();
-      } catch {
-        /* ignore */
-      }
-    }
-    const container = typeof document !== "undefined" ? document.getElementById(containerId) : null;
-    if (container) {
-      container.innerHTML = "";
-    }
+    clearRecaptcha(containerId);
+
     const verifier = new RecaptchaVerifier(auth, containerId, {
       size: "invisible",
       callback: () => {
         /* reCAPTCHA solved */
       },
       "expired-callback": () => {
-        /* expired */
+        /* expired - clear to allow instant retry */
+        clearRecaptcha(containerId);
       },
     });
-    (window as unknown as Record<string, unknown>).__zanaRecaptcha = verifier;
+    if (typeof window !== "undefined") {
+      (window as unknown as Record<string, unknown>).__zanaRecaptcha = verifier;
+    }
     return verifier;
   } catch (err) {
     console.warn("[Phone Auth] RecaptchaVerifier setup failed:", err);
@@ -443,47 +475,271 @@ export function setupRecaptcha(containerId: string): RecaptchaVerifier | null {
   }
 }
 
+let _cloudflareVerificationId: string | null = null;
+let _pendingPhone: string | null = null;
+
 /**
- * Send OTP to phone number.
- * phoneNumber must be in E.164 format: +9647XXXXXXXX
+ * Send OTP via Cloudflare Worker D1 OTP engine.
  */
-export async function sendPhoneOtp(
-  phoneNumber: string,
-  appVerifier: ApplicationVerifier
-): Promise<{ success: boolean; error?: string }> {
-  const auth = getFirebaseAuth();
-  if (!auth) return { success: false, error: "Firebase Auth ئامادە نییە" };
+export async function sendCloudflarePhoneOtp(
+  phoneNumber: string
+): Promise<{ success: boolean; formattedPhone?: string; verificationId?: string; cooldownSeconds?: number; error?: string; status?: string }> {
+  const formatted = formatIraqiPhone(phoneNumber);
+  if (!isIraqiPhoneValid(formatted)) {
+    return {
+      success: false,
+      error: FIREBASE_ERRORS_KU["auth/invalid-phone-number"] || "ژمارەی مۆبایل دروست نییە. فۆرماتی پێویست: 07501234567",
+    };
+  }
 
   try {
-    _confirmationResult = await firebaseSignInWithPhoneNumber(
-      auth,
-      phoneNumber,
-      appVerifier
-    );
-    return { success: true };
-  } catch (err) {
-    _confirmationResult = null;
-    const msg = getErrorMessage(err);
-    return { success: false, error: msg };
+    const res = await fetch("/api/auth/phone/send-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: formatted }),
+    });
+
+    const data = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      status?: string;
+      error?: string;
+      detail?: string;
+      verificationId?: string;
+      cooldownSeconds?: number;
+    };
+
+    if (res.ok && data.ok && data.verificationId) {
+      _cloudflareVerificationId = data.verificationId;
+      _pendingPhone = formatted;
+      return {
+        success: true,
+        formattedPhone: formatted,
+        verificationId: data.verificationId,
+        cooldownSeconds: data.cooldownSeconds || 60,
+      };
+    }
+
+    return {
+      success: false,
+      status: data.status,
+      error: data.detail || data.error || "ناردنی کۆدی کورتەنامە سەرکەوتوو نەبوو.",
+      cooldownSeconds: data.cooldownSeconds,
+    };
+  } catch {
+    return {
+      success: false,
+      error: "کێشەی پەیوەندی لەگەڵ ڕاژەکار هەیە.",
+    };
   }
 }
 
 /**
+ * Verify OTP via Cloudflare Worker and sign in with Firebase Custom Token.
+ */
+export async function verifyCloudflarePhoneOtp(
+  code: string,
+  meta?: { name?: string; grade?: string | number; stream?: string }
+): Promise<{ user: User | null; uid?: string; error?: string }> {
+  if (!_cloudflareVerificationId) {
+    return { user: null, error: "تکایە سەرەتا ژمارەی مۆبایلەکەت بنێرە بۆ وەرگرتنی کۆد." };
+  }
+
+  const cleanCode = normalizeDigits(code).trim();
+  if (!cleanCode || cleanCode.length < 6) {
+    return { user: null, error: "تکایە کۆدی دڵنیایی بە تەواوی بنووسە (٦ ژمارە)." };
+  }
+
+  try {
+    const res = await fetch("/api/auth/phone/verify-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        verificationId: _cloudflareVerificationId,
+        code: cleanCode,
+        name: meta?.name,
+        grade: meta?.grade,
+        stream: meta?.stream,
+      }),
+    });
+
+    const data = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      error?: string;
+      detail?: string;
+      uid?: string;
+      customToken?: string | null;
+      phone?: string;
+    };
+
+    if (!res.ok || !data.ok) {
+      return {
+        user: null,
+        error: data.detail || data.error || "کۆدی دڵنیایی هەڵەیە یان کاتی بەسەرچووە.",
+      };
+    }
+
+    _cloudflareVerificationId = null;
+    const auth = getFirebaseAuth();
+
+    if (data.customToken && auth) {
+      try {
+        const cred = await signInWithCustomToken(auth, data.customToken);
+        if (cred.user) {
+          setLocalAuthUser(cred.user);
+          notifyAuthListeners(cred.user);
+          return { user: cred.user, uid: cred.user.uid };
+        }
+      } catch (customTokenErr) {
+        console.warn("[verifyCloudflarePhoneOtp] signInWithCustomToken notice:", customTokenErr);
+      }
+    }
+
+    if (data.uid) {
+      const syntheticUser = {
+        uid: data.uid,
+        phoneNumber: data.phone || _pendingPhone,
+        displayName: meta?.name || "قوتابی",
+        email: null,
+        emailVerified: false,
+        isAnonymous: false,
+        getIdToken: async () => `cf_token_${data.uid}`,
+      } as unknown as User;
+
+      setLocalAuthUser(syntheticUser);
+      notifyAuthListeners(syntheticUser);
+      return { user: syntheticUser, uid: data.uid };
+    }
+
+    return { user: null, error: "پشتڕاستکردنەوە سەرکەوتوو نەبوو." };
+  } catch (err) {
+    return {
+      user: null,
+      error: getErrorMessage(err),
+    };
+  }
+}
+
+/**
+ * Send OTP to phone number.
+ * Formats raw input into international E.164 (+9647XXXXXXXX).
+ * Uses Cloudflare D1 OTP engine with seamless Firebase fallback.
+ */
+export async function sendPhoneOtp(
+  phoneNumber: string,
+  appVerifier?: ApplicationVerifier
+): Promise<{ success: boolean; formattedPhone?: string; error?: string; status?: string }> {
+  const formatted = formatIraqiPhone(phoneNumber);
+  if (!isIraqiPhoneValid(formatted)) {
+    return {
+      success: false,
+      error: FIREBASE_ERRORS_KU["auth/invalid-phone-number"] || "ژمارەی مۆبایل دروست نییە. فۆرماتی پێویست: 07501234567",
+    };
+  }
+
+  // 1. Primary: Cloudflare Worker OTP Engine (Zero Blaze, No Billing)
+  const cfRes = await sendCloudflarePhoneOtp(formatted);
+  if (cfRes.success) {
+    return { success: true, formattedPhone: formatted };
+  }
+
+  // If SMS provider in Worker is currently disabled (pending telecom registration)
+  if (cfRes.status === "disabled") {
+    if (appVerifier) {
+      const auth = getFirebaseAuth();
+      if (auth) {
+        try {
+          _confirmationResult = await firebaseSignInWithPhoneNumber(auth, formatted, appVerifier);
+          return { success: true, formattedPhone: formatted };
+        } catch {
+          _confirmationResult = null;
+          clearRecaptcha();
+        }
+      }
+    }
+    return {
+      success: false,
+      status: "disabled",
+      error: cfRes.error,
+    };
+  }
+
+  // Secondary fallback: Firebase Phone Auth if appVerifier is available
+  if (appVerifier) {
+    const auth = getFirebaseAuth();
+    if (auth) {
+      try {
+        _confirmationResult = await firebaseSignInWithPhoneNumber(auth, formatted, appVerifier);
+        return { success: true, formattedPhone: formatted };
+      } catch (err) {
+        _confirmationResult = null;
+        clearRecaptcha();
+        return { success: false, error: getErrorMessage(err) };
+      }
+    }
+  }
+
+  return { success: false, error: cfRes.error };
+}
+
+/**
  * Verify OTP code entered by user.
+ * Supports both Cloudflare Worker OTP and Firebase Phone Auth.
  * Returns the Firebase User on success.
  */
 export async function verifyPhoneOtp(
-  code: string
+  code: string,
+  meta?: { name?: string; grade?: string | number; stream?: string }
 ): Promise<{ user: User | null; error?: string }> {
-  if (!_confirmationResult) {
-    return { user: null, error: "تکایە سەرەتا ژمارەی مۆبایلەکەت بنێرە" };
+  const cleanCode = normalizeDigits(code).trim();
+  if (!cleanCode || cleanCode.length < 6) {
+    return { user: null, error: FIREBASE_ERRORS_KU["auth/missing-verification-code"] || "تکایە کۆدی دڵنیایی بنووسە." };
   }
+
+  if (_cloudflareVerificationId) {
+    return verifyCloudflarePhoneOtp(cleanCode, meta);
+  }
+
+  if (_confirmationResult) {
+    try {
+      const result = await _confirmationResult.confirm(cleanCode);
+      _confirmationResult = null;
+      if (result.user) {
+        setLocalAuthUser(result.user);
+        notifyAuthListeners(result.user);
+      }
+      return { user: result.user };
+    } catch (err) {
+      return { user: null, error: getErrorMessage(err) };
+    }
+  }
+
+  return { user: null, error: "تکایە سەرەتا ژمارەی مۆبایلەکەت بنێرە بۆ وەرگرتنی کۆد." };
+}
+
+/**
+ * Link phone credential to the currently authenticated student account.
+ * Prevents account duplication when user has an existing email account.
+ */
+export async function linkPhoneToCurrentAccount(
+  code: string
+): Promise<{ success: boolean; user?: User; error?: string }> {
+  const auth = getFirebaseAuth();
+  if (!auth?.currentUser) {
+    return { success: false, error: "هیچ هەژمارێکی چالاک نەدۆزرایەوە بۆ بەستنەوە." };
+  }
+  if (!_confirmationResult) {
+    return { success: false, error: "تکایە سەرەتا ژمارەی مۆبایلەکەت بنێرە." };
+  }
+  const cleanCode = normalizeDigits(code).trim();
   try {
-    const result = await _confirmationResult.confirm(code);
+    const cred = PhoneAuthProvider.credential(_confirmationResult.verificationId, cleanCode);
+    const res = await linkWithCredential(auth.currentUser, cred);
     _confirmationResult = null;
-    return { user: result.user };
+    setLocalAuthUser(res.user);
+    notifyAuthListeners(res.user);
+    return { success: true, user: res.user };
   } catch (err) {
-    return { user: null, error: getErrorMessage(err) };
+    return { success: false, error: getErrorMessage(err) };
   }
 }
 
@@ -502,7 +758,14 @@ export const AuthService = {
   FIREBASE_ERRORS_KU,
   startStudentTrial,
   setupRecaptcha,
+  clearRecaptcha,
   sendPhoneOtp,
   verifyPhoneOtp,
+  sendCloudflarePhoneOtp,
+  verifyCloudflarePhoneOtp,
+  linkPhoneToCurrentAccount,
+  formatIraqiPhone,
+  isIraqiPhoneValid,
+  normalizeDigits,
 };
 

@@ -13,6 +13,13 @@ import { useTranslation } from "../hooks/useTranslation.ts";
 import { SoundToggle } from "./SoundToggle.tsx";
 import { ThemeToggle } from "./ThemeToggle.tsx";
 import { TrialBanner } from "./trial/TrialBanner.tsx";
+import { SubscriptionModal } from "./SubscriptionModal.tsx";
+import { TrialCelebrationModal } from "./trial/TrialCelebrationModal.tsx";
+import { TrialExpiredModal } from "./trial/TrialExpiredModal.tsx";
+import {
+  getSubscriptionStatus,
+  type SubscriptionStatusResponse,
+} from "../services/subscriptionService.ts";
 
 export interface AppShellProps {
   children: ReactNode;
@@ -45,6 +52,7 @@ export function AppShell({
   const user = useAppStore((state) => state.user);
   const notifications = useAppStore((state) => state.notifications);
   const removeNotification = useAppStore((state) => state.removeNotification);
+  const addNotification = useAppStore((state) => state.addNotification);
 
   const effectiveUserId =
     propUserId ||
@@ -61,6 +69,30 @@ export function AppShell({
     typeof navigator !== "undefined" ? navigator.onLine : true
   );
   const [showRestoredNotice, setShowRestoredNotice] = useState(false);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatusResponse | null>(null);
+  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
+  const [isTrialExpiredModalOpen, setIsTrialExpiredModalOpen] = useState(false);
+  const [isCelebrationModalOpen, setIsCelebrationModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (!effectiveUserId || effectiveUserId === "default-guest") return;
+    let isMounted = true;
+    getSubscriptionStatus(effectiveUserId)
+      .then((data) => {
+        if (!isMounted) return;
+        setSubscriptionStatus(data);
+        if (data.status === "trial" && !data.is_expired) {
+          setIsCelebrationModalOpen(true);
+        }
+      })
+      .catch((err) => {
+        console.warn("[AppShell] getSubscriptionStatus notice:", err);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [effectiveUserId]);
 
   useEffect(() => {
     notificationEngine.initialize(effectiveUserId);
@@ -109,6 +141,15 @@ export function AppShell({
 
   const handleNav = (tab: NavItemKey) => {
     setMobileMenuOpen(false);
+    const RESTRICTED_LAB_TABS: NavItemKey[] = ["chat", "practice", "assessment", "rooms"];
+    if (subscriptionStatus?.status === "unavailable" && RESTRICTED_LAB_TABS.includes(tab)) {
+      addNotification("warning", subscriptionStatus.error || "سێرڤەری داتابەیس لەم کاتەدا بەردەست نییە. تکایە کەمێکی تر هەوڵ بدەرەوە.");
+      return;
+    }
+    if (subscriptionStatus?.status === "expired" && subscriptionStatus?.is_expired && RESTRICTED_LAB_TABS.includes(tab)) {
+      setIsTrialExpiredModalOpen(true);
+      return;
+    }
     if (onTabChange) {
       onTabChange(tab);
     }
@@ -174,8 +215,12 @@ export function AppShell({
           onOpenMobileNav={() => setMobileMenuOpen(!mobileMenuOpen)}
           onOpenNotifications={() => setIsNotificationCenterOpen(true)}
           unreadNotificationsCount={unreadNotificationsCount}
+          onOpenSubscription={() => setIsSubscriptionModalOpen(true)}
+          trialEndsAt={subscriptionStatus?.trial_ends_at}
+          serverTime={subscriptionStatus?.server_time}
+          subscriptionStatus={subscriptionStatus?.status}
         />
-        <TrialBanner />
+        <TrialBanner onOpenSubscription={() => setIsSubscriptionModalOpen(true)} />
       </div>
 
       {/* In-App Notification Center Drawer/Modal */}
@@ -283,6 +328,31 @@ export function AppShell({
       {activeTab !== "chat" && (
         <BottomNav activeTab={activeTab} onNavigate={handleNav} />
       )}
+
+      {/* Subscription Modal (FastPay / Plans) */}
+      <SubscriptionModal
+        isOpen={isSubscriptionModalOpen}
+        onClose={() => setIsSubscriptionModalOpen(false)}
+        userId={effectiveUserId}
+        userName={user?.name}
+        userEmail={user?.email}
+      />
+
+      {/* Trial Celebration Modal (One-time 🎁) */}
+      <TrialCelebrationModal
+        isOpen={isCelebrationModalOpen}
+        onClose={() => setIsCelebrationModalOpen(false)}
+        userId={effectiveUserId}
+        trialEndsAt={subscriptionStatus?.trial_ends_at}
+      />
+
+      {/* Trial Expired Blocker Modal (Locks labs & pedagogy) */}
+      <TrialExpiredModal
+        isOpen={isTrialExpiredModalOpen}
+        onClose={() => setIsTrialExpiredModalOpen(false)}
+        trialEndsAt={subscriptionStatus?.trial_ends_at}
+        onSubscribeClick={() => setIsSubscriptionModalOpen(true)}
+      />
     </div>
   );
 }

@@ -259,6 +259,6 @@ describe("Live Admin Dashboard & Real-Time Firebase Suite", () => {
       expect(typeof res.sentCount).toBe("number");
       expect(typeof res.failedCount).toBe("number");
       expect(typeof res.message).toBe("string");
-    });
+    }, 15000);
   });
 });

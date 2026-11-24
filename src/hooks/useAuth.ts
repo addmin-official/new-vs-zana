@@ -8,6 +8,7 @@ import {
   logoutUser as rawLogoutUser,
   getErrorMessage,
   getCurrentUser,
+  startStudentTrial,
 } from "../services/authService.ts";
 import { useAuthStore } from "../store/authStore.ts";
 import { checkUserExists, createUserDocumentIfMissing } from "../auth/userProfileService.ts";
@@ -57,6 +58,17 @@ export function useAuth() {
 
       if (firebaseUser) {
         useAuthStore.getState().setUser(firebaseUser);
+
+        // Silent background identity reconciliation into D1 students table
+        const iden = firebaseUser.email || (firebaseUser as { phoneNumber?: string }).phoneNumber || undefined;
+        if (iden && !firebaseUser.isAnonymous) {
+          startStudentTrial(firebaseUser.uid, {
+            email: iden,
+            name: firebaseUser.displayName || undefined,
+            grade: "12",
+            stream: "scientific",
+          }).catch(() => {});
+        }
 
         // Check if returning student profile exists in Firestore / LocalStorage
         try {

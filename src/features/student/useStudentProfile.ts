@@ -8,6 +8,7 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { useAppStore } from "../../store/appStore.ts";
 import { PracticeStorage } from "../practice/practiceStorage.ts";
+import { fetchServerStudentProfile } from "../../services/subscriptionService.ts";
 
 export function useStudentProfile() {
   const [isOfflineFallback, setIsOfflineFallback] = useState<boolean>(
@@ -146,7 +147,36 @@ export function useStudentProfile() {
               }, user.uid);
             }
           } else {
-            const saved = getStudentProfile();
+            let saved = getStudentProfile();
+            if (!saved || !saved.onboardingCompleted) {
+              try {
+                const serverRes = await fetchServerStudentProfile();
+                if (serverRes.ok && serverRes.exists && serverRes.onboardingCompleted && serverRes.student) {
+                  const student = serverRes.student;
+                  const identity: VerifiedIdentity = {
+                    verifiedUid: user.uid,
+                    isAnonymous: false,
+                    email: student.email,
+                  };
+                  const draft: StudentProfileDraft = {
+                    name: student.name,
+                    grade: (student.grade as StudentGrade) || "12",
+                    stream: (student.stream as AcademicStream) || "scientific",
+                    activeSubject: "chemistry",
+                    level: "intermediate",
+                  };
+                  const verifiedProfile = createVerifiedStudentProfile(identity, draft);
+                  verifiedProfile.school = student.schoolName;
+                  verifiedProfile.onboardingCompleted = true;
+                  saveStudentProfile(verifiedProfile);
+                  setProfileState(verifiedProfile);
+                  saved = verifiedProfile;
+                }
+              } catch (serverErr) {
+                console.warn("[useStudentProfile] fetchServerStudentProfile notice:", serverErr);
+              }
+            }
+
             const currentStore = useAppStore.getState().userProgress;
             const practice = PracticeStorage.getProgress();
             const initScore = Math.max(currentStore.totalScore || 0, practice.totalXp || 0);

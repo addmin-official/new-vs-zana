@@ -1,6 +1,10 @@
 export interface VerifiedTokenClaims {
   uid: string;
   email?: string;
+  name?: string;
+  phone_number?: string;
+  role?: string;
+  [key: string]: unknown;
   aud: string;
   iss: string;
   exp: number;
@@ -85,12 +89,16 @@ export async function verifyFirebaseIdToken(
   const isTest = typeof process !== "undefined" && (process.env?.NODE_ENV === "test" || process.env?.ZANA_ENV === "test");
   if (isTest) {
     return {
-      uid: payload.sub,
+      uid: payload.sub as string,
       email: typeof payload.email === "string" ? payload.email : undefined,
+      name: typeof payload.name === "string" ? payload.name : undefined,
+      phone_number: typeof payload.phone_number === "string" ? payload.phone_number : undefined,
+      role: typeof payload.role === "string" ? payload.role : undefined,
+      admin: payload.admin === true,
       aud: String(payload.aud),
       iss: String(payload.iss),
-      exp: payload.exp,
-      iat: payload.iat,
+      exp: payload.exp as number,
+      iat: payload.iat as number,
       auth_time: typeof payload.auth_time === "number" ? payload.auth_time : undefined,
     };
   }
@@ -145,6 +153,10 @@ async function verifySignature(
   return {
     uid: String(payload.sub),
     email: typeof payload.email === "string" ? payload.email : undefined,
+    name: typeof payload.name === "string" ? payload.name : undefined,
+    phone_number: typeof payload.phone_number === "string" ? payload.phone_number : undefined,
+    role: typeof payload.role === "string" ? payload.role : undefined,
+    admin: payload.admin === true,
     aud: String(payload.aud),
     iss: String(payload.iss),
     exp: Number(payload.exp),

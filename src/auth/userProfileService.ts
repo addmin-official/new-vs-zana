@@ -13,7 +13,7 @@ import {
   DocumentData,
 } from "firebase/firestore";
 import { getFirestoreDb } from "../services/firebase.ts";
-import { StudentProfile, StudentProfileDraft, VerifiedIdentity } from "../features/student/studentTypes.ts";
+import { StudentProfile, StudentProfileDraft, StudentGrade, AcademicStream, VerifiedIdentity } from "../features/student/studentTypes.ts";
 import {
   saveStudentProfile,
   getStudentProfile,
@@ -23,11 +23,14 @@ import {
 import { getValidatedGrade, getValidatedStream, sanitizeStudentName } from "../features/student/studentDefaults.ts";
 import { notificationEngine } from "../notifications/notificationEngine.ts";
 import { initializeTrial } from "./trialService.ts";
+import { fetchServerStudentProfile } from "../services/subscriptionService.ts";
 
 export interface UserCheckResult {
   exists: boolean;
   isNewUser: boolean;
   profile: StudentProfile | null;
+  error?: string;
+  detail?: string;
 }
 
 /**
@@ -71,10 +74,38 @@ interface FirestoreProfileRaw {
 }
 
 /**
- * Checks whether a student profile already exists in Firestore (users/{uid} or students/{uid})
+ * Checks whether a student profile already exists in D1 database, Firestore,
  * or local storage, preventing duplicate registration loops.
  */
 export async function checkUserExists(uid: string): Promise<UserCheckResult> {
+  // 1. Authoritative check via Cloudflare Worker D1 database (Single Source of Truth)
+  try {
+    const serverRes = await fetchServerStudentProfile();
+    if (serverRes.ok && serverRes.exists && serverRes.onboardingCompleted && serverRes.student) {
+      const student = serverRes.student;
+      const identity: VerifiedIdentity = {
+        verifiedUid: uid,
+        isAnonymous: false,
+        email: student.email,
+      };
+      const draft: StudentProfileDraft = {
+        name: student.name,
+        grade: (student.grade as StudentGrade) || "12",
+        stream: (student.stream as AcademicStream) || "scientific",
+        activeSubject: "chemistry",
+        level: "intermediate",
+      };
+      const loadedProfile = createVerifiedStudentProfile(identity, draft);
+      loadedProfile.school = student.schoolName;
+      loadedProfile.onboardingCompleted = true;
+      saveStudentProfile(loadedProfile);
+      return { exists: true, isNewUser: false, profile: loadedProfile };
+    }
+
+  } catch (serverErr) {
+    console.warn("[checkUserExists] Error calling fetchServerStudentProfile:", serverErr);
+  }
+
   const db = getFirestoreDb();
 
   if (db && uid) {

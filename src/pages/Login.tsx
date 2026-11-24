@@ -19,7 +19,9 @@ import {
   setupRecaptcha,
   sendPhoneOtp,
   verifyPhoneOtp,
+  startStudentTrial,
 } from "../services/authService.ts";
+import { formatIraqiPhone, isIraqiPhoneValid, normalizeDigits } from "../services/phoneUtils.ts";
 import { checkUserExists } from "../auth/userProfileService.ts";
 import { getMyRole, UserRole } from "../auth/roles.ts";
 
@@ -52,33 +54,30 @@ export function Login({
   const [phoneLoading, setPhoneLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
 
-  // Normalize Kurdish (٠-٩, ۰-۹) digits to standard ASCII digits
-  const normalizeDigits = (str: string): string => {
-    return str
-      .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 1632))
-      .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776));
-  };
-
-  // Format Iraqi phone: 07XX → +9647XX
-  const formatIraqiPhone = (raw: string): string => {
-    const digits = normalizeDigits(raw).replace(/\D/g, '');
-    if (digits.startsWith('9647')) return `+${digits}`;
-    if (digits.startsWith('07')) return `+964${digits.slice(1)}`;
-    if (digits.startsWith('7') && digits.length === 10) return `+964${digits}`;
-    return `+${digits}`;
-  };
-
-  const isPhoneValid = /^(\+9647|07|7)\d{9}$/.test(normalizeDigits(phone).replace(/\s/g, ''));
+  const isPhoneValid = isIraqiPhoneValid(phone);
 
   // Email format validation (real-time)
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
-  const handlePostLogin = async (user: { uid: string; getIdToken: (forceRefresh?: boolean) => Promise<string> }) => {
+  const handlePostLogin = async (user: { uid: string; getIdToken: (forceRefresh?: boolean) => Promise<string>; email?: string | null; displayName?: string | null; phoneNumber?: string | null }) => {
     // Force refresh ID token to get latest claims from server
     try {
       await user.getIdToken(true);
     } catch {
       // Handled
+    }
+
+    // Auto-reconcile user identity into D1 database so email/name are never lost
+    try {
+      const identifier = user.email || user.phoneNumber || undefined;
+      await startStudentTrial(user.uid, {
+        name: user.displayName || undefined,
+        email: identifier,
+        grade: "12",
+        stream: "scientific",
+      });
+    } catch (e) {
+      console.warn("[Login] Auto-reconciliation background notice:", e);
     }
 
     const navigate = (path: string) => {

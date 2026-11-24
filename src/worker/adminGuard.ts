@@ -114,9 +114,14 @@ export async function verifyAdmin(
       if (user.customAttributes) {
         try {
           const parsedClaims = JSON.parse(user.customAttributes) as Record<string, unknown>;
-          if (parsedClaims.admin === true || parsedClaims.role === "SuperAdmin" || parsedClaims.role === "super_admin") {
+          if (
+            parsedClaims.admin === true ||
+            parsedClaims.role === "admin" ||
+            parsedClaims.role === "SuperAdmin" ||
+            parsedClaims.role === "super_admin"
+          ) {
             hasAdminClaim = true;
-            userRole = (parsedClaims.role as string) || "super_admin";
+            userRole = (parsedClaims.role as string) || "admin";
           }
         } catch {
           // ignore
@@ -124,8 +129,12 @@ export async function verifyAdmin(
       }
 
       const isAuthorizedEmail = Boolean(userEmail && configuredEmails.includes(userEmail));
-      if (!isAuthorizedEmail && !hasAdminClaim) {
-        return { ok: false, error: "User is not an admin" };
+      // Security Hardening: An email address alone must NEVER grant administrator privileges.
+      if (!hasAdminClaim) {
+        return { ok: false, error: "Unauthorized: User lacks required administrator claim (email alone cannot grant admin privileges)" };
+      }
+      if (configuredEmails.length > 0 && !isAuthorizedEmail && userRole !== "SuperAdmin") {
+        return { ok: false, error: "Unauthorized: User email is not in the authorized administrator registry" };
       }
 
       return {
