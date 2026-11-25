@@ -4,7 +4,7 @@ import { AppShell } from "./components/AppShell.tsx";
 import { LoadingScreen } from "./screens/LoadingScreen.tsx";
 import { useStudentProfile } from "./features/student/useStudentProfile.ts";
 import { SubjectKey, StudentProfile, StudentGrade } from "./features/student/studentTypes.ts";
-import { getStudentProfile } from "./features/student/studentStorage.ts";
+import { getStudentProfile, deleteStudentProfile } from "./features/student/studentStorage.ts";
 import { getFirebaseAuth, isFirebaseConfigured } from "./services/firebase.ts";
 import { getCurrentUser, logoutUser, subscribeToAuthChanges } from "./services/authService.ts";
 import { useAppStore } from "./store/appStore.ts";
@@ -278,10 +278,16 @@ export default function App() {
         setCurrentUser(effectiveUser);
         setAuthTimedOut(false);
 
-        // If local profile is already valid, finish loading immediately to prevent blocking the UI
+        // If local profile is already valid for this exact UID, finish loading immediately;
+        // if cached profile belongs to a different UID, purge it before switching accounts.
         const localProf = getStudentProfile();
         if (localProf && localProf.onboardingCompleted) {
-          smoothFinishLoading();
+          if (!effectiveUser || localProf.id === effectiveUser.uid) {
+            smoothFinishLoading();
+          } else {
+            deleteStudentProfile();
+            setActiveProfile(null);
+          }
         }
 
         // Returning user detection: load Firestore profile without forcing re-registration
@@ -468,7 +474,7 @@ export default function App() {
         name: newProf.name,
         grade: newProf.grade,
         stream: newProf.stream,
-        email: currentUser?.email || "student@zana.krd",
+        email: currentUser?.email || "",
         avatar: "",
         streakDays: curProgress.streak || 1,
         completedLessons: curProgress.lessonsCompleted || 0,

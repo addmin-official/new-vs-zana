@@ -70,6 +70,9 @@ pnpm-debug.log*
 *.backup
 *.backup-*
 .backup-*/
+backup_*.sql
+/backup*.sql
+*.dump.sql
 *.zip
 *.tar.gz
 *.tgz

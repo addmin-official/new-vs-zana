@@ -419,6 +419,8 @@ test("14. Production Config Generation: Preserves assets, name, vars, and does n
       },
     ]);
 
+    assert.equal(parsedGenerated.d1_databases[0].migrations_dir, "./migrations_production");
+
     // Verify wrangler.jsonc was not mutated
     const postWranglerContent = fs.readFileSync(wranglerPath, "utf8");
     assert.equal(initialWranglerContent, postWranglerContent);

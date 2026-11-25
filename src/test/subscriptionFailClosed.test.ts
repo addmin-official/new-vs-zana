@@ -154,7 +154,7 @@ describe("Blocker C — checkSubscription fail-closed", () => {
 function createStudentToken(uid: string): string {
   const header = Buffer.from(JSON.stringify({ alg: "RS256", kid: "test" })).toString("base64url");
   const payload = Buffer.from(JSON.stringify({
-    sub: uid, uid, email: `${uid}@test.krd`,
+    sub: uid, uid, email: `${uid}@test.krd`, email_verified: true,
     aud: "gen-lang-client-0009572581",
     iss: "https://securetoken.google.com/gen-lang-client-0009572581",
     iat: Math.floor(Date.now() / 1000) - 60,
@@ -899,8 +899,8 @@ function createRealSqliteD1() {
   };
 }
 
-function getOrderedMigrationFiles(): string[] {
-  const migrationsDir = path.resolve(process.cwd(), "migrations");
+function getOrderedMigrationFiles(dirName = "migrations"): string[] {
+  const migrationsDir = path.resolve(process.cwd(), dirName);
   const files = fs.readdirSync(migrationsDir).filter((f) => f.endsWith(".sql"));
   return files.sort((a, b) => {
     const aNum = parseInt(a.split("_")[0], 10);
@@ -1318,5 +1318,199 @@ describe("Complete Concrete Protected Route Entitlement Inventory Verification",
       const downJson = (await downRes.json()) as { code: string };
       assert.strictEqual(downJson.code, "DATABASE_UNAVAILABLE", `${route.method} ${route.path} expected DATABASE_UNAVAILABLE`);
     }
+  });
+});
+
+describe("Production Migration Directory (migrations_production/) — National ID Exclusion, Placeholder Protection & Admin Preservation", () => {
+  test("1. Fresh migrations_production/ applies cleanly, adds school_name without National ID, and preserves admin & trial invariants", () => {
+    const db = createRealSqliteD1();
+    const prodDir = path.resolve(process.cwd(), "migrations_production");
+    const files = getOrderedMigrationFiles("migrations_production");
+
+    assert.ok(files.includes("0009_student_onboarding_school_name.sql"));
+    assert.ok(!files.includes("0009_student_onboarding_national_id.sql"));
+
+    for (const file of files.filter((f) => !f.startsWith("0010_"))) {
+      db.exec(fs.readFileSync(path.join(prodDir, file), "utf8"));
+    }
+
+    // Seed production-shaped state: admin, student with synthetic 0006 email, legitimate @zana.edu.krd user, and orphan subscription
+    db.raw
+      .prepare("INSERT INTO students (id, firebase_uid, name, email, grade, school_name) VALUES (?, ?, ?, ?, '12', ?)")
+      .run("J3J0WM7hKBSpvuCJLUJAldo4I652", "J3J0WM7hKBSpvuCJLUJAldo4I652", "Mustafa", null, null);
+    db.raw
+      .prepare("INSERT INTO users (id, email, name, role, grade, stream) VALUES (?, ?, ?, 'student', '12', 'scientific')")
+      .run("J3J0WM7hKBSpvuCJLUJAldo4I652", "J3J0WM7hKBSpvuCJLUJAldo4I652@zana.edu.krd", "Mustafa");
+    db.raw
+      .prepare("INSERT INTO users (id, email, name, role, grade, stream) VALUES (?, ?, ?, 'admin', '12', 'scientific')")
+      .run("uNZzgQaPDjTO8IYBncGVZekGQxN2", "addmin.official.idg@gmail.com", "Admin");
+    db.raw
+      .prepare("INSERT INTO users (id, email, name, role, grade, stream) VALUES (?, ?, ?, 'student', '12', 'scientific')")
+      .run("uid_real_zana", "Sara.Ahmed@Zana.Edu.Krd ", "Sara");
+
+    db.raw
+      .prepare("INSERT INTO subscriptions (user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at) VALUES (?, 'expired', 1000, 2000, 'free_trial_3d', 1000)")
+      .run("J3J0WM7hKBSpvuCJLUJAldo4I652");
+    db.raw
+      .prepare("INSERT INTO subscriptions (user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at) VALUES (?, 'active', 3000, 9999999999999, 'monthly', 3000)")
+      .run("uNZzgQaPDjTO8IYBncGVZekGQxN2");
+    db.raw
+      .prepare("INSERT INTO subscriptions (user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at) VALUES (?, 'trial', 4000, 5000, 'free_trial_3d', 4000)")
+      .run("uid_real_zana");
+    db.raw
+      .prepare("INSERT INTO subscriptions (user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at) VALUES (?, 'trial', 6000, 7000, 'free_trial_3d', 6000)")
+      .run("stud_orphan_1");
+
+    const sql0010 = fs.readFileSync(path.join(prodDir, "0010_email_uniqueness_and_registration_persistence.sql"), "utf8");
+    db.exec(`BEGIN TRANSACTION;\n${sql0010}\nCOMMIT;`);
+
+    // Zero National ID schema objects
+    const nidCount = (db.raw.prepare("SELECT COUNT(*) as c FROM sqlite_master WHERE sql LIKE '%national_id%'").get() as { c: number }).c;
+    assert.strictEqual(nidCount, 0, "migrations_production must contain zero national_id columns or indexes");
+
+    // school_name exists on students and users
+    const stuCols = db.raw.prepare("PRAGMA table_info(students)").all() as Array<{ name: string }>;
+    const usrCols = db.raw.prepare("PRAGMA table_info(users)").all() as Array<{ name: string }>;
+    assert.ok(stuCols.some((c) => c.name === "school_name"));
+    assert.ok(usrCols.some((c) => c.name === "school_name"));
+
+    // Synthetic placeholder excluded from subscriptions.email, real @zana.edu.krd preserved and normalized
+    const subSynthetic = db.raw.prepare("SELECT email, trial_started_at, status FROM subscriptions WHERE user_id = ?").get("J3J0WM7hKBSpvuCJLUJAldo4I652") as { email: string | null; trial_started_at: number; status: string };
+    assert.strictEqual(subSynthetic.email, null);
+    assert.strictEqual(subSynthetic.trial_started_at, 1000);
+    assert.strictEqual(subSynthetic.status, "expired");
+
+    const subRealZana = db.raw.prepare("SELECT email FROM subscriptions WHERE user_id = ?").get("uid_real_zana") as { email: string | null };
+    assert.strictEqual(subRealZana.email, "sara.ahmed@zana.edu.krd");
+
+    const subOrphan = db.raw.prepare("SELECT email FROM subscriptions WHERE user_id = ?").get("stud_orphan_1") as { email: string | null };
+    assert.strictEqual(subOrphan.email, null);
+
+    // Admin role preserved
+    const adminRow = db.raw.prepare("SELECT role FROM users WHERE id = ?").get("uNZzgQaPDjTO8IYBncGVZekGQxN2") as { role: string };
+    assert.strictEqual(adminRow.role, "admin");
+
+    // NULL and empty strings allowed without colliding; case-insensitive duplicates rejected
+    db.raw.prepare("INSERT INTO students (id, firebase_uid, email) VALUES ('s_empty', 's_empty', '')").run();
+    db.raw.prepare("INSERT INTO students (id, firebase_uid, email) VALUES ('s_null', 's_null', NULL)").run();
+    assert.throws(() => {
+      db.raw.prepare("INSERT INTO subscriptions (user_id, email, status, trial_started_at, trial_ends_at, plan_id, updated_at) VALUES ('dup_uid', 'SARA.AHMED@zana.edu.krd', 'trial', 1, 2, 'free_trial_3d', 1)").run();
+    }, /UNIQUE constraint failed/);
+  });
+
+  test("2. Legacy migrations/ directory preserves historical 0009 compatibility", () => {
+    const legacyFiles = getOrderedMigrationFiles("migrations");
+    assert.ok(legacyFiles.includes("0009_student_onboarding_national_id.sql"));
+    assert.ok(legacyFiles.includes("0010_email_uniqueness_and_registration_persistence.sql"));
+  });
+
+  test("3. Returning login /api/trial/start preserves existing name/grade/stream, and Worker sets no-store on private API + max-age=0 on /sw.js", async () => {
+    const db = createRealSqliteD1();
+    const prodDir = path.resolve(process.cwd(), "migrations_production");
+    for (const file of getOrderedMigrationFiles("migrations_production")) {
+      db.exec(fs.readFileSync(path.join(prodDir, file), "utf8"));
+    }
+
+    const header = Buffer.from(JSON.stringify({ alg: "RS256", kid: "test" })).toString("base64url");
+    const payload = Buffer.from(JSON.stringify({
+      sub: "uid_grade9_student",
+      uid: "uid_grade9_student",
+      aud: "gen-lang-client-0009572581",
+      iss: "https://securetoken.google.com/gen-lang-client-0009572581",
+      email: "zana.karim@example.com",
+      email_verified: true,
+      name: "زانا کەریم",
+      iat: Math.floor(Date.now() / 1000) - 60,
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    })).toString("base64url");
+    const verifiedToken = `${header}.${payload}.mock-sig`;
+
+    const env = {
+      GEMINI_API_KEY: "test-key",
+      FIREBASE_PROJECT_ID: "gen-lang-client-0009572581",
+      ALLOWED_ORIGINS: "https://zana.idggov.tech",
+      ALLOW_TEST_AUTH_MOCK: "true",
+      ZANA_ENV: "test",
+      DB: db,
+      ASSETS: {
+        async fetch(req: Request) {
+          const u = new URL(req.url);
+          if (u.pathname === "/sw.js") {
+            return new Response("// sw", { status: 200, headers: { "Content-Type": "application/javascript" } });
+          }
+          return new Response("ok", { status: 200 });
+        },
+      },
+    };
+
+    // Step 1: Onboard as Grade 9 general student
+    const onboardRes = await worker.fetch(
+      new Request("https://zana.idggov.tech/api/student/onboard", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${verifiedToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "زانا کەریم",
+          grade: "9",
+          stream: "general",
+          schoolName: "قوتابخانەی هەولێر",
+        }),
+      }),
+      env as never
+    );
+    assert.strictEqual(onboardRes.status, 200);
+    assert.strictEqual(onboardRes.headers.get("Cache-Control"), "no-store");
+
+    // Step 2: Simulate returning login reconciliation where grade/stream/name are omitted
+    const trialRes = await worker.fetch(
+      new Request("https://zana.idggov.tech/api/trial/start", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${verifiedToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: "uid_grade9_student", email: "zana.karim@example.com" }),
+      }),
+      env as never
+    );
+    assert.strictEqual(trialRes.status, 200);
+    assert.strictEqual(trialRes.headers.get("Cache-Control"), "no-store");
+
+    const studentRow = db.raw
+      .prepare("SELECT name, grade, school_name FROM students WHERE id = ?")
+      .get("uid_grade9_student") as { name: string; grade: string; school_name: string };
+    assert.strictEqual(studentRow.name, "زانا کەریم");
+    assert.strictEqual(studentRow.grade, "9");
+    assert.strictEqual(studentRow.school_name, "قوتابخانەی هەولێر");
+
+    const userRow = db.raw
+      .prepare("SELECT name, grade, stream, school_name FROM users WHERE id = ?")
+      .get("uid_grade9_student") as { name: string; grade: string; stream: string; school_name: string };
+    assert.strictEqual(userRow.name, "زانا کەریم");
+    assert.strictEqual(userRow.grade, "9");
+    assert.strictEqual(userRow.stream, "general");
+    assert.strictEqual(userRow.school_name, "قوتابخانەی هەولێر");
+
+    // Step 3: Private GET routes return Cache-Control: no-store
+    const subRes = await worker.fetch(
+      new Request("https://zana.idggov.tech/api/subscription/status", {
+        method: "GET",
+        headers: { Authorization: `Bearer ${verifiedToken}` },
+      }),
+      env as never
+    );
+    assert.strictEqual(subRes.status, 200);
+    assert.strictEqual(subRes.headers.get("Cache-Control"), "no-store");
+
+    const profRes = await worker.fetch(
+      new Request("https://zana.idggov.tech/api/student/profile", {
+        method: "GET",
+        headers: { Authorization: `Bearer ${verifiedToken}` },
+      }),
+      env as never
+    );
+    assert.strictEqual(profRes.status, 200);
+    assert.strictEqual(profRes.headers.get("Cache-Control"), "no-store");
+
+    // Step 4: /sw.js never cached with immutable max-age=31536000
+    const swRes = await worker.fetch(new Request("https://zana.idggov.tech/sw.js"), env as never);
+    assert.strictEqual(swRes.status, 200);
+    assert.strictEqual(swRes.headers.get("Cache-Control"), "public, max-age=0, must-revalidate");
   });
 });

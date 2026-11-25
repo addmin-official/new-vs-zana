@@ -22,6 +22,9 @@ function createMockJwt(payload: Record<string, unknown>): string {
     iat: now,
     exp: now + 3600,
     auth_time: now,
+    ...(typeof payload.email === "string" && payload.email_verified === undefined
+      ? { email_verified: true }
+      : {}),
     ...payload,
   };
   const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT", kid: "test-kid" })).toString("base64url");
@@ -607,7 +610,17 @@ describe("ZANA — Registration, Identity Persistence & Free Trial Correction (1
               let plan_id: string;
               let updated_at: number;
 
-              if (params.length >= 7) {
+              if (lower.includes("(user_id, email,") && params.length === 5) {
+                [user_id, email, trial_started_at, trial_ends_at, updated_at] = params as [
+                  string,
+                  string,
+                  number,
+                  number,
+                  number
+                ];
+                status = "trial";
+                plan_id = "free_trial_3d";
+              } else if (params.length >= 7) {
                 [user_id, email, status, trial_started_at, trial_ends_at, plan_id, updated_at] = params as [
                   string,
                   string,
@@ -1519,6 +1532,228 @@ describe("ZANA — Registration, Identity Persistence & Free Trial Correction (1
       const data = await res.json();
       expect(data.status).toBe("active");
       expect(data.is_expired).toBe(false);
+    });
+  });
+
+  describe("Verified Email Identity Enforcement & Placeholder Protection", () => {
+    it("rejects unverified email tokens (email_verified: false or missing) on /api/student/onboard and /api/trial/start", async () => {
+      const worker = (await import("../../worker/index.ts")).default;
+      const mockDb = createComprehensiveMockD1();
+      const mockEnv = { DB: mockDb, ALLOW_TEST_AUTH_MOCK: "true", ZANA_ENV: "test" } as never;
+
+      const unverifiedToken = createMockJwt({
+        sub: "uid_unverified",
+        email: "unverified@example.com",
+        email_verified: false,
+        role: "student",
+      });
+
+      const onboardRes = await worker.fetch(
+        new Request("https://zana.krd/api/student/onboard", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${unverifiedToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ name: "قوتابی", schoolName: "ئامادەیی", grade: "12" }),
+        }),
+        mockEnv
+      );
+      expect(onboardRes.status).toBe(403);
+      expect((await onboardRes.json()).error).toBe("EMAIL_NOT_VERIFIED");
+
+      const trialRes = await worker.fetch(
+        new Request("https://zana.krd/api/trial/start", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${unverifiedToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ name: "قوتابی" }),
+        }),
+        mockEnv
+      );
+      expect(trialRes.status).toBe(403);
+      expect((await trialRes.json()).error).toBe("EMAIL_NOT_VERIFIED");
+      expect(mockDb._subscriptions.length).toBe(0);
+    });
+
+    it("rejects missing email on /api/student/onboard and ignores/blocks forged request-body email", async () => {
+      const worker = (await import("../../worker/index.ts")).default;
+      const mockDb = createComprehensiveMockD1();
+      const mockEnv = { DB: mockDb, ALLOW_TEST_AUTH_MOCK: "true", ZANA_ENV: "test" } as never;
+
+      const noEmailToken = createMockJwt({ sub: "uid_no_email", role: "student" });
+      const missingRes = await worker.fetch(
+        new Request("https://zana.krd/api/student/onboard", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${noEmailToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ name: "قوتابی", schoolName: "ئامادەیی", email: "forged@example.com" }),
+        }),
+        mockEnv
+      );
+      expect(missingRes.status).toBe(400);
+      expect((await missingRes.json()).error).toBe("EMAIL_REQUIRED");
+
+      const verifiedToken = createMockJwt({
+        sub: "uid_real",
+        email: "real@example.com",
+        email_verified: true,
+        role: "student",
+      });
+      const forgedRes = await worker.fetch(
+        new Request("https://zana.krd/api/student/onboard", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${verifiedToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: "قوتابی",
+            schoolName: "ئامادەیی",
+            email: "forged@example.com",
+          }),
+        }),
+        mockEnv
+      );
+      expect(forgedRes.status).toBe(403);
+      expect((await forgedRes.json()).error).toBe("FORBIDDEN_EMAIL_MISMATCH");
+
+      const forgedTrialRes = await worker.fetch(
+        new Request("https://zana.krd/api/trial/start", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${verifiedToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ name: "قوتابی", email: "forged@example.com" }),
+        }),
+        mockEnv
+      );
+      expect(forgedTrialRes.status).toBe(403);
+      expect((await forgedTrialRes.json()).error).toBe("FORBIDDEN_EMAIL_MISMATCH");
+      expect(mockDb._students.length).toBe(0);
+      expect(mockDb._subscriptions.length).toBe(0);
+    });
+
+    it("keeps phone-only subscriptions email=NULL and never stores phone_number as email", async () => {
+      const worker = (await import("../../worker/index.ts")).default;
+      const mockDb = createComprehensiveMockD1();
+      const mockEnv = { DB: mockDb, ALLOW_TEST_AUTH_MOCK: "true", ZANA_ENV: "test" } as never;
+
+      const phoneToken = createMockJwt({
+        sub: "uid_phone_only",
+        phone_number: "+9647501234567",
+        role: "student",
+      });
+
+      const statusRes = await worker.fetch(
+        new Request("https://zana.krd/api/subscription/status", {
+          method: "GET",
+          headers: { Authorization: `Bearer ${phoneToken}` },
+        }),
+        mockEnv
+      );
+      expect(statusRes.status).toBe(200);
+      expect(mockDb._subscriptions.length).toBe(1);
+      expect(mockDb._subscriptions[0].user_id).toBe("uid_phone_only");
+      expect(mockDb._subscriptions[0].email).toBeNull();
+
+      // Phone-only user cannot forge email into /api/trial/start or bypass verified-email requirement on /api/student/onboard
+      const forgedPhoneTrialRes = await worker.fetch(
+        new Request("https://zana.krd/api/trial/start", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${phoneToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ name: "قوتابی", email: "spoof@example.com" }),
+        }),
+        mockEnv
+      );
+      expect(forgedPhoneTrialRes.status).toBe(403);
+      expect(mockDb._subscriptions[0].email).toBeNull();
+
+      const phoneOnboardRes = await worker.fetch(
+        new Request("https://zana.krd/api/student/onboard", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${phoneToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ name: "قوتابی", schoolName: "ئامادەیی", email: "+9647501234567" }),
+        }),
+        mockEnv
+      );
+      expect(phoneOnboardRes.status).toBe(400);
+      expect((await phoneOnboardRes.json()).error).toBe("EMAIL_REQUIRED");
+    });
+
+    it("rejects exact synthetic <uid>@zana.edu.krd placeholder while accepting legitimate @zana.edu.krd emails", async () => {
+      const worker = (await import("../../worker/index.ts")).default;
+      const mockDb = createComprehensiveMockD1();
+      const mockEnv = { DB: mockDb, ALLOW_TEST_AUTH_MOCK: "true", ZANA_ENV: "test" } as never;
+
+      const syntheticToken = createMockJwt({
+        sub: "J3J0WM7hKBSpvuCJLUJAldo4I652",
+        email: "J3J0WM7hKBSpvuCJLUJAldo4I652@zana.edu.krd",
+        email_verified: true,
+        role: "student",
+      });
+      const syntheticRes = await worker.fetch(
+        new Request("https://zana.krd/api/student/onboard", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${syntheticToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ name: "Mustafa", schoolName: "Zana High", grade: "12" }),
+        }),
+        mockEnv
+      );
+      expect(syntheticRes.status).toBe(403);
+      expect((await syntheticRes.json()).error).toBe("EMAIL_NOT_VERIFIED");
+
+      const legitToken = createMockJwt({
+        sub: "uid_real_staff_or_student",
+        email: "ara.omar@zana.edu.krd",
+        email_verified: true,
+        role: "student",
+      });
+      const legitRes = await worker.fetch(
+        new Request("https://zana.krd/api/student/onboard", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${legitToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ name: "ئارا عومەر", schoolName: "ئامادەیی زانا", grade: "12" }),
+        }),
+        mockEnv
+      );
+      expect(legitRes.status).toBe(200);
+      expect(mockDb._students[0].email).toBe("ara.omar@zana.edu.krd");
+      expect(mockDb._subscriptions[0].email).toBe("ara.omar@zana.edu.krd");
+    });
+
+    it("blocks test-only JWT shortcut when production environment is active", async () => {
+      const { verifyAuthWorker } = await import("../../server/middleware/authMiddleware.ts");
+      const token = createMockJwt({ sub: "attacker_uid", email: "attacker@example.com", email_verified: true });
+      const req = new Request("https://zana.idggov.tech/api/student/profile", {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const prodEnv = {
+        ZANA_ENV: "production",
+        ALLOW_TEST_AUTH_MOCK: "true",
+        FIREBASE_PROJECT_ID: "gen-lang-client-0009572581",
+      };
+      const result = await verifyAuthWorker(req, prodEnv);
+      expect(result instanceof Response).toBe(true);
+      if (result instanceof Response) {
+        expect(result.status).toBe(401);
+      }
+    });
+
+    it("accepts verified plus-addressed emails and rejects malformed dot/phone email values", async () => {
+      const { resolveVerifiedSubscriptionEmail, isValidEmailSyntax } = await import("../../server/auth/verifiedEmail.ts");
+      expect(isValidEmailSyntax("alice+zana@example.com")).toBe(true);
+      expect(isValidEmailSyntax("user..name@example.com")).toBe(false);
+      expect(isValidEmailSyntax(".user@example.com")).toBe(false);
+      expect(isValidEmailSyntax("user@.com")).toBe(false);
+      expect(isValidEmailSyntax("+9647501234567")).toBe(false);
+
+      expect(
+        resolveVerifiedSubscriptionEmail({
+          uid: "uid_plus",
+          email: "  Alice+Zana@Example.COM ",
+          claims: { email: "  Alice+Zana@Example.COM ", email_verified: true },
+        })
+      ).toBe("alice+zana@example.com");
+
+      expect(
+        resolveVerifiedSubscriptionEmail({
+          uid: "uid_bad",
+          email: "bad..email@example.com",
+          claims: { email: "bad..email@example.com", email_verified: true },
+        })
+      ).toBe("");
     });
   });
 });

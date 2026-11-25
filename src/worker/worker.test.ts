@@ -860,6 +860,7 @@ test("Worker - POST /api/chat enforces 429 when rate limit of 50 is exceeded", a
     headers: {
       Authorization: "Bearer rate-limited-student",
       "Content-Type": "application/json",
+      Origin: "https://zana.idggov.tech",
     },
     body: JSON.stringify({
       message: "Explain Le Chatelier principle",
@@ -873,6 +874,9 @@ test("Worker - POST /api/chat enforces 429 when rate limit of 50 is exceeded", a
   const res = await worker.fetch(req, env);
   assert.strictEqual(res.status, 429);
   assert.strictEqual(res.headers.get("Retry-After"), "3600");
+  assert.strictEqual(res.headers.get("Access-Control-Allow-Origin"), "https://zana.idggov.tech");
+  assert.strictEqual(res.headers.get("Content-Type"), "application/json");
+  assert.strictEqual(res.headers.get("Cache-Control"), "no-store");
   const data = (await res.json()) as { error?: string };
   assert.strictEqual(data.error, "گەیشتیتە سنوری دیاریکراوی بەکارهێنان بۆ ئەم کاتژمێرە. تکایە دواتر هەوڵبدەرەوە.");
 });

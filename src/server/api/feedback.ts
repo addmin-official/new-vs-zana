@@ -29,7 +29,7 @@ export async function handleFeedbackRoute(request: Request, env: FeedbackEnv): P
   }
 
   const token = authHeader.split('Bearer ')[1];
-  const decodedToken = await verifyAuthToken(token, { FIREBASE_PROJECT_ID: env.FIREBASE_PROJECT_ID });
+  const decodedToken = await verifyAuthToken(token, env);
   if (!decodedToken || !decodedToken.uid) {
     return new Response(JSON.stringify({ error: 'Invalid identity' }), {
       status: 403,

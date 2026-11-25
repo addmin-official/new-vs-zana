@@ -20,7 +20,8 @@ export interface AuthResult {
  */
 export async function verifyAuthToken(
   authHeader: string | null,
-  projectId?: string
+  projectId?: string,
+  env?: { NODE_ENV?: string; ZANA_ENV?: string; ALLOW_TEST_AUTH_MOCK?: string; [key: string]: unknown }
 ): Promise<AuthResult> {
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return {
@@ -43,14 +44,21 @@ export async function verifyAuthToken(
   // In production (NODE_ENV === 'production' or ZANA_ENV === 'production'), mock tokens are UNCONDITIONALLY FORBIDDEN.
   // No mock token flag, environment override, or test payload can bypass cryptographic verification in production.
   const isProduction =
-    typeof process !== "undefined" &&
-    (process.env?.NODE_ENV === "production" || process.env?.ZANA_ENV === "production");
+    env?.NODE_ENV === "production" ||
+    env?.ZANA_ENV === "production" ||
+    (typeof process !== "undefined" &&
+      (process.env?.NODE_ENV === "production" || process.env?.ZANA_ENV === "production"));
 
-  const isExplicitTestMode =
-    !isProduction &&
-    typeof process !== "undefined" &&
-    (process.env?.NODE_ENV === "test" || process.env?.ZANA_ENV === "test") &&
-    process.env?.ALLOW_TEST_AUTH_MOCK === "true";
+  const zanaEnvTest =
+    env?.ZANA_ENV === "test" ||
+    env?.NODE_ENV === "test" ||
+    (typeof process !== "undefined" &&
+      (process.env?.NODE_ENV === "test" || process.env?.ZANA_ENV === "test"));
+  const mockFlagEnabled =
+    env?.ALLOW_TEST_AUTH_MOCK === "true" ||
+    (typeof process !== "undefined" && process.env?.ALLOW_TEST_AUTH_MOCK === "true");
+
+  const isExplicitTestMode = !isProduction && zanaEnvTest && mockFlagEnabled;
 
   if (isExplicitTestMode && !token.includes(".")) {
     return {
@@ -64,7 +72,10 @@ export async function verifyAuthToken(
   }
 
   try {
-    const claims = await verifyFirebaseIdToken(token, projectId);
+    const claims = await verifyFirebaseIdToken(token, projectId, {
+      isProduction,
+      allowTestMock: isExplicitTestMode,
+    });
     return {
       ok: true,
       status: 200,
@@ -89,13 +100,14 @@ export async function verifyAuthToken(
  */
 export async function verifyAuthWorker(
   request: Request,
-  env: { FIREBASE_PROJECT_ID?: string; [key: string]: unknown },
+  env: { FIREBASE_PROJECT_ID?: string; NODE_ENV?: string; ZANA_ENV?: string; ALLOW_TEST_AUTH_MOCK?: string; [key: string]: unknown },
   responseHeaders?: Headers | Record<string, string>
 ): Promise<{ user: AuthenticatedUser } | Response> {
   const authHeader = request.headers.get("Authorization");
   const result = await verifyAuthToken(
     authHeader,
-    (env.FIREBASE_PROJECT_ID as string) || "gen-lang-client-0009572581"
+    (env.FIREBASE_PROJECT_ID as string) || "gen-lang-client-0009572581",
+    env
   );
 
   if (!result.ok || !result.user) {

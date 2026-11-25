@@ -1,6 +1,7 @@
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  sendEmailVerification,
   sendPasswordResetEmail,
   signInWithPopup,
   GoogleAuthProvider,
@@ -271,6 +272,55 @@ export async function registerWithEmail(
 }
 
 /**
+ * Send Firebase email verification link to the current or specified user.
+ */
+export async function sendVerificationEmail(
+  targetUser?: User | null
+): Promise<{ ok: boolean; error?: string }> {
+  const auth = getFirebaseAuth();
+  const user = targetUser ?? auth?.currentUser ?? null;
+  if (!user) {
+    return { ok: false, error: "هیچ هەژمارێکی چالاک نەدۆزرایەوە." };
+  }
+  if (user.emailVerified) {
+    return { ok: true };
+  }
+  try {
+    await sendEmailVerification(user);
+    return { ok: true };
+  } catch (err: unknown) {
+    return { ok: false, error: getErrorMessage(err) };
+  }
+}
+
+/**
+ * Reload current Firebase user profile & force-refresh ID token to detect verified email.
+ */
+export async function reloadAndCheckEmailVerified(): Promise<{
+  verified: boolean;
+  user: User | null;
+}> {
+  const auth = getFirebaseAuth();
+  const user = auth?.currentUser ?? null;
+  if (!user) {
+    return { verified: false, user: null };
+  }
+  if (typeof user.reload === "function") {
+    await user.reload();
+  }
+  const refreshed = auth?.currentUser ?? user;
+  if (typeof refreshed.getIdToken === "function") {
+    await refreshed.getIdToken(true);
+  }
+  setLocalAuthUser(refreshed);
+  notifyAuthListeners(refreshed);
+  return {
+    verified: Boolean(refreshed.emailVerified),
+    user: refreshed,
+  };
+}
+
+/**
  * Sign in with Google using standard Firebase Google popup
  */
 export async function loginWithGoogle(): Promise<User> {
@@ -329,6 +379,10 @@ export async function logoutUser(): Promise<void> {
 
   if (typeof window !== "undefined") {
     try {
+      localStorage.removeItem("zana.profile.v1");
+      localStorage.removeItem("zana_session_recovery_v1");
+      localStorage.removeItem("zana_role_cache");
+      localStorage.removeItem("zana_role_cache_time");
       localStorage.removeItem("zana_user_role");
       localStorage.removeItem("zana_app_store_v1");
       const keysToRemove = Object.keys(localStorage).filter(
@@ -749,6 +803,8 @@ export const AuthService = {
   ensureAuthenticated,
   loginWithEmail,
   registerWithEmail,
+  sendVerificationEmail,
+  reloadAndCheckEmailVerified,
   loginWithGoogle,
   loginAnonymously,
   resetPassword,

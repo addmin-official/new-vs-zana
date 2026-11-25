@@ -1,5 +1,8 @@
 # Firebase Phone Authentication Setup
 
+> **Status: Future / Unsupported in Current Release.**
+> SMS and phone-based OTP registration/login are explicitly **out of scope** for the current ZANA production release (not a release blocker). ZANA currently supports verified Email/Password and Google Sign-In only, and server-side `/api/auth/phone/send-otp` fails closed with `503 SMS_PROVIDER_NOT_CONFIGURED`. Retain this document for future SMS activation only.
+
 ## Steps to enable phone login in Firebase Console:
 
 1. Go to: https://console.firebase.google.com

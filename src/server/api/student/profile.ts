@@ -1,4 +1,5 @@
 import { verifyAuthToken } from '../../auth/firebase.ts';
+import { resolveVerifiedSubscriptionEmail } from '../../auth/verifiedEmail.ts';
 
 export interface StudentProfile {
   studentId: string;
@@ -35,7 +36,7 @@ export async function handleStudentProfileRoute(request: Request, env: StudentPr
   }
 
   const token = authHeader.split('Bearer ')[1];
-  const decodedToken = await verifyAuthToken(token, { FIREBASE_PROJECT_ID: env.FIREBASE_PROJECT_ID });
+  const decodedToken = await verifyAuthToken(token, env);
   if (!decodedToken || !decodedToken.uid) {
     return new Response(JSON.stringify({ error: 'Invalid identity' }), {
       status: 403,
@@ -43,7 +44,11 @@ export async function handleStudentProfileRoute(request: Request, env: StudentPr
     });
   }
   const studentId = decodedToken.uid;
-  const verifiedEmail = (decodedToken.email || '').trim().toLowerCase();
+  const verifiedEmail = resolveVerifiedSubscriptionEmail({
+    uid: studentId,
+    email: decodedToken.email,
+    claims: decodedToken as Record<string, unknown>,
+  });
 
   try {
     if (!env.DB) {

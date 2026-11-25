@@ -7,7 +7,6 @@ import { AdaptiveLearningEngine } from "../learning/engine/AdaptiveLearningEngin
 import { DifficultyLevel, MisconceptionStatus, LearningEvent, LearningEventType, ExerciseAttempt, LearningSession } from "../learning/domain/MasteryTypes.ts";
 import { CurriculumRegistry } from "../curriculum/registry/CurriculumRegistry.ts";
 import { getChapterOutlineForSubject } from "../curriculum/data/chapterOutlines.ts";
-import { AuthService } from "../services/authService.ts";
 import {
   ChatRequest,
   AssessmentRequest,
@@ -55,6 +54,7 @@ import {
 import { AdminD1Repository, type D1DatabaseLike } from "../core/brain/storage/AdminD1Repository.ts";
 import { enforceAiRateLimit } from "../server/middleware/rateLimiter.ts";
 import { verifyAuthWorker, type AuthenticatedUser } from "../server/middleware/authMiddleware.ts";
+import { isSyntheticPlaceholderEmail, resolveVerifiedSubscriptionEmail, sanitizeVerifiedSubscriptionEmail } from "../server/auth/verifiedEmail.ts";
 import { applySecurityHeaders } from "../server/middleware/security.ts";
 import { validateProductionEnv } from "../server/config/envValidator.ts";
 import { createOtpSession, verifyOtpSession } from "../server/auth/otpService.ts";
@@ -500,7 +500,7 @@ export async function checkSubscription(
 
   const now = Date.now();
   const trialDurationMs = 3 * 24 * 60 * 60 * 1000; // 3 days
-  const normalizedEmail = (userEmail || "").trim().toLowerCase();
+  const normalizedEmail = sanitizeVerifiedSubscriptionEmail(userId, userEmail);
 
   // Automatically synchronize student metadata into D1 when identity claims are known
   if (normalizedEmail) {
@@ -678,22 +678,18 @@ export async function checkSubscription(
   }
 }
 
-async function getWorkerAuthenticatedStudentId(req: Request, env: Env): Promise<string> {
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    throw new Error("UNAUTHORIZED");
-  }
-  const token = authHeader.substring(7).trim();
-  if (!token || token === "null" || token === "undefined") {
-    throw new Error("UNAUTHORIZED");
-  }
+function withRateLimitHeaders(responseHeaders: Headers, retryAfterSeconds = "3600"): Headers {
+  const headers = new Headers(responseHeaders);
+  headers.set("Retry-After", retryAfterSeconds);
+  return headers;
+}
 
-  try {
-    const claims = await AuthService.verifyFirebaseIdToken(token, env.FIREBASE_PROJECT_ID || "gen-lang-client-0009572581");
-    return claims.uid;
-  } catch {
+async function getWorkerAuthenticatedStudent(req: Request, env: Env): Promise<AuthenticatedUser> {
+  const authResult = await verifyAuthWorker(req, env, new Headers());
+  if (authResult instanceof Response) {
     throw new Error("UNAUTHORIZED");
   }
+  return authResult.user;
 }
 
 export interface EntitlementCheckResult {
@@ -761,7 +757,8 @@ export async function verifyEntitlementWorker(
     );
   }
 
-  const subResult = await checkSubscription(env, studentId, user.email, user.claims?.name);
+  const verifiedEmail = resolveVerifiedSubscriptionEmail(user) || undefined;
+  const subResult = await checkSubscription(env, studentId, verifiedEmail, user.claims?.name);
 
   if (subResult.status === "unavailable") {
     return new Response(
@@ -813,18 +810,19 @@ export async function verifyEntitlementWorker(
 }
 
 export async function getWorkerAuthenticatedStudentWithEntitlement(req: Request, env: Env): Promise<string> {
-  const uid = await getWorkerAuthenticatedStudentId(req, env);
+  const user = await getWorkerAuthenticatedStudent(req, env);
   if (!env.DB) {
     throw new Error("DATABASE_UNAVAILABLE");
   }
-  const subResult = await checkSubscription(env, uid);
+  const verifiedEmail = resolveVerifiedSubscriptionEmail(user) || undefined;
+  const subResult = await checkSubscription(env, user.uid, verifiedEmail, user.claims?.name);
   if (subResult.status === "unavailable") {
     throw new Error("DATABASE_UNAVAILABLE");
   }
-  if (subResult.status === "expired") {
+  if (subResult.status === "expired" || subResult.status === "inactive") {
     throw new Error("SUBSCRIPTION_REQUIRED");
   }
-  return uid;
+  return user.uid;
 }
 
 function getPersistenceMode(env: Env): "production" | "development" | "test" {
@@ -935,6 +933,9 @@ export default {
 
     const responseHeaders = getCorsHeaders(origin, env);
     responseHeaders.set("Content-Type", "application/json");
+    if (pathname.startsWith("/api/") && pathname !== "/api/health" && pathname !== "/api/health/curriculum") {
+      responseHeaders.set("Cache-Control", "no-store");
+    }
 
     // Origin Enforcement for API
     if (pathname.startsWith("/api/")) {
@@ -1072,10 +1073,16 @@ export default {
           }
           if (assetResponse.status < 400) {
             const resHeaders = new Headers(assetResponse.headers);
-            if (pathname.startsWith("/assets/") || pathname.match(/\.(js|css|png|jpg|jpeg|webp|svg|woff2?|ico)$/i)) {
-              resHeaders.set("Cache-Control", "public, max-age=31536000, immutable");
-            } else if (pathname === "/" || pathname === "/index.html" || pathname.endsWith(".html")) {
+            if (
+              pathname === "/" ||
+              pathname === "/index.html" ||
+              pathname.endsWith(".html") ||
+              pathname === "/sw.js" ||
+              pathname === "/registerSW.js"
+            ) {
               resHeaders.set("Cache-Control", "public, max-age=0, must-revalidate");
+            } else if (pathname.startsWith("/assets/") || pathname.match(/\.(js|css|png|jpg|jpeg|webp|svg|woff2?|ico)$/i)) {
+              resHeaders.set("Cache-Control", "public, max-age=31536000, immutable");
             }
             return new Response(assetResponse.body, {
               status: assetResponse.status,
@@ -1487,10 +1494,7 @@ export default {
               }),
               {
                 status: 429,
-                headers: {
-                  ...responseHeaders,
-                  "Retry-After": "3600",
-                },
+                headers: withRateLimitHeaders(responseHeaders, "3600"),
               }
             );
           }
@@ -1539,10 +1543,7 @@ export default {
               }),
               {
                 status: 429,
-                headers: {
-                  ...responseHeaders,
-                  "Retry-After": "3600",
-                },
+                headers: withRateLimitHeaders(responseHeaders, "3600"),
               }
             );
           }
@@ -1604,10 +1605,7 @@ export default {
               }),
               {
                 status: 429,
-                headers: {
-                  ...responseHeaders,
-                  "Retry-After": "3600",
-                },
+                headers: withRateLimitHeaders(responseHeaders, "3600"),
               }
             );
           }
@@ -1655,10 +1653,7 @@ export default {
               }),
               {
                 status: 429,
-                headers: {
-                  ...responseHeaders,
-                  "Retry-After": "3600",
-                },
+                headers: withRateLimitHeaders(responseHeaders, "3600"),
               }
             );
           }
@@ -1696,10 +1691,7 @@ export default {
               }),
               {
                 status: 429,
-                headers: {
-                  ...responseHeaders,
-                  "Retry-After": "3600",
-                },
+                headers: withRateLimitHeaders(responseHeaders, "3600"),
               }
             );
           }
@@ -2486,7 +2478,7 @@ export default {
         if (authResult instanceof Response) return authResult;
 
         const verifiedUid = authResult.user.uid;
-        const verifiedEmail = (authResult.user.email || "").trim().toLowerCase();
+        const verifiedEmail = resolveVerifiedSubscriptionEmail(authResult.user);
 
         try {
           let student = null;
@@ -3197,10 +3189,23 @@ export default {
             });
           }
 
-          const emailToSave = body?.email?.trim() || "";
+          const rawAdminEmail = (body?.email || "").trim().toLowerCase();
+          if (rawAdminEmail && isSyntheticPlaceholderEmail(targetUserId, rawAdminEmail)) {
+            return new Response(
+              JSON.stringify({
+                error: "INVALID_EMAIL",
+                detail: "ناونیشانی ئیمەیڵی دروستکراوی کاتی ڕێگەپێدراو نییە.",
+              }),
+              { status: 400, headers: responseHeaders }
+            );
+          }
+
+          const emailToSave = rawAdminEmail;
           const nameToSave = body?.name?.trim() || "قوتابی";
           const gradeToSave = body?.grade?.trim() || "12";
           const streamToSave = body?.stream?.trim() || "scientific";
+          const studentEmailExpr = emailToSave ? "excluded.email" : "students.email";
+          const userEmailExpr = emailToSave ? "excluded.email" : "users.email";
 
           try {
             await env.DB.prepare(
@@ -3208,21 +3213,39 @@ export default {
                VALUES (?, ?, ?, ?, ?, 'firebase_auth')
                ON CONFLICT(id) DO UPDATE SET
                  name = CASE WHEN excluded.name != '' THEN excluded.name ELSE students.name END,
-                 email = excluded.email,
+                 email = ${studentEmailExpr},
                  grade = excluded.grade,
                  stream = excluded.stream`
             ).bind(targetUserId, nameToSave, emailToSave, gradeToSave, streamToSave).run();
-          } catch {
+          } catch (stuErr) {
+            if (isUniqueConstraintError(stuErr)) {
+              return new Response(
+                JSON.stringify({
+                  error: "EMAIL_ALREADY_REGISTERED",
+                  detail: "ئەم ئیمەیڵە پێشتر بۆ قوتابییەکی تر تۆمار کراوە.",
+                }),
+                { status: 409, headers: responseHeaders }
+              );
+            }
             try {
               await env.DB.prepare(
                 `INSERT INTO students (id, firebase_uid, name, email, grade, created_at)
                  VALUES (?, ?, ?, ?, ?, datetime('now'))
                  ON CONFLICT(id) DO UPDATE SET
                    name = COALESCE(NULLIF(excluded.name, ''), students.name),
-                   email = excluded.email,
+                   email = ${studentEmailExpr},
                    grade = COALESCE(NULLIF(excluded.grade, ''), students.grade)`
               ).bind(targetUserId, targetUserId, nameToSave, emailToSave, gradeToSave).run();
             } catch (fallbackErr) {
+              if (isUniqueConstraintError(fallbackErr)) {
+                return new Response(
+                  JSON.stringify({
+                    error: "EMAIL_ALREADY_REGISTERED",
+                    detail: "ئەم ئیمەیڵە پێشتر بۆ قوتابییەکی تر تۆمار کراوە.",
+                  }),
+                  { status: 409, headers: responseHeaders }
+                );
+              }
               console.warn("[update-student] students fallback error:", fallbackErr);
             }
           }
@@ -3233,11 +3256,20 @@ export default {
                VALUES (?, ?, ?, 'student', ?, ?)
                ON CONFLICT(id) DO UPDATE SET
                  name = CASE WHEN excluded.name != '' THEN excluded.name ELSE users.name END,
-                 email = excluded.email,
+                 email = ${userEmailExpr},
                  grade = excluded.grade,
                  stream = excluded.stream`
             ).bind(targetUserId, emailToSave, nameToSave, gradeToSave, streamToSave).run();
           } catch (usersErr) {
+            if (isUniqueConstraintError(usersErr)) {
+              return new Response(
+                JSON.stringify({
+                  error: "EMAIL_ALREADY_REGISTERED",
+                  detail: "ئەم ئیمەیڵە پێشتر بۆ بەکارهێنەرێکی تر تۆمار کراوە.",
+                }),
+                { status: 409, headers: responseHeaders }
+              );
+            }
             console.warn("[update-student] users upsert notice:", usersErr);
           }
 
@@ -3532,7 +3564,8 @@ export default {
         if (authResult instanceof Response) return authResult;
 
         const verifiedUid = authResult.user.uid;
-        const verifiedEmail = authResult.user.email || "";
+        const verifiedEmail = resolveVerifiedSubscriptionEmail(authResult.user);
+        const rawTokenEmail = (authResult.user.email || "").trim().toLowerCase();
 
         try {
           const body = (await request.json().catch(() => ({}))) as {
@@ -3543,19 +3576,41 @@ export default {
             schoolName?: string;
           };
 
-          const rawEmail = typeof body?.email === "string" ? body.email.trim() : "";
-          const normalizedEmail = (verifiedEmail || rawEmail).trim().toLowerCase();
+          const rawEmail = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
 
-          if (!normalizedEmail) {
+          if (!verifiedEmail) {
+            if (rawTokenEmail) {
+              return new Response(
+                JSON.stringify({
+                  ok: false,
+                  error: "EMAIL_NOT_VERIFIED",
+                  detail: "ئیمەیڵەکەت پشتڕاست نەکراوەتەوە. تکایە سەرەتا ئیمەیڵەکەت پشتڕاست بکەرەوە.",
+                }),
+                { status: 403, headers: responseHeaders }
+              );
+            }
             return new Response(
               JSON.stringify({
                 ok: false,
                 error: "EMAIL_REQUIRED",
-                detail: "ئیمەیڵ پێویستە بۆ تەواوکردنی تۆمارکردن.",
+                detail: "ئیمەیڵی پشتڕاستکراو پێویستە بۆ تەواوکردنی تۆمارکردن.",
               }),
               { status: 400, headers: responseHeaders }
             );
           }
+
+          if (rawEmail && rawEmail !== verifiedEmail) {
+            return new Response(
+              JSON.stringify({
+                ok: false,
+                error: "FORBIDDEN_EMAIL_MISMATCH",
+                detail: "ئیمەیڵی نێردراو لەگەڵ ناسنامەی پشتڕاستکراودا یەک ناگرێتەوە.",
+              }),
+              { status: 403, headers: responseHeaders }
+            );
+          }
+
+          const normalizedEmail = verifiedEmail;
 
           const studentName = body?.name?.trim() || "";
           if (!studentName || studentName.length < 2) {
@@ -3843,7 +3898,11 @@ export default {
         if (authResult instanceof Response) return authResult;
 
         const verifiedUid = authResult.user.uid;
-        const verifiedEmail = authResult.user.email || "";
+        const verifiedEmail = resolveVerifiedSubscriptionEmail(authResult.user);
+        const rawTokenEmail = (authResult.user.email || "").trim().toLowerCase();
+        const verifiedPhone = typeof authResult.user.claims?.phone_number === "string"
+          ? authResult.user.claims.phone_number.trim()
+          : "";
 
         try {
           const body = (await request.json().catch(() => ({}))) as {
@@ -3867,11 +3926,48 @@ export default {
           }
 
           const studentId = verifiedUid;
-          const rawEmail = typeof body?.email === "string" ? body.email.trim() : "";
-          const normalizedEmail = (verifiedEmail || rawEmail).trim().toLowerCase();
-          const studentName = body?.name?.trim() || "قوتابی";
-          const grade = body?.grade?.trim() || "12";
-          const stream = body?.stream?.trim() || "scientific";
+          const rawEmail = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
+
+          if (!verifiedEmail && rawTokenEmail) {
+            return new Response(
+              JSON.stringify({
+                ok: false,
+                error: "EMAIL_NOT_VERIFIED",
+                detail: "ئیمەیڵەکەت پشتڕاست نەکراوەتەوە. تکایە سەرەتا ئیمەیڵەکەت پشتڕاست بکەرەوە.",
+              }),
+              { status: 403, headers: responseHeaders }
+            );
+          }
+
+          if (!verifiedEmail && !verifiedPhone) {
+            return new Response(
+              JSON.stringify({
+                ok: false,
+                error: "EMAIL_REQUIRED",
+                detail: "ئیمەیڵی پشتڕاستکراو یان ژمارەی مۆبایلی پشتڕاستکراو پێویستە.",
+              }),
+              { status: 400, headers: responseHeaders }
+            );
+          }
+
+          if (rawEmail && (!verifiedEmail || rawEmail !== verifiedEmail)) {
+            return new Response(
+              JSON.stringify({
+                ok: false,
+                error: "FORBIDDEN_EMAIL_MISMATCH",
+                detail: "ئیمەیڵی نێردراو لەگەڵ ناسنامەی پشتڕاستکراودا یەک ناگرێتەوە.",
+              }),
+              { status: 403, headers: responseHeaders }
+            );
+          }
+
+          const normalizedEmail = verifiedEmail;
+          const explicitName = typeof body?.name === "string" ? body.name.trim() : "";
+          const explicitGrade = typeof body?.grade === "string" ? body.grade.trim() : "";
+          const explicitStream = typeof body?.stream === "string" ? body.stream.trim() : "";
+          const studentName = explicitName || "قوتابی";
+          const grade = explicitGrade || "12";
+          const stream = explicitStream || "scientific";
 
           const now = Date.now();
           const trialDurationMs = 3 * 24 * 60 * 60 * 1000; // 3 days
@@ -3939,17 +4035,20 @@ export default {
             );
           }
 
-          // 1. Upsert student metadata into students table
+          // 1. Upsert student metadata into students table without clobbering existing values on omitted fields
+          const nameUpdateExpr = explicitName ? "excluded.name" : "COALESCE(NULLIF(students.name, ''), excluded.name)";
+          const gradeUpdateExpr = explicitGrade ? "excluded.grade" : "COALESCE(NULLIF(students.grade, ''), excluded.grade)";
+          const streamUpdateExpr = explicitStream ? "excluded.stream" : "COALESCE(NULLIF(students.stream, ''), excluded.stream)";
           try {
             await env.DB.prepare(
               `INSERT INTO students (id, name, email, grade, stream, password_hash)
                VALUES (?, ?, ?, ?, ?, 'firebase_auth')
                ON CONFLICT(id) DO UPDATE SET
-                 name = CASE WHEN excluded.name != '' THEN excluded.name ELSE students.name END,
-                 email = CASE WHEN excluded.email != '' THEN excluded.email ELSE students.email END,
-                 grade = excluded.grade,
-                 stream = excluded.stream`
-            ).bind(studentId, studentName, normalizedEmail, grade, stream).run();
+                 name = ${nameUpdateExpr},
+                 email = COALESCE(NULLIF(excluded.email, ''), students.email),
+                 grade = ${gradeUpdateExpr},
+                 stream = ${streamUpdateExpr}`
+            ).bind(studentId, studentName, normalizedEmail || null, grade, stream).run();
           } catch (stuErr1) {
             if (isUniqueConstraintError(stuErr1)) {
               return new Response(
@@ -3967,10 +4066,10 @@ export default {
                 `INSERT INTO students (id, firebase_uid, name, email, grade, created_at)
                  VALUES (?, ?, ?, ?, ?, datetime('now'))
                  ON CONFLICT(id) DO UPDATE SET
-                   name = COALESCE(NULLIF(excluded.name, ''), students.name),
+                   name = ${nameUpdateExpr},
                    email = COALESCE(NULLIF(excluded.email, ''), students.email),
-                   grade = COALESCE(NULLIF(excluded.grade, ''), students.grade)`
-              ).bind(studentId, studentId, studentName, normalizedEmail, grade).run();
+                   grade = ${gradeUpdateExpr}`
+              ).bind(studentId, studentId, studentName, normalizedEmail || null, grade).run();
             } catch (stuErr2) {
               if (isUniqueConstraintError(stuErr2)) {
                 return new Response(
@@ -4183,9 +4282,9 @@ export default {
           );
         }
         try {
-          const targetEmail = userId === verifiedUid ? (authResult.user.email || authResult.user.claims?.phone_number) : undefined;
+          const targetEmail = userId === verifiedUid ? (resolveVerifiedSubscriptionEmail(authResult.user) || undefined) : undefined;
           const targetName = userId === verifiedUid ? authResult.user.claims?.name : undefined;
-          const normalizedTargetEmail = (targetEmail || "").trim().toLowerCase();
+          const normalizedTargetEmail = targetEmail || "";
           const subResult = await checkSubscription(env, userId, targetEmail, targetName);
           if (subResult.status === "unavailable") {
             return new Response(
@@ -4285,7 +4384,7 @@ export default {
         const authResult = await verifyAuthWorker(request, env, responseHeaders);
         if (authResult instanceof Response) return authResult;
         const verifiedUserId = authResult.user.uid;
-        const verifiedEmail = authResult.user.email || "";
+        const verifiedEmail = resolveVerifiedSubscriptionEmail(authResult.user);
 
         try {
           const body = (await request.json().catch(() => ({}))) as {
@@ -4377,9 +4476,9 @@ export default {
             );
           }
 
-          // Sanitize metadata fields
+          // Sanitize metadata fields — never trust forged client body.studentEmail over verified token email
           const studentName = (body.studentName || "").trim().slice(0, 100);
-          const studentEmail = (body.studentEmail || verifiedEmail).trim().slice(0, 120);
+          const studentEmail = verifiedEmail.slice(0, 120);
           const studentPhone = (body.studentPhone || "").trim().slice(0, 30);
           const notes = (body.notes || "").trim().slice(0, 500);
 

@@ -87,6 +87,29 @@ jobs:
           set -euo pipefail
           npm test 2>&1 | tee test.log
 
+      # STAGE 3.5.1: Verify Production Migration Directory & National ID Exclusion
+      - name: Verify Production D1 Migrations
+        run: |
+          set -euo pipefail
+          if grep -rnE "national_id|nationalId" migrations_production/; then
+            echo "::error::migrations_production/ must not contain any National ID references!"
+            exit 1
+          fi
+          TMP_PERSIST=$(mktemp -d)
+          TMP_CFG=$(mktemp /tmp/wrangler-ci-XXXXXX.json)
+          cp wrangler.jsonc "$TMP_CFG" 2>/dev/null || true
+          node -e '
+            const fs = require("fs");
+            const path = require("path");
+            const { parseJsonc } = require("./scripts/resolve-kv.js");
+            const cfg = parseJsonc(fs.readFileSync("wrangler.jsonc", "utf8"));
+            const absMigDir = path.resolve("migrations_production");
+            cfg.d1_databases = (cfg.d1_databases || []).map((db) => db.binding === "DB" ? { ...db, migrations_dir: absMigDir } : db);
+            fs.writeFileSync(process.argv[1], JSON.stringify(cfg, null, 2));
+          ' "$TMP_CFG"
+          printf "y\n" | npx wrangler d1 migrations apply DB --local --config "$TMP_CFG" --persist-to "$TMP_PERSIST"
+          rm -rf "$TMP_PERSIST" "$TMP_CFG"
+
       # STAGE 3.6: Vitest Unit & Coverage Gate (70% Threshold)
       - name: Run Vitest Unit Tests with Coverage
         run: |

@@ -57,8 +57,8 @@ export default defineConfig(({ mode }) => {
               },
             },
             {
-              // Cache API responses (NetworkFirst, 1 hour) - Exclude real-time chat, assessment, feedback, admin, and internal routes
-              urlPattern: /^https?:\/\/.*\/api\/(?!chat|assessment|feedback|admin|internal).*/i,
+              // Cache only public read-only health/curriculum API responses (never cache user-specific auth, subscription, student, or receipt endpoints)
+              urlPattern: /^https?:\/\/.*\/api\/(?:health|curriculum)\b.*/i,
               handler: 'NetworkFirst',
               options: {
                 cacheName: 'api-responses-cache',

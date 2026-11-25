@@ -423,6 +423,15 @@ export function generateProductionConfig(
     },
   ];
 
+  // Configure production-safe migration directory (excludes National ID columns)
+  if (Array.isArray(prodConfig.d1_databases)) {
+    prodConfig.d1_databases = prodConfig.d1_databases.map((db) =>
+      db && db.binding === "DB"
+        ? { ...db, migrations_dir: "./migrations_production" }
+        : db
+    );
+  }
+
   // Inject ZANA_REVISION variable
   prodConfig.vars = prodConfig.vars || {};
   let shortSha = "unknown";

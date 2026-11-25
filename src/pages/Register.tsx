@@ -1,4 +1,4 @@
-import React, { useState, useId } from "react";
+import React, { useState, useEffect, useId } from "react";
 import {
   GraduationCap,
   Mail,
@@ -17,18 +17,15 @@ import {
   ChevronLeft,
   ChevronRight,
   Lock,
-  Phone,
 } from "lucide-react";
 import {
   registerWithEmail,
   loginWithGoogle,
+  sendVerificationEmail,
+  reloadAndCheckEmailVerified,
   getErrorMessage,
-  setupRecaptcha,
-  sendPhoneOtp,
-  verifyPhoneOtp,
   startStudentTrial,
 } from "../services/authService.ts";
-import { formatIraqiPhone, isIraqiPhoneValid, normalizeDigits } from "../services/phoneUtils.ts";
 import { onboardStudent } from "../services/subscriptionService.ts";
 import { createUserDocumentIfMissing } from "../auth/userProfileService.ts";
 import { initializeTrial } from "../auth/trialService.ts";
@@ -61,17 +58,15 @@ export function Register({
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
 
   // Step 1: Account Creation fields
-  const [authMethod, setAuthMethod] = useState<'email' | 'phone'>('email');
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [createdUid, setCreatedUid] = useState<string | null>(null);
-  const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
-  const [phoneStep1Loading, setPhoneStep1Loading] = useState(false);
+  const [awaitingEmailVerification, setAwaitingEmailVerification] = useState(false);
+  const [verificationNotice, setVerificationNotice] = useState<string | null>(null);
+  const [verifyingEmailCheck, setVerifyingEmailCheck] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
 
   // Step 2: Student Profile fields
@@ -86,6 +81,14 @@ export function Register({
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = window.setTimeout(() => {
+      setResendCooldown((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [resendCooldown]);
 
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const isPassLengthValid = password.length >= 6;
@@ -106,10 +109,39 @@ export function Register({
 
   const passStrength = getPasswordStrength();
 
+  // Guarantee student identity is committed to Firestore and D1 once email is verified
+  const persistStudentImmediately = async (targetUid: string, identifier: string | null, name: string) => {
+    const streamVal = selectedGrade === "9" || selectedGrade === "10" ? "general" : selectedStream;
+    try {
+      await createUserDocumentIfMissing(targetUid, identifier, {
+        name: name || "قوتابی",
+        grade: selectedGrade || "12",
+        stream: streamVal,
+        activeSubject: "chemistry",
+        level: "intermediate",
+        school: schoolName.trim(),
+      });
+    } catch (err) {
+      console.warn("[Register] createUserDocumentIfMissing notice:", err);
+    }
+
+    try {
+      await startStudentTrial(targetUid, {
+        name: name || "قوتابی",
+        email: identifier || undefined,
+        grade: selectedGrade || "12",
+        stream: streamVal,
+      });
+    } catch (trialErr) {
+      console.warn("[Register] startStudentTrial notice:", trialErr);
+    }
+  };
+
   // Handle Step 1 Email Account Creation
   const handleAccountCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
+    setVerificationNotice(null);
 
     const trimmedName = fullName.trim();
     const trimmedEmail = email.trim();
@@ -137,38 +169,21 @@ export function Register({
       return;
     }
 
-    // Helper to guarantee student identity is committed to both Firestore and D1 immediately
-    const persistStudentImmediately = async (targetUid: string, identifier: string | null, name: string) => {
-      const streamVal = selectedGrade === "9" || selectedGrade === "10" ? "general" : selectedStream;
-      try {
-        await createUserDocumentIfMissing(targetUid, identifier, {
-          name: name || "قوتابی",
-          grade: selectedGrade || "12",
-          stream: streamVal,
-          activeSubject: "chemistry",
-          level: "intermediate",
-          school: schoolName.trim(),
-        });
-      } catch (err) {
-        console.warn("[Register] createUserDocumentIfMissing notice:", err);
-      }
-
-      try {
-        await startStudentTrial(targetUid, {
-          name: name || "قوتابی",
-          email: identifier || undefined,
-          grade: selectedGrade || "12",
-          stream: streamVal,
-        });
-      } catch (trialErr) {
-        console.warn("[Register] startStudentTrial notice:", trialErr);
-      }
-    };
-
     setLoading(true);
     try {
       const user = await registerWithEmail(trimmedEmail, password, trimmedName);
       setCreatedUid(user.uid);
+      if (user.email && user.emailVerified === false) {
+        const sent = await sendVerificationEmail(user);
+        setAwaitingEmailVerification(true);
+        setResendCooldown(60);
+        setVerificationNotice(
+          sent.ok
+            ? `لینکی دڵنیایی نێردرا بۆ ${trimmedEmail}. تکایە ئیمەیڵەکەت بپشکنە و کلیک لە لینکەکە بکە.`
+            : sent.error || `تکایە ئیمەیڵەکەت (${trimmedEmail}) پشتڕاست بکەرەوە پێش بەردەوامبوون.`
+        );
+        return;
+      }
       await initializeTrial(user.uid, trimmedEmail);
       await persistStudentImmediately(user.uid, trimmedEmail, trimmedName);
       setCurrentStep(2);
@@ -179,75 +194,46 @@ export function Register({
     }
   };
 
-  const isPhoneValid = isIraqiPhoneValid(phone);
-
-  const handlePhoneSendOtp = async () => {
-    if (phoneStep1Loading || !isPhoneValid || !fullName.trim()) {
-      if (!fullName.trim()) setErrorMessage('تکایە ناوت بنووسە');
-      return;
-    }
-    setPhoneStep1Loading(true);
+  const handleResendVerificationEmail = async () => {
+    if (resendCooldown > 0 || verifyingEmailCheck) return;
     setErrorMessage(null);
-    await new Promise(resolve => setTimeout(resolve, 100));
-    const verifier = setupRecaptcha('zana-recaptcha-register');
-    if (!verifier) {
-      setErrorMessage('کێشەی دڵنیایی — تکایە پەڕەکە تازە بکەرەوە');
-      setPhoneStep1Loading(false);
-      return;
-    }
-    const result = await sendPhoneOtp(phone, verifier);
-    if (result.success) {
-      setOtpSent(true);
+    const sent = await sendVerificationEmail();
+    if (sent.ok) {
       setResendCooldown(60);
-      const t = setInterval(() => setResendCooldown(p => {
-        if (p <= 1) { clearInterval(t); return 0; }
-        return p - 1;
-      }), 1000);
+      setVerificationNotice(`لینکی نوێی دڵنیایی نێردرا بۆ ${email.trim()}. تکایە Inbox و Spam بپشکنە.`);
     } else {
-      setErrorMessage(result.error || 'کێشەیەک ڕوویدا');
+      setErrorMessage(sent.error || "نەتوانرا ئیمەیڵی دڵنیایی بنێردرێت. تکایە دواتر هەوڵبدە.");
     }
-    setPhoneStep1Loading(false);
   };
 
-  const handlePhoneVerifyAndProceed = async () => {
-    if (phoneStep1Loading || otp.length < 6) return;
-    setPhoneStep1Loading(true);
-    const streamVal = selectedGrade === "9" || selectedGrade === "10" ? "general" : selectedStream;
-    const result = await verifyPhoneOtp(otp, {
-      name: fullName.trim() || "قوتابی",
-      grade: selectedGrade || "12",
-      stream: streamVal,
-    });
-    if (result.user) {
-      setCreatedUid(result.user.uid);
-      const phoneIdentifier = result.user.phoneNumber || formatIraqiPhone(phone);
-      // Initialize trial period immediately in memory and D1/Firestore
-      await initializeTrial(result.user.uid, phoneIdentifier);
-      const streamVal = selectedGrade === "9" || selectedGrade === "10" ? "general" : selectedStream;
-      await createUserDocumentIfMissing(result.user.uid, phoneIdentifier, {
-        name: fullName.trim() || "قوتابی",
-        grade: selectedGrade || "12",
-        stream: streamVal,
-        activeSubject: "chemistry",
-        level: "intermediate",
-        school: schoolName.trim(),
-      }).catch(() => {});
-      await startStudentTrial(result.user.uid, {
-        name: fullName.trim() || "قوتابی",
-        email: phoneIdentifier,
-        grade: selectedGrade || "12",
-        stream: streamVal,
-      }).catch(() => {});
+  const handleCheckEmailVerified = async () => {
+    if (verifyingEmailCheck) return;
+    setVerifyingEmailCheck(true);
+    setErrorMessage(null);
+    try {
+      const res = await reloadAndCheckEmailVerified();
+      if (!res.verified || !res.user) {
+        setErrorMessage("هێشتا ئیمەیڵەکەت پشتڕاست نەکراوەتەوە. تکایە کلیک لە لینکی ناو ئیمەیڵەکە بکە و دووبارە تاقیبکەرەوە.");
+        return;
+      }
+      const verifiedEmail = res.user.email || email.trim();
+      setCreatedUid(res.user.uid);
+      setAwaitingEmailVerification(false);
+      await initializeTrial(res.user.uid, verifiedEmail);
+      await persistStudentImmediately(res.user.uid, verifiedEmail, fullName.trim() || "قوتابی");
       setCurrentStep(2);
-    } else {
-      setErrorMessage(result.error || 'کۆدی دڵنیایی هەڵەیە');
+    } catch (err: unknown) {
+      setErrorMessage(getErrorMessage(err));
+    } finally {
+      setVerifyingEmailCheck(false);
     }
-    setPhoneStep1Loading(false);
   };
 
   // Handle Step 1 Google Sign-Up
   const handleGoogleSignUp = async () => {
     setErrorMessage(null);
+    setVerificationNotice(null);
+    setAwaitingEmailVerification(false);
     setGoogleLoading(true);
     try {
       const user = await loginWithGoogle();
@@ -305,9 +291,8 @@ export function Register({
       const targetUid = createdUid || "guest_" + Date.now();
       const streamVal = selectedGrade === "9" || selectedGrade === "10" ? "general" : selectedStream;
 
-      // For phone-registered users, use phone number as identifier
-      const identifier = email || 
-        (authMethod === 'phone' ? (phone || null) : null);
+      // Verified email identifier (phone auth is disabled in current release)
+      const identifier = email.trim() || null;
       await createUserDocumentIfMissing(targetUid, identifier, {
         name: fullName || "قوتابی",
         grade: selectedGrade,
@@ -320,7 +305,7 @@ export function Register({
       // Synchronize student profile permanently into D1 database via onboardStudent
       const onboardResult = await onboardStudent({
         name: fullName.trim() || "قوتابی",
-        email: identifier || undefined,
+        email: email.trim() || undefined,
         grade: selectedGrade,
         stream: streamVal,
         schoolName: schoolName.trim(),
@@ -436,31 +421,71 @@ export function Register({
         {/* STEP 1: Account Creation */}
         {currentStep === 1 && (
           <div className="space-y-4">
-            {/* Method toggle — same style as Login */}
-            <div className="flex bg-slate-800 rounded-xl p-1 mb-4">
-              <button
-                type="button"
-                onClick={() => { setAuthMethod('email'); setErrorMessage(null); }}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                  authMethod === 'email' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'
-                }`}
+            {verificationNotice && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="p-3.5 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-200 text-xs flex items-center gap-2.5 animate-in fade-in duration-200"
               >
-                <Mail size={15} /> ئیمەیڵ
-              </button>
-              <button
-                type="button"
-                onClick={() => { setAuthMethod('phone'); setErrorMessage(null); }}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                  authMethod === 'phone' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <Phone size={15} /> مۆبایل
-              </button>
-            </div>
+                <Mail className="w-4 h-4 text-indigo-400 shrink-0" aria-hidden="true" />
+                <span>{verificationNotice}</span>
+              </div>
+            )}
 
-            <div id="zana-recaptcha-register" className="fixed bottom-0 right-0 opacity-0 pointer-events-none -z-50" aria-hidden="true" />
+            {awaitingEmailVerification ? (
+              <div className="space-y-4 p-5 rounded-2xl bg-slate-800/60 border border-slate-700/80 text-right">
+                <div className="space-y-1.5">
+                  <h2 className="text-base font-black text-white">دڵنیاکردنەوەی ئیمەیڵ پێویستە</h2>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    بۆ پاراستنی هەژمار و ماوەی خۆڕاییەکەت، تکایە کلیک لە لینکی پشتڕاستکردنەوە بکە کە نێردراوە بۆ{" "}
+                    <span dir="ltr" className="font-mono text-indigo-300 font-bold">{email.trim()}</span> (فۆڵدەری Spamیش بپشکنە).
+                  </p>
+                </div>
 
-            {authMethod === 'email' && (
+                <button
+                  type="button"
+                  onClick={handleCheckEmailVerified}
+                  disabled={verifyingEmailCheck}
+                  className="w-full min-h-[48px] py-3.5 px-4 bg-emerald-600 hover:bg-emerald-500 active:scale-97 text-white font-bold text-sm rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/25 cursor-pointer disabled:opacity-60 touch-manipulation"
+                >
+                  {verifyingEmailCheck ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                      <span>پشکنینی دڵنیایی...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>پشتڕاستم کردەوە، بەردەوام بە</span>
+                      <ArrowLeft className="w-4 h-4" aria-hidden="true" />
+                    </>
+                  )}
+                </button>
+
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleResendVerificationEmail}
+                    disabled={resendCooldown > 0 || verifyingEmailCheck}
+                    className="text-xs font-bold text-indigo-400 hover:text-indigo-300 disabled:opacity-50 cursor-pointer py-1.5"
+                  >
+                    {resendCooldown > 0
+                      ? `دووبارە ناردنەوە: ${resendCooldown} چرکە`
+                      : "دووبارە ناردنی ئیمەیڵی دڵنیایی"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAwaitingEmailVerification(false);
+                      setVerificationNotice(null);
+                      setErrorMessage(null);
+                    }}
+                    className="text-xs text-slate-400 hover:text-white cursor-pointer py-1.5"
+                  >
+                    گەڕانەوە بۆ تۆمارکردن
+                  </button>
+                </div>
+              </div>
+            ) : (
               <form onSubmit={handleAccountCreate} className="space-y-4" noValidate>
             {/* Full Name */}
             <div className="space-y-1.5 text-right">
@@ -604,125 +629,7 @@ export function Register({
               )}
             </button>
           </form>
-        )}
-
-        {authMethod === 'phone' && (
-          <div className="space-y-4">
-            {/* Name field (always required) */}
-            <div className="space-y-1.5 text-right">
-              <label htmlFor={`${nameInputId}-phone`} className="block text-xs font-bold text-slate-300">
-                ناوی تەواو <span className="text-rose-400" aria-hidden="true">*</span>
-              </label>
-              <div className="relative">
-                <input
-                  id={`${nameInputId}-phone`}
-                  type="text"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  disabled={phoneStep1Loading}
-                  placeholder="ناوی قوتابی"
-                  autoComplete="name"
-                  className="w-full bg-slate-800/80 border border-slate-700 focus:border-indigo-500 focus:ring-3 focus:ring-indigo-500/30 text-white rounded-xl px-4 py-3 text-base sm:text-sm placeholder:text-slate-500 transition-all pl-10 min-h-[48px] touch-manipulation"
-                />
-                <UserIcon className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true" />
-              </div>
-            </div>
-
-            {!otpSent ? (
-              <>
-                <div className="space-y-1.5 text-right">
-                  <label className="block text-xs font-bold text-slate-300">
-                    ژمارەی مۆبایل <span className="text-rose-400" aria-hidden="true">*</span>
-                  </label>
-                  <div className="relative">
-                    <Phone size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input
-                      type="tel"
-                      inputMode="numeric"
-                      dir="ltr"
-                      placeholder="07XXXXXXXXX"
-                      value={phone}
-                      onChange={e => setPhone(e.target.value)}
-                      disabled={phoneStep1Loading}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 pr-10 text-left text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 min-h-[48px]"
-                    />
-                  </div>
-                  <p className="text-xs text-slate-500 mt-1">
-                    نموونە: 07501234567 یان +9647501234567
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handlePhoneSendOtp}
-                  disabled={!isPhoneValid || !fullName.trim() || phoneStep1Loading}
-                  className="w-full min-h-[48px] py-3.5 px-4 bg-indigo-600 hover:bg-indigo-500 active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25 cursor-pointer touch-manipulation"
-                >
-                  {phoneStep1Loading ? (
-                    <>
-                      <Loader2 size={16} className="animate-spin" />
-                      <span>ناردنی کۆد...</span>
-                    </>
-                  ) : (
-                    <span>ناردنی کۆدی دڵنیایی</span>
-                  )}
-                </button>
-              </>
-            ) : (
-              <>
-                <div className="space-y-1.5 text-right">
-                  <label className="block text-xs font-bold text-slate-300">
-                    کۆدی دڵنیایی <span className="text-rose-400" aria-hidden="true">*</span>
-                  </label>
-                  <p className="text-xs text-emerald-400 mb-2">
-                    ✓ کۆدەکە نێردرا بۆ {phone}
-                  </p>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    dir="ltr"
-                    maxLength={6}
-                    placeholder="------"
-                    value={otp}
-                    onChange={e => setOtp(normalizeDigits(e.target.value).replace(/\D/g, ''))}
-                    disabled={phoneStep1Loading}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-center text-white text-2xl font-mono tracking-[0.5em] placeholder-slate-700 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 min-h-[48px]"
-                  />
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handlePhoneVerifyAndProceed}
-                  disabled={otp.length < 6 || phoneStep1Loading}
-                  className="w-full min-h-[48px] py-3.5 px-4 bg-indigo-600 hover:bg-indigo-500 active:scale-97 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25 cursor-pointer touch-manipulation"
-                >
-                  {phoneStep1Loading ? (
-                    <>
-                      <Loader2 size={16} className="animate-spin" />
-                      <span>تاقیکردنەوە...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>دڵنیاکردنەوە و بەردەوام بە</span>
-                      <ArrowLeft className="w-4 h-4" aria-hidden="true" />
-                    </>
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => { setOtpSent(false); setOtp(''); }}
-                  disabled={resendCooldown > 0}
-                  className="w-full text-sm text-slate-400 hover:text-white transition-colors disabled:opacity-50 py-2 cursor-pointer"
-                >
-                  {resendCooldown > 0
-                    ? `دووبارە نێردن: ${resendCooldown} چرکە`
-                    : 'ژمارەکە گۆڕ یان دووبارە بنێرە'}
-                </button>
-              </>
             )}
-          </div>
-        )}
 
             {/* Divider */}
             <div className="relative flex items-center justify-center py-2" aria-hidden="true">

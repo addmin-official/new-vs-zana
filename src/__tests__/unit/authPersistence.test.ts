@@ -13,6 +13,14 @@ import * as firestoreModule from "firebase/firestore";
 import * as firebaseService from "../../services/firebase.ts";
 import * as studentStorage from "../../features/student/studentStorage.ts";
 
+vi.mock("firebase/auth", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("firebase/auth")>();
+  return {
+    ...actual,
+    sendEmailVerification: vi.fn(async () => {}),
+  };
+});
+
 vi.mock("firebase/firestore", () => ({
   doc: vi.fn(() => ({})),
   getDoc: vi.fn(),
@@ -295,6 +303,90 @@ describe("ZANA Auth & Session Persistence System", () => {
       expect(result.exists).toBe(true);
       expect(result.isNewUser).toBe(false);
       expect(result.profile?.name).toBe("دیلان کاروان");
+    });
+
+    it("never leaks cached localStorage profile from a previous UID on account switch", async () => {
+      vi.mocked(firebaseService.getFirestoreDb).mockReturnValue(null);
+
+      vi.spyOn(studentStorage, "getStudentProfile").mockReturnValue({
+        id: "student_a_uid",
+        name: "Student A",
+        grade: "12",
+        stream: "scientific",
+        activeSubject: "chemistry",
+        onboardingCompleted: true,
+        createdAt: "2026-11-15T00:00:00.000Z",
+        updatedAt: "2026-11-15T00:00:00.000Z",
+        authoritative: false,
+        source: "guest-local",
+        masteryBySubject: {},
+        xp: 150,
+        level: "intermediate",
+        streakDays: 5,
+        lastActiveDate: "2026-11-15",
+        preferredLanguage: "ckb",
+      });
+      const deleteSpy = vi.spyOn(studentStorage, "deleteStudentProfile").mockImplementation(() => {});
+
+      const result = await checkUserExists("student_b_uid");
+
+      expect(result.exists).toBe(false);
+      expect(result.isNewUser).toBe(true);
+      expect(result.profile).toBeNull();
+      expect(deleteSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("Verified Email Flow & Cache Boundaries", () => {
+    it("sendVerificationEmail and reloadAndCheckEmailVerified reflect Firebase emailVerified transitions", async () => {
+      const fbAuth = await import("firebase/auth");
+      const mockUser = {
+        uid: "uid_unverified_1",
+        email: "new.student@example.com",
+        emailVerified: false,
+        getIdToken: vi.fn(async () => "refreshed-token"),
+        reload: vi.fn(async () => {
+          mockUser.emailVerified = true;
+        }),
+      };
+
+      vi.mocked(firebaseService.getFirebaseAuth).mockReturnValue({
+        currentUser: mockUser,
+      } as unknown as ReturnType<typeof firebaseService.getFirebaseAuth>);
+
+      const authSvc = await import("../../services/authService.ts");
+      const sendRes = await authSvc.sendVerificationEmail(mockUser as never);
+      expect(sendRes.ok).toBe(true);
+
+      const checkRes = await authSvc.reloadAndCheckEmailVerified();
+      expect(mockUser.reload).toHaveBeenCalledTimes(1);
+      expect(mockUser.getIdToken).toHaveBeenCalledWith(true);
+      expect(checkRes.verified).toBe(true);
+      expect(fbAuth).toBeDefined();
+    });
+
+    it("Workbox PWA API cache never caches private student/subscription endpoints and auth UI hides unsupported phone tabs", async () => {
+      const fs = await import("fs");
+      const path = await import("path");
+      const viteCfg = fs.readFileSync(path.resolve(process.cwd(), "vite.config.ts"), "utf8");
+      const cacheRuleMatch = viteCfg.match(
+        /urlPattern:\s*(\/\^https\?:\\\/\\\/\.\*\\\/api\\\/[^\r\n,]+),\s*\n\s*handler:\s*'NetworkFirst'[\s\S]*?cacheName:\s*'api-responses-cache'/
+      );
+      expect(cacheRuleMatch).not.toBeNull();
+      const patternBody = cacheRuleMatch![1];
+      const regex = new RegExp(patternBody.slice(1, patternBody.lastIndexOf("/")), patternBody.slice(patternBody.lastIndexOf("/") + 1));
+
+      expect(regex.test("https://zana.idggov.tech/api/curriculum/pages")).toBe(true);
+      expect(regex.test("https://zana.idggov.tech/api/health")).toBe(true);
+      expect(regex.test("https://zana.idggov.tech/api/subscription/status")).toBe(false);
+      expect(regex.test("https://zana.idggov.tech/api/student/profile")).toBe(false);
+      expect(regex.test("https://zana.idggov.tech/api/student/onboard")).toBe(false);
+      expect(regex.test("https://zana.idggov.tech/api/trial/start")).toBe(false);
+
+      const loginSrc = fs.readFileSync(path.resolve(process.cwd(), "src/pages/Login.tsx"), "utf8");
+      const registerSrc = fs.readFileSync(path.resolve(process.cwd(), "src/pages/Register.tsx"), "utf8");
+      expect(loginSrc).not.toMatch(/setAuthMethod\(['"]phone['"]\)/);
+      expect(registerSrc).not.toMatch(/setAuthMethod\(['"]phone['"]\)/);
     });
   });
 });

@@ -69,8 +69,6 @@ export function ProfileAndSettings({
     user.email ||
     (authUser?.isAnonymous
       ? "هەژماری میوان (بێ ئیمەیڵ)"
-      : studentProfile?.id
-      ? `${studentProfile.id}@student.krd`
       : "تۆمارنەکراو");
 
   const realTotalXp = studentProfile?.totalScore ?? userProgress.totalScore ?? user.totalScore ?? 0;

@@ -1,6 +1,7 @@
 export interface VerifiedTokenClaims {
   uid: string;
   email?: string;
+  email_verified?: boolean;
   name?: string;
   phone_number?: string;
   role?: string;
@@ -10,6 +11,11 @@ export interface VerifiedTokenClaims {
   exp: number;
   iat: number;
   auth_time?: number;
+}
+
+export interface VerifyTokenOptions {
+  isProduction?: boolean;
+  allowTestMock?: boolean;
 }
 
 interface JWKKey {
@@ -26,7 +32,8 @@ let jwksCacheExp = 0;
 
 export async function verifyFirebaseIdToken(
   idToken: string | null,
-  overrideProjectId?: string
+  overrideProjectId?: string,
+  options?: VerifyTokenOptions
 ): Promise<VerifiedTokenClaims> {
   if (!idToken || typeof idToken !== "string" || !idToken.trim()) {
     throw new Error("Missing or empty Firebase ID token");
@@ -86,11 +93,22 @@ export async function verifyFirebaseIdToken(
     throw new Error("Firebase token issuer mismatch");
   }
 
-  const isTest = typeof process !== "undefined" && (process.env?.NODE_ENV === "test" || process.env?.ZANA_ENV === "test");
-  if (isTest) {
+  const isProduction =
+    options?.isProduction === true ||
+    (typeof process !== "undefined" &&
+      (process.env?.NODE_ENV === "production" || process.env?.ZANA_ENV === "production"));
+  const envIsTest =
+    typeof process !== "undefined" &&
+    (process.env?.NODE_ENV === "test" || process.env?.ZANA_ENV === "test") &&
+    process.env?.ALLOW_TEST_AUTH_MOCK === "true";
+  const isExplicitTestMode =
+    !isProduction && (options?.allowTestMock !== undefined ? options.allowTestMock === true : envIsTest);
+
+  if (isExplicitTestMode) {
     return {
       uid: payload.sub as string,
       email: typeof payload.email === "string" ? payload.email : undefined,
+      email_verified: typeof payload.email_verified === "boolean" ? payload.email_verified : undefined,
       name: typeof payload.name === "string" ? payload.name : undefined,
       phone_number: typeof payload.phone_number === "string" ? payload.phone_number : undefined,
       role: typeof payload.role === "string" ? payload.role : undefined,
@@ -153,6 +171,7 @@ async function verifySignature(
   return {
     uid: String(payload.sub),
     email: typeof payload.email === "string" ? payload.email : undefined,
+    email_verified: typeof payload.email_verified === "boolean" ? payload.email_verified : undefined,
     name: typeof payload.name === "string" ? payload.name : undefined,
     phone_number: typeof payload.phone_number === "string" ? payload.phone_number : undefined,
     role: typeof payload.role === "string" ? payload.role : undefined,

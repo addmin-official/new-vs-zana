@@ -809,4 +809,42 @@ describe("ZANA Subscription & FastPay Manual Activation System - Comprehensive 2
     const activateRes = await worker.fetch(activateReq, env as never);
     assert.strictEqual(activateRes.status, 403, "Telemetry secret must not grant access to subscription activation");
   });
+
+  // 24. Receipt submission ignores client-forged studentEmail and synthetic placeholders
+  test("Vector 24: submit-receipt stores only verified token email and ignores forged body.studentEmail", async () => {
+    const header = Buffer.from(JSON.stringify({ alg: "RS256", kid: "test" })).toString("base64url");
+    const payload = Buffer.from(JSON.stringify({
+      sub: "receipt-verified-uid",
+      uid: "receipt-verified-uid",
+      email: "verified.receipt@example.com",
+      email_verified: true,
+      aud: "gen-lang-client-0009572581",
+      iss: "https://securetoken.google.com/gen-lang-client-0009572581",
+      iat: Math.floor(Date.now() / 1000) - 60,
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    })).toString("base64url");
+    const verifiedJwt = `${header}.${payload}.mock-sig`;
+
+    const res = await worker.fetch(
+      new Request("https://zana.idggov.tech/api/subscription/submit-receipt", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${verifiedJwt}`,
+        },
+        body: JSON.stringify({
+          studentName: "Verified Student",
+          studentEmail: "forged.attacker@example.com",
+          planId: "monthly",
+          receiptCode: "FP-VERIFIED-24",
+        }),
+      }),
+      { ...env, ALLOW_TEST_AUTH_MOCK: "true", ZANA_ENV: "test" } as never
+    );
+
+    assert.strictEqual(res.status, 201);
+    const saved = mockDb.store.payment_receipts.find((r) => r.receipt_code === "FP-VERIFIED-24");
+    assert.ok(saved);
+    assert.strictEqual(saved.student_email, "verified.receipt@example.com");
+  });
 });

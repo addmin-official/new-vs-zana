@@ -1,4 +1,4 @@
-import React, { useState, useId } from "react";
+import React, { useState, useEffect, useId } from "react";
 import {
   GraduationCap,
   Mail,
@@ -10,18 +10,15 @@ import {
   Sparkles,
   BookOpen,
   FlaskConical,
-  Phone,
 } from "lucide-react";
 import {
   loginWithEmail,
   loginWithGoogle,
+  sendVerificationEmail,
+  reloadAndCheckEmailVerified,
   getErrorMessage,
-  setupRecaptcha,
-  sendPhoneOtp,
-  verifyPhoneOtp,
   startStudentTrial,
 } from "../services/authService.ts";
-import { formatIraqiPhone, isIraqiPhoneValid, normalizeDigits } from "../services/phoneUtils.ts";
 import { checkUserExists } from "../auth/userProfileService.ts";
 import { getMyRole, UserRole } from "../auth/roles.ts";
 
@@ -46,20 +43,24 @@ export function Login({
   const [googleLoading, setGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Phone auth state
-  const [authMethod, setAuthMethod] = useState<'email' | 'phone'>('email');
-  const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
-  const [phoneLoading, setPhoneLoading] = useState(false);
+  // Email verification recovery state
+  const [awaitingEmailVerification, setAwaitingEmailVerification] = useState(false);
+  const [verificationNotice, setVerificationNotice] = useState<string | null>(null);
+  const [verifyingEmailCheck, setVerifyingEmailCheck] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
 
-  const isPhoneValid = isIraqiPhoneValid(phone);
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = window.setTimeout(() => {
+      setResendCooldown((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [resendCooldown]);
 
   // Email format validation (real-time)
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
-  const handlePostLogin = async (user: { uid: string; getIdToken: (forceRefresh?: boolean) => Promise<string>; email?: string | null; displayName?: string | null; phoneNumber?: string | null }) => {
+  const handlePostLogin = async (user: { uid: string; getIdToken: (forceRefresh?: boolean) => Promise<string>; email?: string | null; displayName?: string | null }) => {
     // Force refresh ID token to get latest claims from server
     try {
       await user.getIdToken(true);
@@ -67,14 +68,11 @@ export function Login({
       // Handled
     }
 
-    // Auto-reconcile user identity into D1 database so email/name are never lost
+    // Auto-reconcile user identity into D1 database without overwriting existing grade/stream
     try {
-      const identifier = user.email || user.phoneNumber || undefined;
       await startStudentTrial(user.uid, {
         name: user.displayName || undefined,
-        email: identifier,
-        grade: "12",
-        stream: "scientific",
+        email: user.email || undefined,
       });
     } catch (e) {
       console.warn("[Login] Auto-reconciliation background notice:", e);
@@ -97,9 +95,10 @@ export function Login({
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (loading || googleLoading) return;
+    if (loading || googleLoading || verifyingEmailCheck) return;
 
     setErrorMessage(null);
+    setVerificationNotice(null);
 
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
@@ -118,6 +117,11 @@ export function Login({
     setLoading(true);
     try {
       const user = await loginWithEmail(trimmedEmail, password);
+      if (user.email && user.emailVerified === false) {
+        setAwaitingEmailVerification(true);
+        setVerificationNotice(`ئیمەیڵی ${user.email} هێشتا پشتڕاست نەکراوەتەوە. تکایە کلیک لە لینکی دڵنیایی بکە لە ئیمەیڵەکەتدا.`);
+        return;
+      }
       await handlePostLogin(user);
     } catch (err: unknown) {
       const parsedMsg = getErrorMessage(err);
@@ -128,8 +132,10 @@ export function Login({
   };
 
   const handleGoogleSubmit = async () => {
-    if (loading || googleLoading) return;
+    if (loading || googleLoading || verifyingEmailCheck) return;
     setErrorMessage(null);
+    setVerificationNotice(null);
+    setAwaitingEmailVerification(false);
     setGoogleLoading(true);
 
     try {
@@ -142,55 +148,38 @@ export function Login({
     }
   };
 
-  const handleSendOtp = async () => {
-    if (phoneLoading || !isPhoneValid) return;
-    setPhoneLoading(true);
+  const handleResendVerificationEmail = async () => {
+    if (resendCooldown > 0 || verifyingEmailCheck) return;
     setErrorMessage(null);
-
-    // Small delay to ensure DOM is ready before reCAPTCHA init
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    const verifier = setupRecaptcha('zana-recaptcha-container');
-    if (!verifier) {
-      setErrorMessage('کێشەیەک لە سیستەمی دڵنیایی ڕوویدا — پەڕەکە تازە بکەرەوە');
-      setPhoneLoading(false);
-      return;
-    }
-
-    const formatted = formatIraqiPhone(phone);
-    const result = await sendPhoneOtp(formatted, verifier);
-
-    if (result.success) {
-      setOtpSent(true);
-      // Start 60s resend cooldown
+    const sent = await sendVerificationEmail();
+    if (sent.ok) {
       setResendCooldown(60);
-      const timer = setInterval(() => {
-        setResendCooldown(prev => {
-          if (prev <= 1) { clearInterval(timer); return 0; }
-          return prev - 1;
-        });
-      }, 1000);
+      setVerificationNotice(`لینکی دڵنیایی نێردرا بۆ ${email.trim()}. تکایە Inbox و Spam بپشکنە.`);
     } else {
-      setErrorMessage(result.error || 'کێشەیەک ڕوویدا');
+      setErrorMessage(sent.error || "نەتوانرا ئیمەیڵی دڵنیایی بنێردرێت.");
     }
-    setPhoneLoading(false);
   };
 
-  const handleVerifyOtp = async () => {
-    if (phoneLoading || otp.length < 6) return;
-    setPhoneLoading(true);
+  const handleCheckEmailVerified = async () => {
+    if (verifyingEmailCheck) return;
+    setVerifyingEmailCheck(true);
     setErrorMessage(null);
-
-    const result = await verifyPhoneOtp(otp);
-    if (result.user) {
-      await handlePostLogin(result.user);
-    } else {
-      setErrorMessage(result.error || 'کۆدی دڵنیایی هەڵەیە');
+    try {
+      const res = await reloadAndCheckEmailVerified();
+      if (!res.verified || !res.user) {
+        setErrorMessage("هێشتا ئیمەیڵەکەت پشتڕاست نەکراوەتەوە. تکایە لینکەکە بکەرەوە و دووبارە هەوڵبدە.");
+        return;
+      }
+      setAwaitingEmailVerification(false);
+      await handlePostLogin(res.user);
+    } catch (err: unknown) {
+      setErrorMessage(getErrorMessage(err));
+    } finally {
+      setVerifyingEmailCheck(false);
     }
-    setPhoneLoading(false);
   };
 
-  const isAnyLoading = loading || googleLoading || phoneLoading;
+  const isAnyLoading = loading || googleLoading || verifyingEmailCheck;
 
   return (
     <div
@@ -290,38 +279,64 @@ export function Login({
               </div>
             )}
 
-            {/* Auth method toggle */}
-            <div className="flex bg-slate-800 rounded-xl p-1 mb-5">
-              <button
-                type="button"
-                onClick={() => { setAuthMethod('email'); setErrorMessage(null); }}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                  authMethod === 'email'
-                    ? 'bg-indigo-600 text-white shadow'
-                    : 'text-slate-400 hover:text-white'
-                }`}
+            {/* Verification Notice Box */}
+            {verificationNotice && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="p-3.5 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-200 text-xs flex items-center gap-2.5 animate-in fade-in duration-200"
               >
-                <Mail size={15} />
-                ئیمەیڵ
-              </button>
-              <button
-                type="button"
-                onClick={() => { setAuthMethod('phone'); setErrorMessage(null); }}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                  authMethod === 'phone'
-                    ? 'bg-indigo-600 text-white shadow'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <Phone size={15} />
-                مۆبایل
-              </button>
-            </div>
+                <Mail className="w-4 h-4 text-indigo-400 shrink-0" aria-hidden="true" />
+                <span>{verificationNotice}</span>
+              </div>
+            )}
 
-            {/* Invisible reCAPTCHA container */}
-            <div id="zana-recaptcha-container" className="fixed bottom-0 right-0 opacity-0 pointer-events-none -z-50" aria-hidden="true" />
-
-            {authMethod === 'email' && (
+            {awaitingEmailVerification ? (
+              <div className="space-y-3 p-4 rounded-2xl bg-slate-800/60 border border-slate-700/80 text-right">
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  بۆ پاراستنی هەژمارەکەت، سەرەتا کلیک لە لینکی پشتڕاستکردنەوە بکە کە بۆ{" "}
+                  <span dir="ltr" className="font-mono text-indigo-300 font-bold">{email.trim()}</span> نێردراوە.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleCheckEmailVerified}
+                  disabled={verifyingEmailCheck}
+                  className="w-full min-h-[48px] py-3 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm rounded-xl transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                >
+                  {verifyingEmailCheck ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                      <span>پشکنینی دڵنیایی...</span>
+                    </>
+                  ) : (
+                    <span>پشتڕاستم کردەوە، بچۆ ژوورەوە</span>
+                  )}
+                </button>
+                <div className="flex items-center justify-between gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleResendVerificationEmail}
+                    disabled={resendCooldown > 0 || verifyingEmailCheck}
+                    className="text-xs font-bold text-indigo-400 hover:text-indigo-300 disabled:opacity-50 cursor-pointer py-1.5"
+                  >
+                    {resendCooldown > 0
+                      ? `دووبارە ناردنەوە: ${resendCooldown} چرکە`
+                      : "دووبارە ناردنی لینکی دڵنیایی"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAwaitingEmailVerification(false);
+                      setVerificationNotice(null);
+                      setErrorMessage(null);
+                    }}
+                    className="text-xs text-slate-400 hover:text-white cursor-pointer py-1.5"
+                  >
+                    گەڕانەوە بۆ چوونەژوورەوە
+                  </button>
+                </div>
+              </div>
+            ) : (
               <form onSubmit={handleEmailSubmit} className="space-y-4" noValidate>
                 {/* Email Field */}
                 <div className="space-y-1.5 text-right">
@@ -415,91 +430,6 @@ export function Login({
                   )}
                 </button>
               </form>
-            )}
-
-            {authMethod === 'phone' && (
-              <div className="space-y-4">
-                {!otpSent ? (
-                  <>
-                    {/* Phone number input */}
-                    <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1.5">
-                        ژمارەی مۆبایل
-                      </label>
-                      <div className="relative">
-                        <Phone size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <input
-                          type="tel"
-                          inputMode="numeric"
-                          dir="ltr"
-                          placeholder="07XXXXXXXXX"
-                          value={phone}
-                          onChange={e => setPhone(e.target.value)}
-                          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 pr-10 text-left text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-                        />
-                      </div>
-                      <p className="text-xs text-slate-500 mt-1">
-                        نموونە: 07501234567 یان +9647501234567
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleSendOtp}
-                      disabled={!isPhoneValid || phoneLoading}
-                      className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
-                    >
-                      {phoneLoading
-                        ? <><Loader2 size={16} className="animate-spin" /> ناردنی کۆد...</>
-                        : 'ناردنی کۆدی دڵنیایی'}
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    {/* OTP input */}
-                    <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1.5">
-                        کۆدی دڵنیایی
-                      </label>
-                      <p className="text-xs text-emerald-400 mb-2">
-                        ✓ کۆدەکە نێردرا بۆ {phone}
-                      </p>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        dir="ltr"
-                        maxLength={6}
-                        placeholder="------"
-                        value={otp}
-                        onChange={e => setOtp(normalizeDigits(e.target.value).replace(/\D/g, ''))}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-center text-white text-2xl font-mono tracking-[0.5em] placeholder-slate-700 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-                      />
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleVerifyOtp}
-                      disabled={otp.length < 6 || phoneLoading}
-                      className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
-                    >
-                      {phoneLoading
-                        ? <><Loader2 size={16} className="animate-spin" /> تاقیکردنەوە...</>
-                        : 'دڵنیاکردنەوە و چوونەژوورەوە'}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => { setOtpSent(false); setOtp(''); }}
-                      disabled={resendCooldown > 0}
-                      className="w-full text-sm text-slate-400 hover:text-white transition-colors disabled:opacity-50"
-                    >
-                      {resendCooldown > 0
-                        ? `دووبارە نێردن: ${resendCooldown} چرکە`
-                        : 'ژمارەکە گۆڕ یان دووبارە بنێرە'}
-                    </button>
-                  </>
-                )}
-              </div>
             )}
 
             {/* Divider */}

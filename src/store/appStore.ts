@@ -503,6 +503,10 @@ let currentState: AppState = {
     const initialMsgs = loadLessonChatMessages("chemistry", 1);
     if (typeof window !== "undefined") {
       try {
+        localStorage.removeItem("zana.profile.v1");
+        localStorage.removeItem("zana_session_recovery_v1");
+        localStorage.removeItem("zana_role_cache");
+        localStorage.removeItem("zana_role_cache_time");
         localStorage.removeItem("zana_user_role");
         localStorage.removeItem("zana_app_store_v1");
         const keysToRemove = Object.keys(localStorage).filter(

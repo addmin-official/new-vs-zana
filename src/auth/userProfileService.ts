@@ -17,6 +17,7 @@ import { StudentProfile, StudentProfileDraft, StudentGrade, AcademicStream, Veri
 import {
   saveStudentProfile,
   getStudentProfile,
+  deleteStudentProfile,
   createVerifiedStudentProfile,
   parseServerProfileDocument,
 } from "../features/student/studentStorage.ts";
@@ -129,7 +130,7 @@ export async function checkUserExists(uid: string): Promise<UserCheckResult> {
           const identity: VerifiedIdentity = {
             verifiedUid: uid,
             isAnonymous: false,
-            email: raw.email || raw.profile?.email || raw.phoneNumber || raw.profile?.phoneNumber,
+            email: raw.email || raw.profile?.email,
           };
           const loadedProfile = createVerifiedStudentProfile(identity, draft);
           loadedProfile.school = profileData.school;
@@ -181,10 +182,14 @@ export async function checkUserExists(uid: string): Promise<UserCheckResult> {
     }
   }
 
-  // 3. Check local storage if device is offline or in local environment
+  // 3. Check local storage if device is offline or in local environment (strictly UID-scoped)
   const local = getStudentProfile();
-  if (local && local.onboardingCompleted && (local.id === uid || (!local.id.includes("default-guest")))) {
-    return { exists: true, isNewUser: false, profile: local };
+  if (local && local.onboardingCompleted) {
+    if (local.id === uid) {
+      return { exists: true, isNewUser: false, profile: local };
+    }
+    // Account switching guard: never leak another student's cached profile
+    deleteStudentProfile();
   }
 
   return { exists: false, isNewUser: true, profile: null };
@@ -215,10 +220,11 @@ export async function createUserDocumentIfMissing(
   const validatedStream = getValidatedStream(draft.stream);
   const sanitizedName = sanitizeStudentName(draft.name);
 
+  const isPhoneIdentifier = Boolean(email && !email.includes("@"));
   const identity: VerifiedIdentity = {
     verifiedUid: uid,
     isAnonymous: false,
-    email: email || undefined,
+    email: isPhoneIdentifier ? undefined : (email || undefined),
   };
 
   const newProfile = createVerifiedStudentProfile(identity, {
