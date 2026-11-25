@@ -1329,6 +1329,7 @@ describe("Production Migration Directory (migrations_production/) — National I
 
     assert.ok(files.includes("0009_student_onboarding_school_name.sql"));
     assert.ok(!files.includes("0009_student_onboarding_national_id.sql"));
+    assert.ok(!files.includes("0008_phone_auth_and_verifications.sql"), "migrations_production must exclude unused 0008 phone auth migration");
 
     for (const file of files.filter((f) => !f.startsWith("0010_"))) {
       db.exec(fs.readFileSync(path.join(prodDir, file), "utf8"));
@@ -1368,11 +1369,17 @@ describe("Production Migration Directory (migrations_production/) — National I
     const nidCount = (db.raw.prepare("SELECT COUNT(*) as c FROM sqlite_master WHERE sql LIKE '%national_id%'").get() as { c: number }).c;
     assert.strictEqual(nidCount, 0, "migrations_production must contain zero national_id columns or indexes");
 
-    // school_name exists on students and users
+    // Zero phone schema objects (0008 excluded from migrations_production)
+    const phoneTableCount = (db.raw.prepare("SELECT COUNT(*) as c FROM sqlite_master WHERE type='table' AND name='phone_verifications'").get() as { c: number }).c;
+    assert.strictEqual(phoneTableCount, 0, "migrations_production must not create phone_verifications");
+
+    // school_name exists on students and users; phone column does not
     const stuCols = db.raw.prepare("PRAGMA table_info(students)").all() as Array<{ name: string }>;
     const usrCols = db.raw.prepare("PRAGMA table_info(users)").all() as Array<{ name: string }>;
     assert.ok(stuCols.some((c) => c.name === "school_name"));
     assert.ok(usrCols.some((c) => c.name === "school_name"));
+    assert.ok(!stuCols.some((c) => c.name === "phone"));
+    assert.ok(!usrCols.some((c) => c.name === "phone"));
 
     // Synthetic placeholder excluded from subscriptions.email, real @zana.edu.krd preserved and normalized
     const subSynthetic = db.raw.prepare("SELECT email, trial_started_at, status FROM subscriptions WHERE user_id = ?").get("J3J0WM7hKBSpvuCJLUJAldo4I652") as { email: string | null; trial_started_at: number; status: string };
@@ -1512,5 +1519,221 @@ describe("Production Migration Directory (migrations_production/) — National I
     const swRes = await worker.fetch(new Request("https://zana.idggov.tech/sw.js"), env as never);
     assert.strictEqual(swRes.status, 200);
     assert.strictEqual(swRes.headers.get("Cache-Control"), "public, max-age=0, must-revalidate");
+  });
+
+  test("4. Phone auth endpoints (/api/auth/phone/send-otp & verify-otp) fail closed with 503 and zero D1 calls when SMS is disabled", async () => {
+    let prepareCalls = 0;
+    const spyDb = {
+      prepare() {
+        prepareCalls += 1;
+        throw new Error("D1 MUST NOT BE QUERIED WHEN SMS PROVIDER IS DISABLED");
+      },
+    };
+
+    const disabledEnvs = [
+      {
+        GEMINI_API_KEY: "test-key",
+        ALLOWED_ORIGINS: "https://zana.idggov.tech",
+        DB: spyDb,
+      },
+      {
+        GEMINI_API_KEY: "test-key",
+        ALLOWED_ORIGINS: "https://zana.idggov.tech",
+        SMS_PROVIDER: "twilio", // incomplete -> resolves to disabled
+        DB: spyDb,
+      },
+    ];
+
+    for (const env of disabledEnvs) {
+      const sendRes = await worker.fetch(
+        new Request("https://zana.idggov.tech/api/auth/phone/send-otp", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone: "07501234567" }),
+        }),
+        env as never
+      );
+      assert.strictEqual(sendRes.status, 503);
+      const sendBody = (await sendRes.json()) as { ok: boolean; error: string; verificationId?: string };
+      assert.strictEqual(sendBody.ok, false);
+      assert.strictEqual(sendBody.error, "SMS_PROVIDER_NOT_CONFIGURED");
+      assert.strictEqual(sendBody.verificationId, undefined);
+
+      const verifyRes = await worker.fetch(
+        new Request("https://zana.idggov.tech/api/auth/phone/verify-otp", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ verificationId: "fake-id", code: "123456" }),
+        }),
+        env as never
+      );
+      assert.strictEqual(verifyRes.status, 503);
+      const verifyBody = (await verifyRes.json()) as { ok: boolean; error: string };
+      assert.strictEqual(verifyBody.ok, false);
+      assert.strictEqual(verifyBody.error, "SMS_PROVIDER_NOT_CONFIGURED");
+    }
+
+    assert.strictEqual(prepareCalls, 0, "Expected zero D1 calls when SMS provider is disabled");
+
+    // Preserve configured provider behavior (mock provider in test env with 0008 schema)
+    const dbWith0008 = createRealSqliteD1();
+    const legacyDir = path.resolve(process.cwd(), "migrations");
+    for (const file of getOrderedMigrationFiles("migrations")) {
+      dbWith0008.exec(fs.readFileSync(path.join(legacyDir, file), "utf8"));
+    }
+
+    const mockEnv = {
+      GEMINI_API_KEY: "test-key",
+      ALLOWED_ORIGINS: "https://zana.idggov.tech",
+      SMS_PROVIDER: "mock",
+      ZANA_ENV: "test",
+      DB: dbWith0008,
+    };
+
+    const okSendRes = await worker.fetch(
+      new Request("https://zana.idggov.tech/api/auth/phone/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "CF-Connecting-IP": "198.51.100.10" },
+        body: JSON.stringify({ phone: "07501234567" }),
+      }),
+      mockEnv as never
+    );
+    assert.strictEqual(okSendRes.status, 200);
+    const okSendBody = (await okSendRes.json()) as { ok: boolean; verificationId: string };
+    assert.strictEqual(okSendBody.ok, true);
+    assert.ok(okSendBody.verificationId);
+
+    const invalidCodeRes = await worker.fetch(
+      new Request("https://zana.idggov.tech/api/auth/phone/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "CF-Connecting-IP": "198.51.100.10" },
+        body: JSON.stringify({ verificationId: okSendBody.verificationId, code: "000000" }),
+      }),
+      mockEnv as never
+    );
+    assert.strictEqual(invalidCodeRes.status, 400);
+    const invalidCodeBody = (await invalidCodeRes.json()) as { ok: boolean; error: string };
+    assert.strictEqual(invalidCodeBody.ok, false);
+    assert.strictEqual(invalidCodeBody.error, "INVALID_CODE");
+  });
+
+  test("5. GET /api/admin/subscriptions works without migration 0008 on pre-0009, 0009+, and students-only schemas", async () => {
+    const header = Buffer.from(JSON.stringify({ alg: "RS256", kid: "test" })).toString("base64url");
+    const payload = Buffer.from(JSON.stringify({
+      sub: "uNZzgQaPDjTO8IYBncGVZekGQxN2",
+      uid: "uNZzgQaPDjTO8IYBncGVZekGQxN2",
+      aud: "gen-lang-client-0009572581",
+      iss: "https://securetoken.google.com/gen-lang-client-0009572581",
+      email: "addmin.official.idg@gmail.com",
+      email_verified: true,
+      admin: true,
+      role: "admin",
+      iat: Math.floor(Date.now() / 1000) - 60,
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    })).toString("base64url");
+    const adminToken = `${header}.${payload}.mock-sig`;
+
+    const makeAdminEnv = (db: ReturnType<typeof createRealSqliteD1>) => ({
+      GEMINI_API_KEY: "test-key",
+      FIREBASE_PROJECT_ID: "gen-lang-client-0009572581",
+      ALLOWED_ORIGINS: "https://zana.idggov.tech",
+      ALLOW_TEST_AUTH_MOCK: "true",
+      ZANA_ENV: "test",
+      DB: db,
+    });
+
+    const prodDir = path.resolve(process.cwd(), "migrations_production");
+    const prodFiles = getOrderedMigrationFiles("migrations_production");
+
+    // Case A: Current Production pre-0009 schema (0001..0007 only — no 0008 phone, no 0009 school_name)
+    const pre0009Db = createRealSqliteD1();
+    for (const file of prodFiles.filter((f) => parseInt(f.split("_")[0], 10) <= 7)) {
+      pre0009Db.exec(fs.readFileSync(path.join(prodDir, file), "utf8"));
+    }
+    pre0009Db.raw
+      .prepare("INSERT INTO students (id, firebase_uid, name, email, grade) VALUES (?, ?, ?, ?, '12')")
+      .run("stu_pre9", "stu_pre9", "دانا فەرهاد", "dana@example.com");
+    pre0009Db.raw
+      .prepare("INSERT INTO users (id, email, name, role, grade, stream) VALUES (?, ?, ?, 'student', '12', 'scientific')")
+      .run("stu_pre9", "dana@example.com", "دانا فەرهاد");
+    pre0009Db.raw
+      .prepare("INSERT INTO subscriptions (user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at) VALUES (?, 'active', 1000, 9999999999999, 'monthly', 2000)")
+      .run("stu_pre9");
+    pre0009Db.raw
+      .prepare("INSERT INTO subscriptions (user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at) VALUES (?, 'trial', 1500, 9999999999999, 'free_trial_3d', 1500)")
+      .run("stud_orphan_pre9");
+
+    const resA = await worker.fetch(
+      new Request("https://zana.idggov.tech/api/admin/subscriptions", {
+        method: "GET",
+        headers: { Authorization: `Bearer ${adminToken}` },
+      }),
+      makeAdminEnv(pre0009Db) as never
+    );
+    assert.strictEqual(resA.status, 200);
+    const bodyA = (await resA.json()) as { ok: boolean; subscriptions: Array<Record<string, unknown>> };
+    assert.strictEqual(bodyA.ok, true);
+    assert.strictEqual(bodyA.subscriptions.length, 2);
+    const linkedA = bodyA.subscriptions.find((r) => r.user_id === "stu_pre9");
+    const orphanA = bodyA.subscriptions.find((r) => r.user_id === "stud_orphan_pre9");
+    assert.strictEqual(linkedA?.user_name, "دانا فەرهاد");
+    assert.strictEqual(linkedA?.user_email, "dana@example.com");
+    assert.strictEqual(linkedA?.user_phone, "");
+    assert.strictEqual(linkedA?.school_name, "");
+    assert.strictEqual(orphanA?.status, "trial");
+
+    // Case B: Target Production schema (migrations_production/ 0001..0007, 0009, 0010 — no 0008)
+    const prodDb = createRealSqliteD1();
+    for (const file of prodFiles) {
+      prodDb.exec(fs.readFileSync(path.join(prodDir, file), "utf8"));
+    }
+    prodDb.raw
+      .prepare("INSERT INTO students (id, firebase_uid, name, email, grade, school_name) VALUES (?, ?, ?, ?, '12', ?)")
+      .run("stu_prod", "stu_prod", "سارا هێمن", "sara@example.com", "ئامادەیی سلێمانی");
+    prodDb.raw
+      .prepare("INSERT INTO users (id, email, name, role, grade, stream, school_name) VALUES (?, ?, ?, 'student', '12', 'scientific', ?)")
+      .run("stu_prod", "sara@example.com", "سارا هێمن", "ئامادەیی سلێمانی");
+    prodDb.raw
+      .prepare("INSERT INTO subscriptions (user_id, email, status, trial_started_at, trial_ends_at, plan_id, updated_at) VALUES (?, ?, 'active', 3000, 9999999999999, 'yearly', 4000)")
+      .run("stu_prod", "sara@example.com");
+    prodDb.raw
+      .prepare("INSERT INTO subscriptions (user_id, email, status, trial_started_at, trial_ends_at, plan_id, updated_at) VALUES (?, NULL, 'expired', 500, 1000, 'free_trial_3d', 500)")
+      .run("stud_orphan_prod");
+
+    const resB = await worker.fetch(
+      new Request("https://zana.idggov.tech/api/admin/subscriptions", {
+        method: "GET",
+        headers: { Authorization: `Bearer ${adminToken}` },
+      }),
+      makeAdminEnv(prodDb) as never
+    );
+    assert.strictEqual(resB.status, 200);
+    const bodyB = (await resB.json()) as { ok: boolean; subscriptions: Array<Record<string, unknown>> };
+    assert.strictEqual(bodyB.ok, true);
+    assert.strictEqual(bodyB.subscriptions.length, 2);
+    const linkedB = bodyB.subscriptions.find((r) => r.user_id === "stu_prod");
+    const orphanB = bodyB.subscriptions.find((r) => r.user_id === "stud_orphan_prod");
+    assert.strictEqual(linkedB?.user_name, "سارا هێمن");
+    assert.strictEqual(linkedB?.user_email, "sara@example.com");
+    assert.strictEqual(linkedB?.school_name, "ئامادەیی سلێمانی");
+    assert.strictEqual(linkedB?.user_phone, "");
+    assert.strictEqual(orphanB?.status, "expired");
+
+    // Case C: Students-only fallback (users table absent, no phone column)
+    prodDb.exec("DROP TABLE users;");
+    const resC = await worker.fetch(
+      new Request("https://zana.idggov.tech/api/admin/subscriptions", {
+        method: "GET",
+        headers: { Authorization: `Bearer ${adminToken}` },
+      }),
+      makeAdminEnv(prodDb) as never
+    );
+    assert.strictEqual(resC.status, 200);
+    const bodyC = (await resC.json()) as { ok: boolean; subscriptions: Array<Record<string, unknown>> };
+    const linkedC = bodyC.subscriptions.find((r) => r.user_id === "stu_prod");
+    assert.strictEqual(linkedC?.user_name, "سارا هێمن");
+    assert.strictEqual(linkedC?.user_email, "sara@example.com");
+    assert.strictEqual(linkedC?.school_name, "ئامادەیی سلێمانی");
+    assert.strictEqual(linkedC?.user_phone, "");
   });
 });

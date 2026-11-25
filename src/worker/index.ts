@@ -483,6 +483,33 @@ function isMissingColumnError(err: unknown): boolean {
   return msg.includes("no such column") || msg.includes("has no column named");
 }
 
+function isMissingSchemaError(err: unknown): boolean {
+  const msg = String((err as Error)?.message || err || "").toLowerCase();
+  return isMissingColumnError(err) || msg.includes("no such table");
+}
+
+function ensureSmsProviderEnabled(
+  env: Env,
+  headers: Headers
+): { ok: true; provider: ReturnType<typeof resolveSmsProvider> } | { ok: false; response: Response } {
+  const smsProvider = resolveSmsProvider(env as Record<string, unknown>);
+  if (smsProvider.name === "disabled" || !smsProvider.isConfigured) {
+    return {
+      ok: false,
+      response: new Response(
+        JSON.stringify({
+          ok: false,
+          status: "disabled",
+          error: "SMS_PROVIDER_NOT_CONFIGURED",
+          detail: "دەروازەی کورتەنامەی مۆبایل لە ئێستادا لە قۆناغی وەرگرتنی ڕەزامەندی کۆمپانیاکانی پەیوەندیدایە (CMC). تکایە بە ئیمەیڵ یاخود گووگڵ بەشدار بە.",
+        }),
+        { status: 503, headers }
+      ),
+    };
+  }
+  return { ok: true, provider: smsProvider };
+}
+
 function isUniqueConstraintError(err: unknown): boolean {
   const msg = String((err as Error)?.message || err || "").toLowerCase();
   return msg.includes("unique constraint") || msg.includes("constraint failed");
@@ -1185,6 +1212,12 @@ export default {
 
       // POST /api/auth/phone/send-otp
       if (pathname === "/api/auth/phone/send-otp" && request.method === "POST") {
+        // Resolve SMS provider before any D1 operation so disabled phone auth fails closed with 503
+        const smsCheck = ensureSmsProviderEnabled(env, responseHeaders);
+        if (!smsCheck.ok) {
+          return smsCheck.response;
+        }
+
         if (!env.DB) {
           return new Response(JSON.stringify({ ok: false, error: "DB_NOT_CONFIGURED", detail: "داتابەیس بەردەست نییە." }), {
             status: 500,
@@ -1241,22 +1274,7 @@ export default {
           );
         }
 
-        // Resolve SMS Provider
-        const smsProvider = resolveSmsProvider(env as Record<string, unknown>);
-        if (smsProvider.name === "disabled" || !smsProvider.isConfigured) {
-          return new Response(
-            JSON.stringify({
-              ok: false,
-              status: "disabled",
-              error: "SMS_PROVIDER_NOT_CONFIGURED",
-              detail: "دەروازەی کورتەنامەی مۆبایل لە ئێستادا لە قۆناغی وەرگرتنی ڕەزامەندی کۆمپانیاکانی پەیوەندیدایە (CMC). تکایە بە ئیمەیڵ یاخود گووگڵ بەشدار بە.",
-              verificationId: sessionRes.verificationId,
-            }),
-            { status: 503, headers: responseHeaders }
-          );
-        }
-
-        const smsResult = await smsProvider.sendOtp({
+        const smsResult = await smsCheck.provider.sendOtp({
           to: phoneE164,
           otp: sessionRes.otp!,
         });
@@ -1288,6 +1306,12 @@ export default {
 
       // POST /api/auth/phone/verify-otp
       if (pathname === "/api/auth/phone/verify-otp" && request.method === "POST") {
+        // Resolve SMS provider before any D1 operation so disabled phone auth fails closed with 503
+        const smsCheck = ensureSmsProviderEnabled(env, responseHeaders);
+        if (!smsCheck.ok) {
+          return smsCheck.response;
+        }
+
         if (!env.DB) {
           return new Response(JSON.stringify({ ok: false, error: "DB_NOT_CONFIGURED", detail: "داتابەیس بەردەست نییە." }), {
             status: 500,
@@ -3026,37 +3050,62 @@ export default {
             "UPDATE subscriptions SET status = 'expired', updated_at = ? WHERE status IN ('trial', 'active') AND trial_ends_at < ?"
           ).bind(now, now).run().catch(() => {});
 
+          const subscriptionQueries = [
+            // 1. Target production schema (0009+ without 0008 phone columns): students + users with school_name
+            `SELECT s.user_id, s.status, s.trial_started_at, s.trial_ends_at, s.plan_id, s.updated_at,
+                    COALESCE(NULLIF(st.name, ''), NULLIF(u.name, ''), '') as user_name,
+                    COALESCE(NULLIF(st.email, ''), NULLIF(u.email, ''), '') as user_email,
+                    '' as user_phone,
+                    COALESCE(NULLIF(st.school_name, ''), NULLIF(u.school_name, ''), '') as school_name
+             FROM subscriptions s
+             LEFT JOIN students st ON (s.user_id = st.id OR s.user_id = st.firebase_uid)
+             LEFT JOIN users u ON (s.user_id = u.id)
+             ORDER BY s.updated_at DESC LIMIT 200`,
+            // 2. Pre-0009 production schema (without 0008 phone or 0009 school_name): preserves name and email
+            `SELECT s.user_id, s.status, s.trial_started_at, s.trial_ends_at, s.plan_id, s.updated_at,
+                    COALESCE(NULLIF(st.name, ''), NULLIF(u.name, ''), '') as user_name,
+                    COALESCE(NULLIF(st.email, ''), NULLIF(u.email, ''), '') as user_email,
+                    '' as user_phone,
+                    '' as school_name
+             FROM subscriptions s
+             LEFT JOIN students st ON (s.user_id = st.id OR s.user_id = st.firebase_uid)
+             LEFT JOIN users u ON (s.user_id = u.id)
+             ORDER BY s.updated_at DESC LIMIT 200`,
+            // 3. Students-only fallback with school_name (if users table absent)
+            `SELECT s.user_id, s.status, s.trial_started_at, s.trial_ends_at, s.plan_id, s.updated_at,
+                    COALESCE(NULLIF(st.name, ''), '') as user_name,
+                    COALESCE(NULLIF(st.email, ''), '') as user_email,
+                    '' as user_phone,
+                    COALESCE(NULLIF(st.school_name, ''), '') as school_name
+             FROM subscriptions s
+             LEFT JOIN students st ON (s.user_id = st.id OR s.user_id = st.firebase_uid)
+             ORDER BY s.updated_at DESC LIMIT 200`,
+            // 4. Students-only fallback without school_name (if users table and school_name absent)
+            `SELECT s.user_id, s.status, s.trial_started_at, s.trial_ends_at, s.plan_id, s.updated_at,
+                    COALESCE(NULLIF(st.name, ''), '') as user_name,
+                    COALESCE(NULLIF(st.email, ''), '') as user_email,
+                    '' as user_phone,
+                    '' as school_name
+             FROM subscriptions s
+             LEFT JOIN students st ON (s.user_id = st.id OR s.user_id = st.firebase_uid)
+             ORDER BY s.updated_at DESC LIMIT 200`,
+            // 5. Minimal bare subscriptions fallback
+            "SELECT user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at FROM subscriptions ORDER BY updated_at DESC LIMIT 200",
+          ];
+
           let res: { results?: unknown[] } | null = null;
-          try {
-            res = await env.DB.prepare(
-              `SELECT s.user_id, s.status, s.trial_started_at, s.trial_ends_at, s.plan_id, s.updated_at,
-                      COALESCE(NULLIF(st.name, ''), NULLIF(u.name, ''), '') as user_name,
-                      COALESCE(NULLIF(st.email, ''), NULLIF(u.email, ''), '') as user_email,
-                      COALESCE(NULLIF(st.phone, ''), NULLIF(u.phone, ''), '') as user_phone,
-                      COALESCE(NULLIF(st.school_name, ''), NULLIF(u.school_name, ''), '') as school_name
-               FROM subscriptions s
-               LEFT JOIN students st ON (s.user_id = st.id OR s.user_id = st.firebase_uid)
-               LEFT JOIN users u ON (s.user_id = u.id)
-               ORDER BY s.updated_at DESC LIMIT 200`
-            ).bind().all<unknown>();
-          } catch {
+          let lastSchemaErr: unknown = null;
+          for (const sql of subscriptionQueries) {
             try {
-              res = await env.DB.prepare(
-                `SELECT s.user_id, s.status, s.trial_started_at, s.trial_ends_at, s.plan_id, s.updated_at,
-                        COALESCE(NULLIF(st.name, ''), '') as user_name,
-                        COALESCE(NULLIF(st.email, ''), '') as user_email,
-                        COALESCE(NULLIF(st.phone, ''), '') as user_phone,
-                        COALESCE(NULLIF(st.school_name, ''), '') as school_name
-                 FROM subscriptions s
-                 LEFT JOIN students st ON (s.user_id = st.id OR s.user_id = st.firebase_uid)
-                 ORDER BY s.updated_at DESC LIMIT 200`
-              ).bind().all<unknown>();
-            } catch {
-              res = await env.DB.prepare(
-                "SELECT user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at FROM subscriptions ORDER BY updated_at DESC LIMIT 200"
-              ).bind().all<unknown>();
+              res = await env.DB.prepare(sql).bind().all<unknown>();
+              lastSchemaErr = null;
+              break;
+            } catch (err) {
+              if (!isMissingSchemaError(err)) throw err;
+              lastSchemaErr = err;
             }
           }
+          if (lastSchemaErr) throw lastSchemaErr;
           return new Response(
             JSON.stringify({ ok: true, subscriptions: res?.results || [] }),
             { status: 200, headers: responseHeaders }
