@@ -20,8 +20,9 @@ import { useAppStore } from "../store/appStore.ts";
 import { useSoundEffects } from "../hooks/useSoundEffects.ts";
 import { Modal } from "../components/Modal.tsx";
 import { SubscriptionModal } from "../components/SubscriptionModal.tsx";
-import { getSubscriptionStatus, type StudentSubscriptionStatus } from "../services/subscriptionService.ts";
+import { getSubscriptionStatus, fetchServerStudentProfile, type StudentSubscriptionStatus } from "../services/subscriptionService.ts";
 import { logoutUser, getCurrentUser, resetPassword } from "../services/authService.ts";
+import { isSyntheticPlaceholderEmail } from "../server/auth/verifiedEmail.ts";
 import { deleteStudentProfile } from "../features/student/studentStorage.ts";
 import { BAGHDAD_TIMEZONE } from "../utils/dateTime.ts";
 import { StudentProfile } from "../features/student/studentTypes.ts";
@@ -63,13 +64,60 @@ export function ProfileAndSettings({
   const { profile: masteryProfile } = useStudentMastery(studentProfile?.id || "default-guest");
   const userProgress = useAppStore((state) => state.userProgress);
   const authUser = getCurrentUser();
+  const [serverProfile, setServerProfile] = useState<{
+    id: string;
+    name: string;
+    email: string;
+    schoolName: string;
+    grade: string;
+    stream: string;
+  } | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState<boolean>(false);
+  const [profileLoadError, setProfileLoadError] = useState<string | null>(null);
 
+  React.useEffect(() => {
+    let active = true;
+    const uid = authUser?.uid || studentProfile?.id;
+    if (!uid || uid === "default-guest") {
+      setServerProfile(null);
+      return;
+    }
+    setIsLoadingProfile(true);
+    setProfileLoadError(null);
+    fetchServerStudentProfile()
+      .then((res) => {
+        if (!active) return;
+        if (res.ok && res.exists && res.student) {
+          setServerProfile(res.student);
+        } else if (!res.ok) {
+          setProfileLoadError(res.detail || "نەتوانرا زانیارییەکانی پرۆفایل لە سێرڤەرەوە بهێنرێتەوە.");
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setProfileLoadError("هەڵەیەک لە پەیوەندیکردن بە سێرڤەرەوە ڕوویدا.");
+        }
+      })
+      .finally(() => {
+        if (active) setIsLoadingProfile(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [authUser?.uid, studentProfile?.id]);
+
+  const effectiveName = serverProfile?.name || studentProfile?.name || user.name || "";
+  const effectiveGrade = serverProfile?.grade || studentProfile?.grade || user.grade || "";
+  const effectiveStream = serverProfile?.stream || studentProfile?.stream || user.stream || "";
+  const effectiveSchool = serverProfile?.schoolName || studentProfile?.school || "";
+  const candidateEmail = serverProfile?.email || authUser?.email || user.email || "";
+  const effectiveUid = serverProfile?.id || authUser?.uid || studentProfile?.id || "";
   const realEmail =
-    authUser?.email ||
-    user.email ||
-    (authUser?.isAnonymous
+    candidateEmail && (!effectiveUid || !isSyntheticPlaceholderEmail(effectiveUid, candidateEmail))
+      ? candidateEmail
+      : authUser?.isAnonymous
       ? "هەژماری میوان (بێ ئیمەیڵ)"
-      : "تۆمارنەکراو");
+      : "ئیمەیڵ بەردەست نییە";
 
   const realTotalXp = studentProfile?.totalScore ?? userProgress.totalScore ?? user.totalScore ?? 0;
   const realCompletedLessons =
@@ -115,16 +163,16 @@ export function ProfileAndSettings({
 
   const [activeTab, setActiveTab] = useState<"profile" | "preferences" | "account" | "privacy">("profile");
 
-  // Form states
-  const [name, setName] = useState(studentProfile?.name || user.name);
-  const [grade, _setGrade] = useState(studentProfile?.grade || user.grade);
-  const [stream, _setStream] = useState(studentProfile?.stream || user.stream);
-  const [selectedSubjects, setSelectedSubjects] = useState<Record<string, boolean>>({
-    chemistry: true,
-    physics: true,
-    math: true,
-    biology: false,
-    english: false,
+  // Form states (synced whenever authoritative profile or account changes)
+  const [name, setName] = useState(effectiveName);
+  React.useEffect(() => {
+    setName(effectiveName);
+  }, [effectiveName, effectiveUid]);
+  const grade = effectiveGrade;
+  const stream = effectiveStream;
+  const [selectedSubjects, setSelectedSubjects] = useState<Record<string, boolean>>(() => {
+    const active = studentProfile?.activeSubject || user.activeSubject;
+    return active ? { [active]: true } : {};
   });
 
   // Preferences states
@@ -284,9 +332,9 @@ export function ProfileAndSettings({
           <div className="flex items-center gap-4 border-b border-slate-100 dark:border-slate-800 pb-5">
             <div className="w-20 h-20 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 border-2 border-indigo-200 dark:border-indigo-800 flex items-center justify-center text-indigo-600 dark:text-indigo-300 text-3xl font-black shrink-0 relative overflow-hidden group cursor-pointer">
               {user.avatar ? (
-                <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+                <img src={user.avatar} alt={effectiveName || "قوتابی"} className="w-full h-full object-cover" />
               ) : (
-                <span>{user.name.charAt(0)}</span>
+                <span>{(effectiveName || "؟").charAt(0)}</span>
               )}
               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
                 <Upload className="w-5 h-5" />
@@ -294,10 +342,18 @@ export function ProfileAndSettings({
             </div>
 
             <div className="space-y-1">
-              <h2 className="font-sans font-bold text-lg text-slate-900 dark:text-white">{name}</h2>
+              <h2 className="font-sans font-bold text-lg text-slate-900 dark:text-white">
+                {isLoadingProfile ? "چاوەڕوان بە..." : name || "ناو تۆمار نەکراوە"}
+              </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 font-sans">
-                پۆلی {grade} • لقی {stream === "scientific" ? "زانستی" : "وێژەیی"}
+                {grade ? `پۆلی ${grade}` : "پۆل دیاری نەکراوە"} •{" "}
+                {stream === "scientific" ? "لقی زانستی" : stream === "literary" ? "لقی وێژەیی" : stream === "general" ? "گشتی" : "لق دیاری نەکراوە"}
               </p>
+              {profileLoadError && (
+                <p className="text-[11px] text-rose-600 dark:text-rose-400 font-sans" role="alert">
+                  {profileLoadError}
+                </p>
+              )}
               <span className="inline-block text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800/60">
                 قوتابی فەرمی هەرێمی کوردستان
               </span>
@@ -317,6 +373,13 @@ export function ProfileAndSettings({
             </div>
 
             <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 font-sans">قوتابخانە:</label>
+              <div className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 text-slate-800 dark:text-slate-200 text-sm font-sans font-bold">
+                {effectiveSchool ? effectiveSchool : <span className="text-slate-400 font-normal">دیاری نەکراوە</span>}
+              </div>
+            </div>
+
+            <div className="space-y-1">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300 font-sans">پۆلی خوێندن:</label>
                 <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-md border border-amber-200 dark:border-amber-800/60 flex items-center gap-1">
@@ -325,7 +388,7 @@ export function ProfileAndSettings({
                 </span>
               </div>
               <div className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/80 dark:bg-slate-800/60 text-slate-700 dark:text-slate-200 text-sm font-sans font-bold flex items-center justify-between">
-                <span>{grade === "12" ? "پۆلی ١٢ی ئامادەیی" : `پۆلی ${grade}`}</span>
+                <span>{grade === "12" ? "پۆلی ١٢ی ئامادەیی" : grade ? `پۆلی ${grade}` : "دیاری نەکراوە"}</span>
                 <span className="text-xs text-slate-400 dark:text-slate-500 font-normal">ناتوانرێت بگۆڕدرێت</span>
               </div>
             </div>
@@ -340,7 +403,7 @@ export function ProfileAndSettings({
               </div>
               <div className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/80 dark:bg-slate-800/60 text-slate-700 dark:text-slate-200 text-sm font-sans font-bold flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span>{stream === "scientific" ? "بەشی زانستی 🔬" : "بەشی وێژەیی 📚"}</span>
+                  <span>{stream === "scientific" ? "بەشی زانستی 🔬" : stream === "literary" ? "بەشی وێژەیی 📚" : stream === "general" ? "گشتی" : "دیاری نەکراوە"}</span>
                   {stream === "literary" && (
                     <span className="text-[10px] font-bold text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 px-2 py-0.5 rounded-full">
                       لە ماوەی داهاتوو کارا دەبێت بۆ قوتابیان ⏳
@@ -482,8 +545,9 @@ export function ProfileAndSettings({
             </div>
 
             <div className="space-y-2.5 max-h-[220px] overflow-y-auto pl-1">
-              {(masteryProfile?.conceptMasteries && Object.keys(masteryProfile.conceptMasteries).length > 0
-                ? Object.values(masteryProfile.conceptMasteries).map((cm) => ({
+              {masteryProfile?.conceptMasteries && Object.keys(masteryProfile.conceptMasteries).length > 0 ? (
+                Object.values(masteryProfile.conceptMasteries)
+                  .map((cm) => ({
                     conceptId: cm.conceptId,
                     score: cm.masteryScore,
                     label:
@@ -501,22 +565,22 @@ export function ProfileAndSettings({
                     barClass:
                       cm.masteryScore >= 0.8 ? "bg-emerald-500" : cm.masteryScore >= 0.5 ? "bg-indigo-600" : "bg-red-500",
                   }))
-                : [
-                    { conceptId: "ترش و تفتەکان (تیۆری برۆنستد)", score: 0, label: "دەستپێنەکراو", badgeClass: "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700", barClass: "bg-indigo-600" },
-                    { conceptId: "هاوسەنگیی کیمیایی و نەگۆڕی هاوسەنگ", score: 0, label: "دەستپێنەکراو", badgeClass: "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700", barClass: "bg-indigo-600" },
-                    { conceptId: "پێوەری pH و دەرهێنانی خەستی", score: 0, label: "دەستپێنەکراو", badgeClass: "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700", barClass: "bg-indigo-600" },
-                  ]
-              ).map((item, idx) => (
-                <div key={idx} className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 space-y-1.5 text-right">
-                  <div className="flex items-center justify-between">
-                    <span className="font-sans font-bold text-xs text-slate-800 dark:text-slate-200">{item.conceptId}</span>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${item.badgeClass}`}>{item.label}</span>
-                  </div>
-                  <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                    <div className={`h-full rounded-full transition-all duration-300 ${item.barClass}`} style={{ width: `${Math.max(item.score * 100, 2)}%` }} />
-                  </div>
+                  .map((item, idx) => (
+                    <div key={idx} className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 space-y-1.5 text-right">
+                      <div className="flex items-center justify-between">
+                        <span className="font-sans font-bold text-xs text-slate-800 dark:text-slate-200">{item.conceptId}</span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${item.badgeClass}`}>{item.label}</span>
+                      </div>
+                      <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full transition-all duration-300 ${item.barClass}`} style={{ width: `${Math.max(item.score * 100, 2)}%` }} />
+                      </div>
+                    </div>
+                  ))
+              ) : (
+                <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300 font-sans text-right">
+                  هێشتا هیچ چەمکێک هەڵنەسەنگێندراوە. دوای تاقیکردنەوە یان ڕاهێنان، ئاستی لێهاتووییت لێرە دەردەکەوێت.
                 </div>
-              ))}
+              )}
             </div>
           </div>
 

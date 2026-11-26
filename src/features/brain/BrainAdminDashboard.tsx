@@ -37,7 +37,7 @@ import {
  AlertCircle,
  Trash2,
 } from "lucide-react";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { getFirestoreDb } from "../../services/firebase.ts";
 import { InternalBrainService } from "../../core/brain/InternalBrainService";
 import {
@@ -51,13 +51,13 @@ import {
   getAdminSubscriptions,
   activateUserSubscription,
   resetUserTrial,
-  updateAdminStudentProfile,
   deleteAdminSubscription,
   getAdminPaymentReceipts,
   reviewPaymentReceipt,
   type SubscriptionRecord,
   type PaymentReceiptRecord,
 } from "../../services/adminApi.ts";
+import { isSyntheticPlaceholderEmail } from "../../server/auth/verifiedEmail.ts";
 import { useIsAdmin } from "../../hooks/useIsAdmin.ts";
 import {
  ACTION_LEVEL_DEFINITIONS,
@@ -195,7 +195,10 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
       };
       const rawIdentifier = raw.email || raw.profile?.email || "";
       const rawPhone = raw.phoneNumber || raw.profile?.phoneNumber || raw.phone || raw.profile?.phone || "";
-      const email = rawIdentifier.includes("@") ? rawIdentifier : "";
+      const email =
+        rawIdentifier.includes("@") && !isSyntheticPlaceholderEmail(s.user_id, rawIdentifier)
+          ? rawIdentifier
+          : "";
       const phone = rawPhone || (!rawIdentifier.includes("@") ? rawIdentifier : "");
       const name = raw.name || raw.displayName || raw.profile?.name || "";
       return { userId: s.user_id, email, phone, name };
@@ -207,7 +210,10 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
       const sRaw = sSnap.data() as { email?: string; name?: string; displayName?: string; phoneNumber?: string; phone?: string };
       const rawIdentifier = sRaw.email || "";
       const rawPhone = sRaw.phoneNumber || sRaw.phone || "";
-      const email = rawIdentifier.includes("@") ? rawIdentifier : "";
+      const email =
+        rawIdentifier.includes("@") && !isSyntheticPlaceholderEmail(s.user_id, rawIdentifier)
+          ? rawIdentifier
+          : "";
       const phone = rawPhone || (!rawIdentifier.includes("@") ? rawIdentifier : "");
       const name = sRaw.name || sRaw.displayName || "";
       return { userId: s.user_id, email, phone, name };
@@ -240,36 +246,7 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
   });
  };
 
- const handleUpdateStudentEmail = async (userId: string, currentName?: string | null) => {
-  const input = window.prompt(`ئیمەیڵ یان ژمارەی مۆبایل بۆ ئەم قوتابییە (${currentName || userId}) بنووسە:`);
-  if (!input || !input.trim()) return;
-  const trimmed = input.trim();
-  try {
-   // 1. Update D1 database authoritatively via Cloudflare Worker
-   await updateAdminStudentProfile(userId, { email: trimmed, name: currentName || undefined });
-
-   // 2. Also sync to Firestore if available
-   const db = getFirestoreDb();
-   if (db) {
-    const isPhone = !trimmed.includes("@");
-    const payload = isPhone ? { phoneNumber: trimmed } : { email: trimmed };
-    const uRef = doc(db, "users", userId);
-    const sRef = doc(db, "students", userId);
-    await Promise.allSettled([
-     setDoc(uRef, { ...payload, updatedAt: new Date().toISOString() }, { merge: true }),
-     setDoc(sRef, { ...payload, updatedAt: new Date().toISOString() }, { merge: true }),
-    ]);
-   }
-
-   setSubscriptions((prev) =>
-    prev.map((sub) => (sub.user_id === userId ? { ...sub, user_email: trimmed } : sub))
-   );
-   setSubActionMessage(`ئیمەیڵی قوتابی ${userId} بە سەرکەوتوویی لە داتابەیسی سێرڤەر (D1) نوێکرایەوە.`);
-  } catch (err) {
-   console.error("Failed to update student email:", err);
-   alert(`کێشەیەک لە نوێکردنەوەی زانیاری ڕوویدا: ${err instanceof Error ? err.message : String(err)}`);
-  }
- };
+ // Email editing is intentionally read-only until a verified Firebase Admin email-change workflow is approved.
 
  const handleDeleteSubscription = async (userId: string) => {
   if (!window.confirm(`ئایا دڵنیایت لە سڕینەوەی ئەم تۆمارەی بەشداریکردن (${userId})؟`)) return;
@@ -2373,18 +2350,16 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
           <User className="w-3.5 h-3.5 text-blue-400 shrink-0" />
           <span>{s.user_name || "قوتابی تۆمارکراو"}</span>
          </div>
-         {s.user_email ? (
+         {s.user_email && !isSyntheticPlaceholderEmail(s.user_id, s.user_email) ? (
           <div className="text-[11px] text-emerald-300 font-mono flex items-center gap-1" dir="ltr">
           <Mail className="w-3 h-3 text-emerald-400 shrink-0" />
           <span>{s.user_email}</span>
           </div>
-         ) : s.user_phone ? (
-          <div className="text-[11px] text-cyan-300 font-mono flex items-center gap-1" dir="ltr">
-          <Phone className="w-3 h-3 text-cyan-400 shrink-0" />
-          <span>{s.user_phone}</span>
-          <span className="text-[9px] px-1 py-0.2 rounded bg-cyan-950/80 text-cyan-400 border border-cyan-800/60 font-sans">
-           مۆبایل
-          </span>
+         ) : s.email_status === "synthetic" ? (
+          <div className="flex items-center gap-1.5">
+           <span className="text-[10px] text-amber-300 font-sans bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-800/50">
+            ئیمەیڵی کاتی سیستەم (نەپشتڕاستکراو)
+           </span>
           </div>
          ) : s.user_id.startsWith("guest_") ? (
           <div className="flex items-center gap-1.5">
@@ -2395,16 +2370,8 @@ export function BrainAdminDashboard({ onBackToApp }: BrainAdminDashboardProps) {
          ) : (
           <div className="flex items-center gap-1.5">
            <span className="text-[10px] text-slate-400 italic">
-           (هێشتا ئیمەیڵ هاوکات نەکراوە)
+           (ئیمەیڵ تۆمار نەکراوە • Read-Only)
            </span>
-           <button
-            type="button"
-            onClick={() => void handleUpdateStudentEmail(s.user_id, s.user_name)}
-            className="text-[10px] text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
-            title="زیادکردنی ئیمەیڵ بۆ ئەم قوتابییە"
-           >
-            + زیادکردن
-           </button>
           </div>
          )}
          {s.school_name && (

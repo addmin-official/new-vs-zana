@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Users,
   Play,
@@ -8,6 +8,8 @@ import {
   VolumeX,
   Target,
   ExternalLink,
+  RefreshCw,
+  AlertTriangle,
 } from "lucide-react";
 import { useSoundEffects } from "../hooks/useSoundEffects.ts";
 import {
@@ -16,25 +18,61 @@ import {
   setAmbientChannelVolume,
   type AmbientSoundType,
 } from "../services/ambientSoundscape.ts";
-
-export interface StudyRoomInfo {
-  id: string;
-  name: string;
-  subject: string;
-  activeCount: number;
-  ambient: string;
-}
-
-const AVAILABLE_ROOMS: StudyRoomInfo[] = [
-  { id: "room-chem", name: "گرووپی خوێندنی کیمیای پۆلی ١٢", subject: "کیمیا", activeCount: 7, ambient: "بارانی دارستان" },
-  { id: "room-phys", name: "شیکارکەرانی فیزیای میکانیک", subject: "فیزیا", activeCount: 12, ambient: "کتێبخانەی بێدەنگ" },
-  { id: "room-math", name: "ژووری جیاکاری و تەواوکاری بیرکاری", subject: "بیرکاری", activeCount: 5, ambient: "شەپۆلی دەریا" },
-];
+import { fetchStudyRooms, fetchStudyRoom } from "../services/studyRoomApi.ts";
+import type { StudyRoomSummary, StudyRoomData } from "../server/rooms/StudyRoomTypes.ts";
 
 export function StudyRooms() {
   const { playSuccess } = useSoundEffects();
-  const [selectedRoomId, setSelectedRoomId] = useState<string>("room-chem");
-  const [activeRoom, setActiveRoom] = useState<StudyRoomInfo>(AVAILABLE_ROOMS[0]);
+  const [rooms, setRooms] = useState<StudyRoomSummary[]>([]);
+  const [isLoadingRooms, setIsLoadingRooms] = useState<boolean>(true);
+  const [roomsError, setRoomsError] = useState<string | null>(null);
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
+  const [activeRoomDetail, setActiveRoomDetail] = useState<StudyRoomData | null>(null);
+
+  const loadRooms = useCallback(async () => {
+    setIsLoadingRooms(true);
+    setRoomsError(null);
+    try {
+      const list = await fetchStudyRooms();
+      setRooms(list);
+      if (list.length > 0) {
+        const firstId = list[0].id;
+        setSelectedRoomId((prev) => (prev && list.some((r) => r.id === prev) ? prev : firstId));
+      } else {
+        setSelectedRoomId(null);
+        setActiveRoomDetail(null);
+      }
+    } catch {
+      setRooms([]);
+      setSelectedRoomId(null);
+      setActiveRoomDetail(null);
+      setRoomsError("نەتوانرا لیستی ژوورەکان لە سێرڤەرەوە بهێنرێتەوە. تکایە دووبارە هەوڵ بدەرەوە.");
+    } finally {
+      setIsLoadingRooms(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadRooms();
+  }, [loadRooms]);
+
+  useEffect(() => {
+    if (!selectedRoomId) {
+      setActiveRoomDetail(null);
+      return;
+    }
+    let active = true;
+    fetchStudyRoom(selectedRoomId)
+      .then((detail) => {
+        if (active) setActiveRoomDetail(detail);
+      })
+      .catch(() => {
+        if (active) setActiveRoomDetail(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [selectedRoomId]);
 
   // Pomodoro state: 25 minutes = 1500s
   const [secondsLeft, setSecondsLeft] = useState(1500);
@@ -168,12 +206,8 @@ export function StudyRooms() {
     setAmbientChannelVolume(key, val);
   };
 
-  const peers = [
-    { name: "محمد علی", topic: "کیمیا • بەندی ترش و تفت", status: "خوێندنی چڕ 🔥" },
-    { name: "فاتمة کاروان", topic: "فیزیا • یاسای نیوتن", status: "شیکارکردن ✍️" },
-    { name: "حسن هەڵگورد", topic: "بیرکاری • ڕادە و سنوور", status: "پیاچوونەوە 📖" },
-    { name: "سارا ڕەحیم", topic: "کیمیا • کاربۆن", status: "خوێندنی چڕ 🔥" },
-  ];
+  const selectedRoomSummary = rooms.find((r) => r.id === selectedRoomId) || null;
+  const realPeers = activeRoomDetail?.participants || [];
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-6xl mx-auto w-full" dir="rtl">
@@ -190,66 +224,110 @@ export function StudyRooms() {
         </p>
       </div>
 
-      {/* Main Grid: Selector (4 Cols) + Active Room Canvas (8 Cols) */}
+      {/* Main Grid: Selector (4 Cols) + Active Room / Focus Canvas (8 Cols) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Room Selector (4 Cols) */}
         <div className="lg:col-span-4 space-y-3">
-          <h2 className="font-sans font-bold text-sm text-slate-900 dark:text-white">
-            ژوورە چالاکەکان
-          </h2>
-
-          <div className="space-y-3">
-            {AVAILABLE_ROOMS.map((r) => {
-              const isSelected = selectedRoomId === r.id;
-              return (
-                <div
-                  key={r.id}
-                  onClick={() => {
-                    setSelectedRoomId(r.id);
-                    setActiveRoom(r);
-                  }}
-                  className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between space-y-3 ${
-                    isSelected
-                      ? "bg-indigo-50/70 dark:bg-indigo-950/40 border-indigo-300 dark:border-indigo-700 shadow-2xs"
-                      : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
-                  }`}
-                >
-                  <div>
-                    <span className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300 bg-white dark:bg-slate-800 px-2 py-0.5 rounded-full border border-indigo-100 dark:border-indigo-800/60">
-                      {r.subject}
-                    </span>
-                    <h3 className="font-sans font-bold text-sm text-slate-900 dark:text-white mt-1.5">
-                      {r.name}
-                    </h3>
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-sans pt-1 border-t border-slate-100 dark:border-slate-800">
-                    <span className="flex items-center gap-1">
-                      <Users className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                      <span>{r.activeCount} قوتابی ئێستا چالاکن</span>
-                    </span>
-                    <span className="text-[11px] text-slate-400">
-                      {r.ambient}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="flex items-center justify-between">
+            <h2 className="font-sans font-bold text-sm text-slate-900 dark:text-white">
+              ژوورە چالاکەکان
+            </h2>
+            <button
+              type="button"
+              onClick={() => void loadRooms()}
+              disabled={isLoadingRooms}
+              className="text-xs font-sans font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoadingRooms ? "animate-spin" : ""}`} />
+              <span>نوێکردنەوە</span>
+            </button>
           </div>
+
+          {isLoadingRooms ? (
+            <div className="p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-center space-y-2" role="status">
+              <div className="w-6 h-6 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto" />
+              <p className="text-xs font-sans text-slate-500 dark:text-slate-400">
+                چاوەڕوان بە... پشکنینی ژوورە چالاکەکان
+              </p>
+            </div>
+          ) : roomsError ? (
+            <div className="p-5 rounded-2xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/70 dark:bg-rose-950/30 text-right space-y-3" role="alert">
+              <div className="flex items-center gap-2 text-rose-700 dark:text-rose-300 font-sans font-bold text-xs">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>{roomsError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => void loadRooms()}
+                className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-sans font-bold cursor-pointer flex items-center gap-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>دووبارە هەوڵدانەوە</span>
+              </button>
+            </div>
+          ) : rooms.length === 0 ? (
+            <div className="p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-center space-y-2.5">
+              <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center justify-center mx-auto">
+                <Users className="w-5 h-5" />
+              </div>
+              <p className="font-sans font-bold text-sm text-slate-900 dark:text-white">
+                لە ئێستادا هیچ ژوورێکی خوێندنی چالاک نییە.
+              </p>
+              <p className="font-sans text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                ژوورەکانی خوێندنی بەکۆمەڵ لەلایەن بەڕێوەبەرایەتییەوە ڕێکدەخرێن. دەتوانیت هێشتا لە تەنیشتەوە تایمەری پۆمۆدۆرۆ و دەنگی ئارامبەخش بۆ خوێندنی تایبەتی خۆت بەکاربهێنیت.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {rooms.map((r) => {
+                const isSelected = selectedRoomId === r.id;
+                return (
+                  <div
+                    key={r.id}
+                    onClick={() => setSelectedRoomId(r.id)}
+                    className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between space-y-3 ${
+                      isSelected
+                        ? "bg-indigo-50/70 dark:bg-indigo-950/40 border-indigo-300 dark:border-indigo-700 shadow-2xs"
+                        : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
+                    }`}
+                  >
+                    <div>
+                      <span className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300 bg-white dark:bg-slate-800 px-2 py-0.5 rounded-full border border-indigo-100 dark:border-indigo-800/60">
+                        {r.subjectNameKu}
+                      </span>
+                      <h3 className="font-sans font-bold text-sm text-slate-900 dark:text-white mt-1.5">
+                        {r.title}
+                      </h3>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-sans pt-1 border-t border-slate-100 dark:border-slate-800">
+                      <span className="flex items-center gap-1">
+                        <Users className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                        <span>{r.activeCount} قوتابی ئێستا چالاکن</span>
+                      </span>
+                      <span className="text-[11px] text-slate-400">
+                        پۆلی {r.grade}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        {/* Active Room Canvas (8 Cols) */}
+        {/* Active Room / Personal Focus Canvas (8 Cols) */}
         <div className="lg:col-span-8 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-6">
           {/* Room Name Bar */}
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+              <span className={`w-2.5 h-2.5 rounded-full ${selectedRoomSummary ? "bg-emerald-500" : "bg-slate-400"}`} />
               <h2 className="font-sans font-bold text-base text-slate-900 dark:text-white">
-                {activeRoom.name}
+                {selectedRoomSummary ? selectedRoomSummary.title : "ژینگەی تەرکیزی تاکەکەسی (پۆمۆدۆرۆ)"}
               </h2>
             </div>
             <span className="text-xs font-sans text-slate-500 dark:text-slate-400 font-medium">
-              {peers.length + 3} قوتابی بەشدارن
+              {selectedRoomSummary ? `${realPeers.length} قوتابی بەشدارن` : "بەبێ ژووری چالاک"}
             </span>
           </div>
 
@@ -511,26 +589,28 @@ export function StudyRooms() {
               هاوپۆلە چالاکەکانی ناو ئەم ژوورە:
             </h3>
 
+            {realPeers.length === 0 ? (
+              <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/30 text-xs font-sans text-slate-500 dark:text-slate-400 text-center">
+                هیچ هاوپۆلێکی چالاک لەم کاتەدا بەشدار نییە.
+              </div>
+            ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {peers.map((peer, pIdx) => (
+              {realPeers.map((peer, pIdx) => (
                 <div
-                  key={pIdx}
+                  key={peer.id}
                   className="p-3 bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl flex flex-col gap-2 text-xs font-sans"
                 >
                   {/* Peer header row */}
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
                       <span className="font-bold text-slate-900 dark:text-white block">{peer.name}</span>
-                      {/* ── Feature 4: subject + chat link ── */}
                       <span className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1 flex-wrap">
-                        {peer.topic}
+                        {peer.currentConcept}
                         <button
                           onClick={() => {
                             const win = window as unknown as { onNavigateToChat?: (t: string) => void };
                             if (typeof win.onNavigateToChat === "function") {
-                              win.onNavigateToChat(peer.topic);
-                            } else {
-                              console.log("Navigate to chat for:", peer.topic);
+                              win.onNavigateToChat(peer.currentConcept);
                             }
                           }}
                           className="inline-flex items-center gap-0.5 text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
@@ -545,7 +625,7 @@ export function StudyRooms() {
                     </span>
                   </div>
 
-                  {/* ── Feature 3: Per-peer cheer buttons ── */}
+                  {/* Per-peer cheer buttons */}
                   <div className="flex flex-wrap gap-1 pt-1 border-t border-slate-100 dark:border-slate-700 relative">
                     {CHEER_TEMPLATES.map((tmpl, tIdx) => (
                       <button
@@ -561,7 +641,6 @@ export function StudyRooms() {
                         {tmpl.emoji}
                       </button>
                     ))}
-                    {/* Mini toast anchored to this peer card */}
                     {cheerFeedback !== null &&
                       cheerFeedback.endsWith(`-${pIdx}`) && (
                         <span className="absolute left-0 -bottom-6 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-lg animate-in fade-in z-10 whitespace-nowrap">
@@ -572,6 +651,7 @@ export function StudyRooms() {
                 </div>
               ))}
             </div>
+            )}
 
             {/* Quick Cheer Buttons (global) */}
             <div className="flex flex-wrap items-center gap-2 pt-2">

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { StudentProfile, StudentProfileDraft, StudentGrade, AcademicStream, SubjectKey, StudentLevel, VerifiedIdentity } from "./studentTypes.ts";
 import { getStudentProfile, deleteStudentProfile, createStudentProfile, createVerifiedStudentProfile, updateStudentProfile, saveStudentProfile, parseServerProfileDocument, syncStudentProgressToFirestore } from "./studentStorage.ts";
 import { getValidatedGrade, getValidatedStream, getValidatedSubject, getValidatedLevel, sanitizeStudentName } from "./studentDefaults.ts";
@@ -35,6 +35,24 @@ export function useStudentProfile() {
     };
   });
 
+  const resetProfileOnly = useCallback(() => {
+    deleteStudentProfile();
+    const guest: StudentProfile = {
+      id: "default-guest",
+      name: "",
+      grade: "12",
+      stream: "scientific",
+      activeSubject: "chemistry",
+      level: "intermediate",
+      onboardingCompleted: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      authoritative: false,
+      source: "guest-local",
+    };
+    setProfileState(guest);
+  }, []);
+
   useEffect(() => {
     if (!isFirebaseConfigured()) {
       return;
@@ -63,18 +81,58 @@ export function useStudentProfile() {
           return;
         }
 
+        // Always query authoritative D1 profile first for authenticated non-anonymous users
+        let serverProfileData: {
+          name: string;
+          email: string;
+          schoolName: string;
+          grade: string;
+          stream: string;
+          onboardingCompleted: boolean;
+        } | null = null;
+
+        try {
+          const serverRes = await fetchServerStudentProfile();
+          if (serverRes.ok && serverRes.exists && serverRes.student) {
+            serverProfileData = {
+              name: serverRes.student.name || "",
+              email: serverRes.student.email || user.email || "",
+              schoolName: serverRes.student.schoolName || "",
+              grade: serverRes.student.grade || "12",
+              stream: serverRes.student.stream || "scientific",
+              onboardingCompleted: Boolean(serverRes.onboardingCompleted),
+            };
+          }
+        } catch (serverErr) {
+          console.warn("[useStudentProfile] fetchServerStudentProfile notice:", serverErr);
+        }
+
         const docRef = doc(db, "students", user.uid);
         try {
           const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) {
-            const rawData = docSnap.data();
-            const serverDraft = parseServerProfileDocument(rawData);
+          if (docSnap.exists() || serverProfileData) {
+            const rawData = docSnap.exists() ? docSnap.data() : {};
+            const serverDraft = serverProfileData
+              ? {
+                  name: serverProfileData.name,
+                  grade: getValidatedGrade(serverProfileData.grade),
+                  stream: getValidatedStream(serverProfileData.stream),
+                  activeSubject: getValidatedSubject(rawData.activeSubject || rawData.subject || "chemistry"),
+                  level: getValidatedLevel(rawData.level),
+                }
+              : parseServerProfileDocument(rawData);
             const identity: VerifiedIdentity = {
               verifiedUid: user.uid,
               isAnonymous: false,
-              email: user.email,
+              email: serverProfileData?.email || user.email,
             };
             const cloudProfile = createVerifiedStudentProfile(identity, serverDraft);
+            if (serverProfileData) {
+              cloudProfile.school = serverProfileData.schoolName;
+              cloudProfile.onboardingCompleted = serverProfileData.onboardingCompleted;
+            } else if (typeof rawData.school === "string") {
+              cloudProfile.school = rawData.school;
+            }
 
             // Extract Firestore progress data
             const cloudScore = typeof rawData.totalScore === "number" ? rawData.totalScore : (typeof rawData.xp === "number" ? rawData.xp : 0);
@@ -228,16 +286,13 @@ export function useStudentProfile() {
           setIsOfflineFallback(true);
         }
       } else {
-        // Unauthenticated / logged out state
-        const saved = getStudentProfile();
-        if (saved) {
-          setProfileState(saved);
-        }
+        // Unauthenticated / logged out state: never retain stale profile from localStorage
+        resetProfileOnly();
       }
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [resetProfileOnly]);
 
   const isOnboarded = profile.onboardingCompleted;
 
@@ -309,24 +364,6 @@ export function useStudentProfile() {
   };
 
   const deleteProfile = () => {
-    deleteStudentProfile();
-    const guest: StudentProfile = {
-      id: "default-guest",
-      name: "",
-      grade: "12",
-      stream: "scientific",
-      activeSubject: "chemistry",
-      level: "intermediate",
-      onboardingCompleted: false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      authoritative: false,
-      source: "guest-local",
-    };
-    setProfileState(guest);
-  };
-
-  const resetProfileOnly = () => {
     deleteStudentProfile();
     const guest: StudentProfile = {
       id: "default-guest",

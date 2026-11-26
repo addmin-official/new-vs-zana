@@ -3051,20 +3051,20 @@ export default {
           ).bind(now, now).run().catch(() => {});
 
           const subscriptionQueries = [
-            // 1. Target production schema (0009+ without 0008 phone columns): students + users with school_name
+            // 1. Target production schema (0009+ & 0010 without 0008 phone columns): includes s.email, st.email, u.email
             `SELECT s.user_id, s.status, s.trial_started_at, s.trial_ends_at, s.plan_id, s.updated_at,
                     COALESCE(NULLIF(st.name, ''), NULLIF(u.name, ''), '') as user_name,
-                    COALESCE(NULLIF(st.email, ''), NULLIF(u.email, ''), '') as user_email,
+                    COALESCE(NULLIF(s.email, ''), NULLIF(st.email, ''), NULLIF(u.email, ''), '') as raw_email,
                     '' as user_phone,
                     COALESCE(NULLIF(st.school_name, ''), NULLIF(u.school_name, ''), '') as school_name
              FROM subscriptions s
              LEFT JOIN students st ON (s.user_id = st.id OR s.user_id = st.firebase_uid)
              LEFT JOIN users u ON (s.user_id = u.id)
              ORDER BY s.updated_at DESC LIMIT 200`,
-            // 2. Pre-0009 production schema (without 0008 phone or 0009 school_name): preserves name and email
+            // 2. Pre-0009/0010 production schema (without s.email, 0008 phone, or 0009 school_name): preserves name and email
             `SELECT s.user_id, s.status, s.trial_started_at, s.trial_ends_at, s.plan_id, s.updated_at,
                     COALESCE(NULLIF(st.name, ''), NULLIF(u.name, ''), '') as user_name,
-                    COALESCE(NULLIF(st.email, ''), NULLIF(u.email, ''), '') as user_email,
+                    COALESCE(NULLIF(st.email, ''), NULLIF(u.email, ''), '') as raw_email,
                     '' as user_phone,
                     '' as school_name
              FROM subscriptions s
@@ -3074,7 +3074,7 @@ export default {
             // 3. Students-only fallback with school_name (if users table absent)
             `SELECT s.user_id, s.status, s.trial_started_at, s.trial_ends_at, s.plan_id, s.updated_at,
                     COALESCE(NULLIF(st.name, ''), '') as user_name,
-                    COALESCE(NULLIF(st.email, ''), '') as user_email,
+                    COALESCE(NULLIF(st.email, ''), '') as raw_email,
                     '' as user_phone,
                     COALESCE(NULLIF(st.school_name, ''), '') as school_name
              FROM subscriptions s
@@ -3083,7 +3083,7 @@ export default {
             // 4. Students-only fallback without school_name (if users table and school_name absent)
             `SELECT s.user_id, s.status, s.trial_started_at, s.trial_ends_at, s.plan_id, s.updated_at,
                     COALESCE(NULLIF(st.name, ''), '') as user_name,
-                    COALESCE(NULLIF(st.email, ''), '') as user_email,
+                    COALESCE(NULLIF(st.email, ''), '') as raw_email,
                     '' as user_phone,
                     '' as school_name
              FROM subscriptions s
@@ -3093,11 +3093,11 @@ export default {
             "SELECT user_id, status, trial_started_at, trial_ends_at, plan_id, updated_at FROM subscriptions ORDER BY updated_at DESC LIMIT 200",
           ];
 
-          let res: { results?: unknown[] } | null = null;
+          let res: { results?: Array<Record<string, unknown>> } | null = null;
           let lastSchemaErr: unknown = null;
           for (const sql of subscriptionQueries) {
             try {
-              res = await env.DB.prepare(sql).bind().all<unknown>();
+              res = await env.DB.prepare(sql).bind().all<Record<string, unknown>>();
               lastSchemaErr = null;
               break;
             } catch (err) {
@@ -3106,8 +3106,27 @@ export default {
             }
           }
           if (lastSchemaErr) throw lastSchemaErr;
+
+          const normalizedSubscriptions = (res?.results || []).map((row) => {
+            const uid = typeof row.user_id === "string" ? row.user_id : "";
+            const rawEmail = typeof row.raw_email === "string" ? row.raw_email.trim() : "";
+            const isSynthetic = Boolean(rawEmail && isSyntheticPlaceholderEmail(uid, rawEmail));
+            const cleanEmail = isSynthetic ? "" : sanitizeVerifiedSubscriptionEmail(uid, rawEmail);
+            const emailStatus: "verified" | "synthetic" | "missing" = cleanEmail
+              ? "verified"
+              : isSynthetic
+              ? "synthetic"
+              : "missing";
+            const { raw_email: _omitRaw, ...rest } = row;
+            return {
+              ...rest,
+              user_email: cleanEmail,
+              email_status: emailStatus,
+            };
+          });
+
           return new Response(
-            JSON.stringify({ ok: true, subscriptions: res?.results || [] }),
+            JSON.stringify({ ok: true, subscriptions: normalizedSubscriptions }),
             { status: 200, headers: responseHeaders }
           );
         } catch (dbErr: unknown) {
@@ -3685,8 +3704,76 @@ export default {
             );
           }
 
-          const grade = body?.grade?.trim() || "12";
-          const stream = body?.stream?.trim() || "scientific";
+          const ALLOWED_GRADES = new Set(["9", "10", "11", "12"]);
+          const ALLOWED_STREAMS = new Set(["scientific", "literary", "general"]);
+          const requestedGrade = typeof body?.grade === "string" ? body.grade.trim() : "";
+          const requestedStream = typeof body?.stream === "string" ? body.stream.trim() : "";
+
+          if (requestedGrade && !ALLOWED_GRADES.has(requestedGrade)) {
+            return new Response(
+              JSON.stringify({
+                ok: false,
+                error: "INVALID_ACADEMIC_CLASSIFICATION",
+                detail: "پۆلی خوێندن نادروستە.",
+              }),
+              { status: 400, headers: responseHeaders }
+            );
+          }
+
+          if (requestedStream && !ALLOWED_STREAMS.has(requestedStream)) {
+            return new Response(
+              JSON.stringify({
+                ok: false,
+                error: "INVALID_ACADEMIC_CLASSIFICATION",
+                detail: "لقی خوێندن نادروستە.",
+              }),
+              { status: 400, headers: responseHeaders }
+            );
+          }
+
+          // Check existing onboarded student record: grade and stream are locked after onboarding
+          let existingStudentRecord: { id: string; grade: string | null; school_name: string | null; stream?: string | null } | null = null;
+          try {
+            existingStudentRecord = await env.DB.prepare(
+              `SELECT s.id, s.grade, s.school_name, u.stream
+               FROM students s
+               LEFT JOIN users u ON (u.id = s.id OR u.id = s.firebase_uid)
+               WHERE s.id = ? OR s.firebase_uid = ?
+               LIMIT 1`
+            ).bind(verifiedUid, verifiedUid).first<{ id: string; grade: string | null; school_name: string | null; stream?: string | null }>();
+          } catch (exErr) {
+            if (!isMissingSchemaError(exErr)) throw exErr;
+            existingStudentRecord = await env.DB.prepare(
+              "SELECT id, grade, school_name FROM students WHERE id = ? LIMIT 1"
+            ).bind(verifiedUid).first<{ id: string; grade: string | null; school_name: string | null }>();
+          }
+
+          const isAlreadyOnboarded = Boolean(
+            existingStudentRecord &&
+            existingStudentRecord.school_name &&
+            existingStudentRecord.school_name.trim().length > 0
+          );
+          const lockedGrade = existingStudentRecord?.grade?.trim() || "";
+          const lockedStream = existingStudentRecord?.stream?.trim() || "";
+
+          if (isAlreadyOnboarded) {
+            if (
+              (requestedGrade && lockedGrade && requestedGrade !== lockedGrade) ||
+              (requestedStream && lockedStream && requestedStream !== lockedStream)
+            ) {
+              return new Response(
+                JSON.stringify({
+                  ok: false,
+                  error: "ACADEMIC_CLASSIFICATION_LOCKED",
+                  detail: "پۆل و لقی خوێندن دوای تۆمارکردن جێگیرکراون و ناتوانرێت بگۆڕدرێن.",
+                }),
+                { status: 403, headers: responseHeaders }
+              );
+            }
+          }
+
+          const grade = isAlreadyOnboarded && lockedGrade ? lockedGrade : (requestedGrade || "12");
+          const stream = isAlreadyOnboarded && lockedStream ? lockedStream : (requestedStream || (grade === "9" ? "general" : "scientific"));
 
           // Enforce one registration per email: Reject if email already linked to another student UID
           let duplicateStudent = null;
@@ -3757,8 +3844,8 @@ export default {
                ON CONFLICT(id) DO UPDATE SET
                  name = CASE WHEN excluded.name != '' THEN excluded.name ELSE students.name END,
                  email = CASE WHEN excluded.email != '' THEN excluded.email ELSE students.email END,
-                 grade = excluded.grade,
-                 stream = excluded.stream,
+                 grade = COALESCE(NULLIF(students.grade, ''), excluded.grade),
+                 stream = COALESCE(NULLIF(students.stream, ''), excluded.stream),
                  school_name = excluded.school_name`
             ).bind(
               verifiedUid,
@@ -3787,7 +3874,7 @@ export default {
                  ON CONFLICT(id) DO UPDATE SET
                    name = COALESCE(NULLIF(excluded.name, ''), students.name),
                    email = COALESCE(NULLIF(excluded.email, ''), students.email),
-                   grade = COALESCE(NULLIF(excluded.grade, ''), students.grade),
+                   grade = COALESCE(NULLIF(students.grade, ''), NULLIF(excluded.grade, '')),
                    school_name = COALESCE(NULLIF(excluded.school_name, ''), students.school_name)`
               ).bind(
                 verifiedUid,
@@ -3820,8 +3907,8 @@ export default {
                ON CONFLICT(id) DO UPDATE SET
                  name = CASE WHEN excluded.name != '' THEN excluded.name ELSE users.name END,
                  email = CASE WHEN excluded.email != '' THEN excluded.email ELSE users.email END,
-                 grade = excluded.grade,
-                 stream = excluded.stream,
+                 grade = COALESCE(NULLIF(users.grade, ''), excluded.grade),
+                 stream = COALESCE(NULLIF(users.stream, ''), excluded.stream),
                  school_name = excluded.school_name`
             ).bind(
               verifiedUid,

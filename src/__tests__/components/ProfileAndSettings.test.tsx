@@ -31,6 +31,19 @@ vi.mock("../../hooks/useSoundEffects.ts", () => ({
 
 vi.mock("../../services/subscriptionService.ts", () => ({
   getSubscriptionStatus: vi.fn().mockResolvedValue({ status: "active", planId: "yearly" }),
+  fetchServerStudentProfile: vi.fn().mockResolvedValue({
+    ok: true,
+    exists: true,
+    onboardingCompleted: true,
+    student: {
+      id: "student-qa-1",
+      name: "کاروان ئەحمەد",
+      email: "karwan@example.com",
+      schoolName: "ئامادەیی کوردستان",
+      grade: "12",
+      stream: "scientific",
+    },
+  }),
   submitPaymentReceipt: vi.fn(),
   getMyReceipts: vi.fn().mockResolvedValue([]),
 }));
@@ -117,5 +130,30 @@ describe("ProfileAndSettings - Data Usage & Privacy Section", () => {
     expect(parentToggle.checked).toBe(true);
     fireEvent.click(parentToggle);
     expect(parentToggle.checked).toBe(false);
+  });
+
+  it("displays authoritative schoolName from server profile and never renders hardcoded chemistry mastery topics", async () => {
+    renderWithTheme(
+      <ProfileAndSettings
+        profile={{
+          id: "student-qa-1",
+          name: "کاروان ئەحمەد",
+          grade: "12",
+          stream: "scientific",
+          activeSubject: "chemistry",
+          level: "intermediate",
+          onboardingCompleted: true,
+          createdAt: "2026-11-01T00:00:00.000Z",
+          updatedAt: "2026-11-01T00:00:00.000Z",
+          authoritative: true,
+          source: "server-authoritative",
+        }}
+      />
+    );
+    await waitFor(() => {
+      expect(screen.getByText("ئامادەیی کوردستان")).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/ترش و تفتەکان \(تیۆری برۆنستد\)/)).toBeNull();
+    expect(screen.getByText(/هێشتا هیچ چەمکێک هەڵنەسەنگێندراوە/)).toBeInTheDocument();
   });
 });

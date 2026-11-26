@@ -70,12 +70,12 @@ export interface AppState {
 
 const DEFAULT_USER: UserProfile = {
   id: "default-guest",
-  name: "قوتابی",
+  name: "",
   email: "",
   avatar: "",
-  grade: "12",
+  grade: "",
   stream: "scientific",
-  streakDays: 1,
+  streakDays: 0,
   completedLessons: 0,
   totalScore: 0,
 };
@@ -228,25 +228,25 @@ let currentState: AppState = {
     });
   },
 
-  setActiveSubject: (subject: string, gradeOverride?: string) => {
+  setActiveSubject: (subject: string, browsingGradeOverride?: string) => {
     const norm = subject.toLowerCase();
-    const curGrade = currentState.user.grade || "12";
-    const nextGrade = String(gradeOverride || curGrade).trim();
+    const permanentGrade = currentState.user.grade || "12";
+    const browseGrade = String(browsingGradeOverride || permanentGrade).trim();
     // Save current lesson chat before switching subject
     const curSubj = currentState.user.activeSubject || "chemistry";
     const curCh = currentState.activeChapter || 1;
-    const prevKey = getLessonChatKey(curSubj, curCh, curGrade);
+    const prevKey = getLessonChatKey(curSubj, curCh, permanentGrade);
     ZanaStorage.saveChatMessages(prevKey, currentState.chatMessages);
 
-    // Load the selected subject's chapter 1 messages for true chat isolation
-    const newMsgs = loadLessonChatMessages(norm, 1, undefined, nextGrade);
+    // Load the selected subject's chapter 1 messages without mutating permanent user.grade
+    const newMsgs = loadLessonChatMessages(norm, 1, undefined, browseGrade);
 
     setState({
-      user: { ...currentState.user, activeSubject: norm, grade: nextGrade },
+      user: { ...currentState.user, activeSubject: norm },
       activeChapter: 1,
       chatMessages: newMsgs,
     });
-    void currentState.fetchChapters(norm, nextGrade);
+    void currentState.fetchChapters(norm, browseGrade);
   },
 
   setGrade: (grade: string) => {

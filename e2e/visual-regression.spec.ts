@@ -1,57 +1,36 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("RTL Layout & Visual Presentation Tests", () => {
-  test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => {
-      window.sessionStorage.setItem("zana_guest_bypassed", "true");
-      window.localStorage.setItem(
-        "zana.profile.v1",
-        JSON.stringify({
-          id: "visual-e2e-1",
-          name: "قوتابی تاقیکردنەوە",
-          grade: "12",
-          stream: "scientific",
-          activeSubject: "chemistry",
-          level: "intermediate",
-          onboardingCompleted: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        })
-      );
-    });
-  });
-
-  test("verifies RTL layout orientation and Kurdish content across key pages", async ({
+  test("verifies RTL layout orientation and Kurdish content across public routes and /profile guard", async ({
     page,
   }) => {
-    // 1. Home Page RTL Check
+    // 1. Public Welcome / Landing Page RTL Check
     await page.goto("/");
-    const htmlDir = await page.locator("html").getAttribute("dir");
-    const bodyDir = await page.locator("body").getAttribute("dir");
-    expect(htmlDir === "rtl" || bodyDir === "rtl" || true).toBeTruthy();
-
     await expect(page.locator("body")).toBeVisible();
+    await expect(page.locator("[dir='rtl']").first()).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(/زانا/i).first()).toBeVisible();
 
-    // 2. Chat / AI Tutor Page
-    await page.goto("/chat");
-    await expect(page.getByText(/مامۆستا زانا|زانا/i).first()).toBeVisible({ timeout: 10000 });
-
-    // 3. Study Plan Page
-    await page.goto("/plan");
-    await expect(page.getByText(/نەخشەی مەعریفە|پلانی هەفتانە|پێشبینی پێشکەوتن|پلان/i).first()).toBeVisible({
+    // 2. Login Page RTL Check
+    await page.goto("/login");
+    await expect(page.locator("input[type='email'], input[placeholder*='ئیمەیڵ']").first()).toBeVisible({
       timeout: 10000,
     });
+    await expect(page.locator("[dir='rtl']").first()).toBeVisible();
 
-    // 4. Subjects Page
-    await page.goto("/subjects");
-    await expect(page.getByText(/وانەکان|کیمیا|فیزیا|زیندەوەرزانی/i).first()).toBeVisible({
-      timeout: 10000,
-    });
+    // 3. Register Page RTL Check
+    await page.goto("/register");
+    await expect(page.locator("input[autocomplete='name']").first()).toBeVisible({ timeout: 10000 });
+    await expect(page.locator("[dir='rtl']").first()).toBeVisible();
 
-    // 5. Settings / Profile Page
+    // 4. Forgot Password Page RTL Check
+    await page.goto("/forgot-password");
+    await expect(page.locator("[dir='rtl']").first()).toBeVisible({ timeout: 10000 });
+
+    // 5. Protected /profile Page redirects unauthenticated visitor to /login
     await page.goto("/profile");
-    await expect(page.getByText(/پڕۆفایل|زانیاری کەسی|ڕێکخستن|تایبەتمەندی/i).first()).toBeVisible({
+    await expect(page.locator("input[type='email'], input[placeholder*='ئیمەیڵ']").first()).toBeVisible({
       timeout: 10000,
     });
+    expect(new URL(page.url()).pathname).toBe("/login");
   });
 });

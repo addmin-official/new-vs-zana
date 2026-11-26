@@ -1736,4 +1736,175 @@ describe("Production Migration Directory (migrations_production/) — National I
     assert.strictEqual(linkedC?.school_name, "ئامادەیی سلێمانی");
     assert.strictEqual(linkedC?.user_phone, "");
   });
+
+  test("6. Academic classification lock: POST /api/student/onboard rejects grade/stream changes for onboarded student", async () => {
+    const db = createRealSqliteD1();
+    const prodDir = path.resolve(process.cwd(), "migrations_production");
+    for (const file of getOrderedMigrationFiles("migrations_production")) {
+      db.exec(fs.readFileSync(path.join(prodDir, file), "utf8"));
+    }
+
+    const header = Buffer.from(JSON.stringify({ alg: "RS256", kid: "test" })).toString("base64url");
+    const payload = Buffer.from(JSON.stringify({
+      sub: "uid_locked_academic",
+      uid: "uid_locked_academic",
+      aud: "gen-lang-client-0009572581",
+      iss: "https://securetoken.google.com/gen-lang-client-0009572581",
+      email: "locked.student@example.com",
+      email_verified: true,
+      iat: Math.floor(Date.now() / 1000) - 60,
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    })).toString("base64url");
+    const token = `${header}.${payload}.mock-sig`;
+
+    const env = {
+      GEMINI_API_KEY: "test-key",
+      FIREBASE_PROJECT_ID: "gen-lang-client-0009572581",
+      ALLOWED_ORIGINS: "https://zana.idggov.tech",
+      ALLOW_TEST_AUTH_MOCK: "true",
+      ZANA_ENV: "test",
+      DB: db,
+    };
+
+    // Initial onboarding locks grade 12 + scientific
+    const initRes = await worker.fetch(
+      new Request("https://zana.idggov.tech/api/student/onboard", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "ئارام کەرەم",
+          grade: "12",
+          stream: "scientific",
+          schoolName: "ئامادەیی هەولێر",
+        }),
+      }),
+      env as never
+    );
+    assert.strictEqual(initRes.status, 200);
+
+    // Attempt to alter grade to 10 via direct API call -> 403 ACADEMIC_CLASSIFICATION_LOCKED
+    const gradeTamperRes = await worker.fetch(
+      new Request("https://zana.idggov.tech/api/student/onboard", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "ئارام کەرەم",
+          grade: "10",
+          stream: "scientific",
+          schoolName: "ئامادەیی هەولێر",
+        }),
+      }),
+      env as never
+    );
+    assert.strictEqual(gradeTamperRes.status, 403);
+    const gradeTamperBody = (await gradeTamperRes.json()) as { error: string };
+    assert.strictEqual(gradeTamperBody.error, "ACADEMIC_CLASSIFICATION_LOCKED");
+
+    // Attempt to alter stream to literary -> 403 ACADEMIC_CLASSIFICATION_LOCKED
+    const streamTamperRes = await worker.fetch(
+      new Request("https://zana.idggov.tech/api/student/onboard", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "ئارام کەرەم",
+          grade: "12",
+          stream: "literary",
+          schoolName: "ئامادەیی هەولێر",
+        }),
+      }),
+      env as never
+    );
+    assert.strictEqual(streamTamperRes.status, 403);
+
+    const row = db.raw.prepare("SELECT grade FROM students WHERE id = ?").get("uid_locked_academic") as { grade: string };
+    const uRow = db.raw.prepare("SELECT grade, stream FROM users WHERE id = ?").get("uid_locked_academic") as { grade: string; stream: string };
+    assert.strictEqual(row.grade, "12");
+    assert.strictEqual(uRow.grade, "12");
+    assert.strictEqual(uRow.stream, "scientific");
+  });
+
+  test("7. Study rooms API returns empty list without fabricated rooms/peers, and Admin subscriptions distinguishes genuine/synthetic/missing emails", async () => {
+    const db = createRealSqliteD1();
+    const prodDir = path.resolve(process.cwd(), "migrations_production");
+    for (const file of getOrderedMigrationFiles("migrations_production")) {
+      db.exec(fs.readFileSync(path.join(prodDir, file), "utf8"));
+    }
+
+    const header = Buffer.from(JSON.stringify({ alg: "RS256", kid: "test" })).toString("base64url");
+    const makeJwt = (claims: Record<string, unknown>) =>
+      `${header}.${Buffer.from(JSON.stringify({
+        aud: "gen-lang-client-0009572581",
+        iss: "https://securetoken.google.com/gen-lang-client-0009572581",
+        iat: Math.floor(Date.now() / 1000) - 60,
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        ...claims,
+      })).toString("base64url")}.mock-sig`;
+
+    const studentToken = makeJwt({
+      sub: "uid_genuine",
+      uid: "uid_genuine",
+      email: "genuine@example.com",
+      email_verified: true,
+    });
+    const adminToken = makeJwt({
+      sub: "uNZzgQaPDjTO8IYBncGVZekGQxN2",
+      uid: "uNZzgQaPDjTO8IYBncGVZekGQxN2",
+      email: "addmin.official.idg@gmail.com",
+      email_verified: true,
+      admin: true,
+      role: "admin",
+    });
+
+    db.raw.prepare("INSERT INTO students (id, firebase_uid, name, email, grade, school_name) VALUES (?, ?, ?, ?, '12', ?)").run("uid_genuine", "uid_genuine", "سۆران", "genuine@example.com", "ئامادەیی زانا");
+    db.raw.prepare("INSERT INTO users (id, email, name, role, grade, stream) VALUES (?, ?, ?, 'student', '12', 'scientific')").run("uid_genuine", "genuine@example.com", "سۆران");
+    db.raw.prepare("INSERT INTO subscriptions (user_id, email, status, trial_started_at, trial_ends_at, plan_id, updated_at) VALUES (?, ?, 'active', 1000, 9999999999999, 'monthly', 3000)").run("uid_genuine", "genuine@example.com");
+
+    db.raw.prepare("INSERT INTO students (id, firebase_uid, name, email, grade) VALUES (?, ?, ?, NULL, '12')").run("uid_synth", "uid_synth", "ئاراس");
+    db.raw.prepare("INSERT INTO users (id, email, name, role, grade, stream) VALUES (?, ?, ?, 'student', '12', 'scientific')").run("uid_synth", "uid_synth@zana.edu.krd", "ئاراس");
+    db.raw.prepare("INSERT INTO subscriptions (user_id, email, status, trial_started_at, trial_ends_at, plan_id, updated_at) VALUES (?, NULL, 'expired', 1000, 2000, 'free_trial_3d', 2000)").run("uid_synth");
+
+    db.raw.prepare("INSERT INTO subscriptions (user_id, email, status, trial_started_at, trial_ends_at, plan_id, updated_at) VALUES (?, NULL, 'trial', 1000, 9999999999999, 'free_trial_3d', 1000)").run("stud_orphan_1");
+
+    const env = {
+      GEMINI_API_KEY: "test-key",
+      FIREBASE_PROJECT_ID: "gen-lang-client-0009572581",
+      ALLOWED_ORIGINS: "https://zana.idggov.tech",
+      ALLOW_TEST_AUTH_MOCK: "true",
+      ZANA_ENV: "test",
+      DB: db,
+    };
+
+    const roomsRes = await worker.fetch(
+      new Request("https://zana.idggov.tech/api/study-rooms", {
+        method: "GET",
+        headers: { Authorization: `Bearer ${studentToken}` },
+      }),
+      env as never
+    );
+    assert.strictEqual(roomsRes.status, 200);
+    const roomsBody = (await roomsRes.json()) as { rooms: unknown[] };
+    assert.deepStrictEqual(roomsBody.rooms, []);
+
+    const adminSubsRes = await worker.fetch(
+      new Request("https://zana.idggov.tech/api/admin/subscriptions", {
+        method: "GET",
+        headers: { Authorization: `Bearer ${adminToken}` },
+      }),
+      env as never
+    );
+    assert.strictEqual(adminSubsRes.status, 200);
+    const adminSubsBody = (await adminSubsRes.json()) as {
+      ok: boolean;
+      subscriptions: Array<{ user_id: string; user_email: string; email_status: string }>;
+    };
+    const genuine = adminSubsBody.subscriptions.find((s) => s.user_id === "uid_genuine");
+    const synth = adminSubsBody.subscriptions.find((s) => s.user_id === "uid_synth");
+    const orphan = adminSubsBody.subscriptions.find((s) => s.user_id === "stud_orphan_1");
+    assert.strictEqual(genuine?.user_email, "genuine@example.com");
+    assert.strictEqual(genuine?.email_status, "verified");
+    assert.strictEqual(synth?.user_email, "");
+    assert.strictEqual(synth?.email_status, "synthetic");
+    assert.strictEqual(orphan?.user_email, "");
+    assert.strictEqual(orphan?.email_status, "missing");
+  });
 });

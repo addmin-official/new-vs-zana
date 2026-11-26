@@ -5,12 +5,21 @@ import {
   RoomMilestone,
   FocusStatus,
 } from "../server/rooms/StudyRoomTypes.ts";
+import { getClientToken } from "./authService.ts";
 
 const API_BASE = "/api/study-rooms";
 
+async function getAuthHeaders(extra?: Record<string, string>): Promise<Record<string, string>> {
+  const token = await getClientToken().catch(() => null);
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(extra || {}),
+  };
+}
+
 export async function fetchStudyRooms(grade?: string): Promise<StudyRoomSummary[]> {
   const url = grade ? `${API_BASE}?grade=${encodeURIComponent(grade)}` : API_BASE;
-  const res = await fetch(url);
+  const res = await fetch(url, { headers: await getAuthHeaders() });
   if (!res.ok) throw new Error("Failed to fetch study rooms");
   const data = (await res.json()) as { rooms: StudyRoomSummary[] };
   return data.rooms || [];

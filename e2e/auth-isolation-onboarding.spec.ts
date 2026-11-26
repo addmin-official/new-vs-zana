@@ -50,15 +50,12 @@ test.describe("Auth, Onboarding, Mobile & Account Isolation E2E", () => {
     expect(forgotOverflow).toBe(false);
   });
 
-  test("switching student accounts does not leak cached localStorage profile between UIDs", async ({
+  test("unauthenticated reload purges stale localStorage profile and /profile redirects to /login", async ({
     page,
+    request,
   }) => {
-    // 1. Seed Student A session
+    // Seed stale Student A profile in localStorage without an authenticated Firebase session
     await page.addInitScript(() => {
-      window.sessionStorage.setItem("zana_guest_bypassed", "true");
-    });
-    await page.goto("/");
-    await page.evaluate(() => {
       window.localStorage.setItem(
         "zana.profile.v1",
         JSON.stringify({
@@ -79,37 +76,26 @@ test.describe("Auth, Onboarding, Mobile & Account Isolation E2E", () => {
       );
     });
 
-    // 2. Simulate logout clearing profile & session recovery, then Student B login
-    await page.evaluate(() => {
-      window.localStorage.removeItem("zana.profile.v1");
-      window.localStorage.removeItem("zana_session_recovery_v1");
-      window.localStorage.setItem(
-        "zana.profile.v1",
-        JSON.stringify({
-          id: "student_uid_b",
-          name: "Student Beta",
-          grade: "11",
-          stream: "literary",
-          activeSubject: "math",
-          level: "beginner",
-          onboardingCompleted: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        })
-      );
-    });
+    await page.goto("/profile");
 
-    await page.reload();
-    await expect(page.locator("body")).toBeVisible();
-    const storedProfile = await page.evaluate(() =>
-      JSON.parse(window.localStorage.getItem("zana.profile.v1") || "null")
-    );
-    expect(storedProfile?.id).toBe("student_uid_b");
-    expect(storedProfile?.name).toBe("Student Beta");
-    expect(storedProfile?.name).not.toBe("Student Alpha");
+    // Must redirect to /login and never display Student Alpha's cached profile
+    await expect(page.locator("input[type='email'], input[placeholder*='ئیمەیڵ']").first()).toBeVisible({
+      timeout: 10000,
+    });
+    expect(new URL(page.url()).pathname).toBe("/login");
+    await expect(page.getByText("Student Alpha")).toHaveCount(0);
+
+    // Stale profile in localStorage must be cleared when unauthenticated
+    await expect
+      .poll(async () => page.evaluate(() => window.localStorage.getItem("zana.profile.v1")))
+      .toBeNull();
+
+    // Direct API call without a verified token must be rejected
+    const profileRes = await request.get("/api/student/profile");
+    expect(profileRes.status()).toBe(401);
   });
 
-  test("persistence failure (503 DATABASE_UNAVAILABLE) on subscription check never grants a fake trial", async ({
+  test("unauthenticated /profile visit redirects to /login even if subscription check fails", async ({
     page,
   }) => {
     await page.route("**/api/subscription/status**", async (route) => {
@@ -124,25 +110,10 @@ test.describe("Auth, Onboarding, Mobile & Account Isolation E2E", () => {
       });
     });
 
-    await page.addInitScript(() => {
-      window.sessionStorage.setItem("zana_guest_bypassed", "true");
-      window.localStorage.setItem(
-        "zana.profile.v1",
-        JSON.stringify({
-          id: "student_db_down",
-          name: "قوتابی",
-          grade: "12",
-          stream: "scientific",
-          activeSubject: "chemistry",
-          level: "intermediate",
-          onboardingCompleted: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        })
-      );
-    });
-
     await page.goto("/profile");
-    await expect(page.locator("body")).toBeVisible({ timeout: 10000 });
+    await expect(page.locator("input[type='email'], input[placeholder*='ئیمەیڵ']").first()).toBeVisible({
+      timeout: 10000,
+    });
+    expect(new URL(page.url()).pathname).toBe("/login");
   });
 });

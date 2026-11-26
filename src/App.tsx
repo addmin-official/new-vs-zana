@@ -21,6 +21,7 @@ import {
 } from "./auth/sessionRecovery.ts";
 import { checkUserExists } from "./auth/userProfileService.ts";
 import { FeatureFlagProvider } from "./features/flags/index.ts";
+import { ProtectedStudentRoute } from "./routes/ProtectedStudentRoute.tsx";
 import type { PedagogyPillarTab } from "./screens/PedagogicalHubScreen.tsx";
 import { lazyWithRetry } from "./utils/lazyWithRetry.ts";
 
@@ -150,15 +151,10 @@ export default function App() {
   const { profile, updateProfile, completeOnboarding, resetProfileOnly } = useStudentProfile();
   usePerformanceMonitor();
 
-  // Authentication & Initialization State
+  // Authentication & Initialization State (Firebase Auth is the sole authority)
   const [currentUser, setCurrentUser] = useState<User | null>(() => getCurrentUser());
   const [authLoading, setAuthLoading] = useState<boolean>(() => {
-    // If student already has a completed local profile, render instantly with zero refresh lag
-    const localProfile = getStudentProfile();
-    if (localProfile && localProfile.onboardingCompleted) {
-      return false;
-    }
-    // If explicitly on an auth screen (/login, /register, etc.), the screen manages its own view
+    // If explicitly on a public auth screen (/login, /register, /forgot-password, /welcome), render it immediately
     if (typeof window !== "undefined") {
       const p = window.location.pathname.replace(/\/+$/, "");
       if (p === "/login" || p === "/register" || p === "/forgot-password" || p === "/welcome") {
@@ -183,13 +179,22 @@ export default function App() {
       setAuthTimedOut(false);
     }, 200);
   }, []);
+
+  const redirectToLogin = useCallback(() => {
+    setAuthScreen("login");
+    setIsAuthExplicit(true);
+    if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+      window.history.replaceState(null, "", "/login");
+    }
+  }, []);
   const [authScreen, setAuthScreen] = useState<"welcome" | "login" | "register" | "forgot-password">(() => {
     if (typeof window !== "undefined") {
       const p = window.location.pathname.replace(/\/+$/, "");
       if (p === "/register") return "register";
       if (p === "/forgot-password") return "forgot-password";
       if (p === "/login") return "login";
-      if (p === "/welcome") return "welcome";
+      if (p === "/welcome" || p === "") return "welcome";
+      return "login";
     }
     return "welcome";
   });
@@ -207,13 +212,29 @@ export default function App() {
   // Genuinely authenticated permanent user (Email or Google account)
   const isPermanentUser = Boolean(currentUser && !currentUser.isAnonymous && currentUser.email);
 
-  // Check if student has explicitly bypassed login in this browser session as guest
-  const [isGuestBypassed, setIsGuestBypassed] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      return sessionStorage.getItem("zana_guest_bypassed") === "true";
+  useEffect(() => {
+    if (!authLoading && !isPermanentUser && !isAuthExplicit && typeof window !== "undefined") {
+      const p = window.location.pathname.replace(/\/+$/, "") || "/";
+      if (p !== "/" && p !== "/welcome") {
+        setAuthScreen("login");
+        setIsAuthExplicit(true);
+        if (window.location.pathname !== "/login") {
+          window.history.replaceState(null, "", "/login");
+        }
+      }
     }
-    return false;
-  });
+  }, [authLoading, isPermanentUser, isAuthExplicit]);
+
+  // Clear any legacy guest bypass flag so protected routes never bypass Firebase Auth
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        sessionStorage.removeItem("zana_guest_bypassed");
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
 
   // Manage active tab, plus optional "brain" mode
   const [activeTab, setActiveTabState] = useState<NavItemKey>(() => {
@@ -242,19 +263,18 @@ export default function App() {
     }
   };
 
-  // 2.5s Auth loading safety fallback guard to completely prevent UI lockup on reload
+  // Timeout indicator if Firebase Auth initialization stalls (never unlocks protected routes)
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     if (authLoading) {
       timer = setTimeout(() => {
-        // Automatically unlock UI after 2.5s if auth takes too long
-        smoothFinishLoading();
-      }, 2500);
+        setAuthTimedOut(true);
+      }, 6000);
     }
     return () => {
       if (timer) clearTimeout(timer);
     };
-  }, [authLoading, smoothFinishLoading]);
+  }, [authLoading]);
 
   // Auth State Listeners & Returning User Auto-Detection with Smooth Transition
   useEffect(() => {
@@ -265,6 +285,10 @@ export default function App() {
       setCurrentUser(u);
       setAuthTimedOut(false);
       if (!u) {
+        deleteStudentProfile();
+        resetProfileOnly();
+        setActiveProfile(null);
+        useAppStore.getState().logout();
         smoothFinishLoading();
       }
     });
@@ -274,50 +298,58 @@ export default function App() {
     if (auth) {
       unsubFirebase = onAuthStateChanged(auth, async (u) => {
         if (!isMounted) return;
-        const effectiveUser = u || getCurrentUser();
-        setCurrentUser(effectiveUser);
+        setCurrentUser(u);
         setAuthTimedOut(false);
 
-        // If local profile is already valid for this exact UID, finish loading immediately;
-        // if cached profile belongs to a different UID, purge it before switching accounts.
-        const localProf = getStudentProfile();
-        if (localProf && localProf.onboardingCompleted) {
-          if (!effectiveUser || localProf.id === effectiveUser.uid) {
-            smoothFinishLoading();
-          } else {
-            deleteStudentProfile();
-            setActiveProfile(null);
-          }
+        if (!u || u.isAnonymous) {
+          deleteStudentProfile();
+          resetProfileOnly();
+          setActiveProfile(null);
+          useAppStore.getState().logout();
+          setIsForcedOnboarding(false);
+          smoothFinishLoading();
+          return;
         }
 
-        // Returning user detection: load Firestore profile without forcing re-registration
-        if (effectiveUser && !effectiveUser.isAnonymous) {
-          setLoadingMessage("چاوەڕێبکە... ئامادەکردنی پرۆفایل");
-          try {
-            const check = await checkUserExists(effectiveUser.uid);
-            if (!isMounted) return;
-            if (check.exists && check.profile) {
-              setActiveProfile(check.profile);
-              setIsForcedOnboarding(false);
-              const rec = getSessionRecovery();
-              const targetRec = rec || {
-                lastRoute: "/home",
-                lastSubject: check.profile.activeSubject || "chemistry",
-                timestamp: Date.now(),
-              };
-              void triggerSessionRecoveryNotification(effectiveUser.uid, targetRec);
-              if (rec && typeof window !== "undefined") {
-                const currentPath = window.location.pathname.replace(/\/+$/, "") || "/";
-                if (currentPath === "/" || currentPath === "/home") {
-                  setActiveTabState(resolveTabFromPath(rec.lastRoute));
-                }
+        // Purge cached state if cached profile belongs to a different UID (account-switch isolation)
+        const localProf = getStudentProfile();
+        const storeUserId = useAppStore.getState().user.id;
+        if (
+          (localProf && localProf.id !== u.uid) ||
+          (storeUserId && storeUserId !== "default-guest" && storeUserId !== u.uid)
+        ) {
+          deleteStudentProfile();
+          resetProfileOnly();
+          setActiveProfile(null);
+          useAppStore.getState().logout();
+        }
+
+        // Returning user detection: load authoritative profile
+        setLoadingMessage("چاوەڕێبکە... ئامادەکردنی پرۆفایل");
+        try {
+          const check = await checkUserExists(u.uid);
+          if (!isMounted) return;
+          if (check.exists && check.profile) {
+            setActiveProfile(check.profile);
+            setIsForcedOnboarding(false);
+            const rec = getSessionRecovery();
+            const targetRec = rec || {
+              lastRoute: "/home",
+              lastSubject: check.profile.activeSubject || "chemistry",
+              timestamp: Date.now(),
+            };
+            void triggerSessionRecoveryNotification(u.uid, targetRec);
+            if (rec && typeof window !== "undefined") {
+              const currentPath = window.location.pathname.replace(/\/+$/, "") || "/";
+              if (currentPath === "/" || currentPath === "/home") {
+                setActiveTabState(resolveTabFromPath(rec.lastRoute));
               }
-            } else if (check.isNewUser) {
-              setIsForcedOnboarding(true);
             }
-          } catch (e) {
-            console.warn("Returning user profile check failed:", e);
+          } else if (check.isNewUser) {
+            setIsForcedOnboarding(true);
           }
+        } catch (e) {
+          console.warn("Returning user profile check failed:", e);
         }
         smoothFinishLoading();
       });
@@ -330,7 +362,7 @@ export default function App() {
       unsubCustom();
       unsubFirebase();
     };
-  }, [smoothFinishLoading]);
+  }, [smoothFinishLoading, resetProfileOnly]);
 
   // Save session recovery position as student studies
   useEffect(() => {
@@ -441,8 +473,7 @@ export default function App() {
     } catch (e) {
       console.warn("Logout error:", e);
     }
-    // Note: Do NOT delete the persistent student profile from disk on logout!
-    // This allows returning users to log back in without having to re-register.
+    deleteStudentProfile();
     resetProfileOnly();
     setActiveProfile(null);
     useAppStore.getState().logout();
@@ -451,7 +482,6 @@ export default function App() {
       sessionStorage.removeItem("zana_guest_bypassed");
       window.history.pushState(null, "", "/login");
     }
-    setIsGuestBypassed(false);
     setAuthScreen("login");
     setIsAuthExplicit(true);
     setActiveTabState("home");
@@ -483,13 +513,13 @@ export default function App() {
     });
   };
 
-  const handleSelectSubject = (subjectId: SubjectKey, grade?: StudentGrade) => {
-    const nextGrade = grade || effectiveProfile?.grade || "12";
-    updateProfile({ activeSubject: subjectId, grade: nextGrade });
+  const handleSelectSubject = (subjectId: SubjectKey, browsingGrade?: StudentGrade) => {
+    // Selecting a book or browsing grade never mutates permanent student grade/stream
+    updateProfile({ activeSubject: subjectId });
     setActiveProfile((prev: StudentProfile | null) =>
-      prev ? { ...prev, activeSubject: subjectId, grade: nextGrade } : null
+      prev ? { ...prev, activeSubject: subjectId } : null
     );
-    useAppStore.getState().setActiveSubject(subjectId, nextGrade);
+    useAppStore.getState().setActiveSubject(subjectId, browsingGrade || effectiveProfile?.grade || "12");
   };
 
   const _handleStartAssessment = () => {
@@ -516,7 +546,7 @@ export default function App() {
   }
 
   // 2. Unauthenticated User Flows or Explicit Auth Route (/login, /register, /forgot-password)
-  const showAuthFlow = isAuthExplicit || (!isPermanentUser && !isGuestBypassed);
+  const showAuthFlow = isAuthExplicit || !isPermanentUser;
   if (showAuthFlow) {
     if (authScreen === "welcome") {
       return (
@@ -538,12 +568,11 @@ export default function App() {
             <RegisterScreen
               onNavigateToLogin={() => navigateAuth("login")}
               onRegisterSuccess={(regData) => {
+                setCurrentUser(getCurrentUser());
                 setIsAuthExplicit(false);
                 if (typeof window !== "undefined") {
-                  sessionStorage.setItem("zana_guest_bypassed", "true");
                   window.history.replaceState(null, "", "/");
                 }
-                setIsGuestBypassed(true);
                 setIsForcedOnboarding(false);
                 handleOnboardingComplete(
                   regData.name,
@@ -579,10 +608,9 @@ export default function App() {
             onNavigateToRegister={() => navigateAuth("register")}
             onNavigateToForgotPassword={() => navigateAuth("forgot-password")}
             onLoginSuccess={(isNewUser) => {
+              setCurrentUser(getCurrentUser());
               setIsAuthExplicit(false);
-              setIsGuestBypassed(true);
               if (typeof window !== "undefined") {
-                sessionStorage.setItem("zana_guest_bypassed", "true");
                 const target = isBrainActive ? "/admin/brain" : "/";
                 window.history.replaceState(null, "", target);
               }
@@ -594,7 +622,7 @@ export default function App() {
                   lastSubject: effectiveProfile?.activeSubject || "chemistry",
                   timestamp: Date.now(),
                 };
-                const uid = currentUser?.uid || effectiveProfile?.id || useAppStore.getState().user.id;
+                const uid = getCurrentUser()?.uid || currentUser?.uid || effectiveProfile?.id || useAppStore.getState().user.id;
                 if (uid) {
                   void triggerSessionRecoveryNotification(uid, targetRec);
                 }
@@ -824,9 +852,16 @@ export default function App() {
           onLogout={handleLogout}
         >
           <ErrorBoundary>
-            <Suspense fallback={<ScreenLoadingFallback />}>
-              {renderScreen()}
-            </Suspense>
+            <ProtectedStudentRoute
+              authLoading={authLoading}
+              isAuthenticated={isPermanentUser}
+              loadingFallback={<ScreenLoadingFallback />}
+              onUnauthenticated={redirectToLogin}
+            >
+              <Suspense fallback={<ScreenLoadingFallback />}>
+                {renderScreen()}
+              </Suspense>
+            </ProtectedStudentRoute>
           </ErrorBoundary>
         </AppShell>
       </div>

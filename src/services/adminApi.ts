@@ -148,6 +148,7 @@ export interface SubscriptionRecord {
   updated_at: number;
   user_name?: string | null;
   user_email?: string | null;
+  email_status?: "verified" | "synthetic" | "missing";
   user_phone?: string | null;
   school_name?: string | null;
 }

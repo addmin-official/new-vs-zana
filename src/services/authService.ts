@@ -159,42 +159,13 @@ export function subscribeToAuthChanges(callback: (user: User | null) => void): (
   return () => authListeners.delete(callback);
 }
 
-function getLocalAuthUser(): User | null {
-  if (typeof window === "undefined" || !window.localStorage) return null;
-  try {
-    const raw = window.localStorage.getItem(LOCAL_AUTH_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return {
-      uid: parsed.uid || "local-user",
-      email: parsed.email || null,
-      displayName: parsed.displayName || "قوتابی",
-      isAnonymous: Boolean(parsed.isAnonymous),
-      getIdToken: async () => "",
-    } as unknown as User;
-  } catch {
-    return null;
-  }
-}
-
-function setLocalAuthUser(user: User | null): void {
+function setLocalAuthUser(_user: User | null): void {
+  // Never persist auth identity in localStorage; clear any legacy cached user key.
   if (typeof window === "undefined" || !window.localStorage) return;
   try {
-    if (user) {
-      window.localStorage.setItem(
-        LOCAL_AUTH_KEY,
-        JSON.stringify({
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName,
-          isAnonymous: user.isAnonymous,
-        })
-      );
-    } else {
-      window.localStorage.removeItem(LOCAL_AUTH_KEY);
-    }
-  } catch (e) {
-    console.warn("Failed to set local auth user:", e);
+    window.localStorage.removeItem(LOCAL_AUTH_KEY);
+  } catch {
+    // ignore
   }
 }
 
@@ -401,12 +372,11 @@ export async function logoutUser(): Promise<void> {
 }
 
 /**
- * Get the current user synchronously
+ * Get the current user synchronously from Firebase Auth only.
  */
 export function getCurrentUser(): User | null {
   const auth = getFirebaseAuth();
-  if (auth?.currentUser) return auth.currentUser;
-  return getLocalAuthUser();
+  return auth?.currentUser ?? null;
 }
 
 /**
