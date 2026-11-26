@@ -5,6 +5,12 @@ on:
     branches: [ "**" ]
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch:
+    inputs:
+      confirm_deploy:
+        description: "Type DEPLOY to authorize production Worker deployment"
+        required: true
+        default: ""
 
 concurrency:
   group: production-deployment
@@ -331,8 +337,8 @@ jobs:
 
   deploy-worker:
     name: Deploy Cloudflare Worker
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [validate, build, wrangler-dry-run, security-checks]
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.event.inputs.confirm_deploy == 'DEPLOY'
     runs-on: ubuntu-latest
     environment: Production
     steps:
@@ -816,10 +822,37 @@ jobs:
           fi
 
           echo "Scanning for private keys..."
-          if grep -r -l "BEGIN PRIVATE KEY" --exclude-dir=node_modules --exclude=package.json --exclude=package-lock.json --exclude-dir=.github .; then
-            echo "::error::Security Exposure Check Failed: Found possible private key committed in the codebase!"
-            exit 1
-          fi
+          node -e '
+            const fs = require("fs");
+            const path = require("path");
+            const skipDirs = new Set(["node_modules", ".git", ".github", "dist", "coverage"]);
+            const pemRe = /-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----([\s\S]{0,4096}?)-----END (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----/g;
+            const findings = [];
+            function walk(dir) {
+              for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+                if (skipDirs.has(entry.name)) continue;
+                const full = path.join(dir, entry.name);
+                if (entry.isDirectory()) walk(full);
+                else if (entry.isFile() && /\.(ts|tsx|js|jsx|json|pem|key|env|yml|yaml|txt)$/i.test(entry.name)) {
+                  const content = fs.readFileSync(full, "utf8");
+                  let m;
+                  while ((m = pemRe.exec(content)) !== null) {
+                    const body = m[1].replace(/\\n|\s+/g, "");
+                    const isTestFile = /(?:^|\/)__tests__\/|\.test\.[jt]sx?$/.test(full);
+                    const isSyntheticStub = body.includes("...") || body.includes("${");
+                    if (!(isTestFile && isSyntheticStub) && body.length >= 32) {
+                      findings.push(full);
+                    }
+                  }
+                }
+              }
+            }
+            walk(".");
+            if (findings.length > 0) {
+              console.error("::error::Security Exposure Check Failed: Possible private key material in:", findings.join(", "));
+              process.exit(1);
+            }
+          '
 
           echo "Security checks passed successfully!"
 

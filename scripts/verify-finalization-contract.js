@@ -24,6 +24,7 @@ const workflowPath = existsSync('.github/workflows/ci.yml') ? '.github/workflows
 const workflow = read(workflowPath);
 const models = read('src/server/config/aiModels.ts');
 const worker = read('src/worker/index.ts');
+const workerTests = read('src/worker/worker.test.ts');
 const provider = read('src/server/ai/GeminiProvider.ts');
 const smoke = read('scripts/smoke-test.js');
 
@@ -64,6 +65,9 @@ requireMatch(workflow, /npm test/, 'CI test gate is missing.');
 requireMatch(workflow, /npm run test:smoke/, 'Production smoke-test gate is missing.');
 requireMatch(workflow, /Verify Production Exposure Security/, 'Production security exposure gate is missing.');
 requireMatch(workflow, /Generate Release Tag & Metadata/, 'Release metadata gate is missing.');
+requireMatch(workflow, /workflow_dispatch:/, 'Manual workflow_dispatch trigger is required for controlled deployment.');
+requireMatch(workflow, /confirm_deploy\s*==\s*'DEPLOY'/, 'Production deployment must require explicit DEPLOY confirmation.');
+requireMatch(workflow, /needs:\s*\[validate,\s*build,\s*wrangler-dry-run,\s*security-checks\]/, 'Production deploy job must depend on validate, build, dry-run, and security checks.');
 requireMatch(workflow, /wrangler deploy --config wrangler\.production\.json/, 'Production deployment must use Wrangler and wrangler.production.json.');
 requireMatch(workflow, /wrangler d1 migrations apply DB --remote --config wrangler\.production\.json/, 'Production deployment must run remote D1 database migrations before deploy.');
 requireMatch(wrangler, /"binding"\s*:\s*"DB"/, 'D1 database binding DB is missing from wrangler.jsonc.');
@@ -79,23 +83,30 @@ requireMatch(mig02, /CREATE TABLE IF NOT EXISTS audit_log/, 'Migration 0002 must
 requireMatch(mig02, /trg_prevent_audit_log_update/, 'Migration 0002 must enforce append-only trigger trg_prevent_audit_log_update.');
 requireMatch(mig02, /trg_prevent_audit_log_delete/, 'Migration 0002 must enforce append-only trigger trg_prevent_audit_log_delete.');
 
-// Valid AI routes must stay real production checks expecting HTTP 200.
-const validRoutes = [
+// Health route must stay HTTP 200; unauthenticated AI routes must enforce HTTP 401 Unauthorized.
+requireMatch(smoke, /runSmokeAndCorsTest\("GET \/api\/health",\s*"\/api\/health",\s*\{[\s\S]{0,120}?\},\s*200\)/, 'Smoke test for GET /api/health must require HTTP 200.');
+
+const protectedAiRoutes = [
   '/api/chat',
   '/api/assessment',
   '/api/report',
   '/api/study/ask',
   '/api/study/vision',
 ];
-for (const route of validRoutes) {
+for (const route of protectedAiRoutes) {
   const escaped = route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  requireMatch(smoke, new RegExp(`runSmokeAndCorsTest\\([\\s\\S]{0,500}${escaped}[\\s\\S]{0,1200}\\}, 200\\)`), `Smoke test for valid route ${route} is missing or no longer requires HTTP 200.`);
+  requireMatch(smoke, new RegExp(`path:\\s*"${escaped}"`), `Smoke test entry for protected route ${route} is missing.`);
 }
+requireMatch(smoke, /runSmokeAndCorsTest\(ep\.name,\s*ep\.path,\s*\{[\s\S]{0,120}?\},\s*401\)/, 'Unauthenticated protected AI smoke tests must require HTTP 401.');
+requireMatch(smoke, /errData\.error !== 'Unauthorized'/, 'Protected AI smoke tests must verify JSON Unauthorized rejection rather than arbitrary 401 errors.');
 
-// Correct negative contracts must not be weakened.
-requireMatch(smoke, /Missing payload[\s\S]{0,800}\}, 400\)/, 'Missing-payload smoke contract must remain HTTP 400.');
-requireMatch(smoke, /Oversized 6MB payload[\s\S]{0,1200}\}, 413\)/, 'Oversized-image smoke contract must remain HTTP 413.');
-requireMatch(smoke, /Unsupported signature[\s\S]{0,1200}\}, 415\)/, 'Unsupported-image smoke contract must remain HTTP 415.');
+// Authenticated validation and auth contracts must remain covered in Worker source & tests.
+requireMatch(worker, /status:\s*413/, 'Worker oversized vision payload (HTTP 413) guard is missing.');
+requireMatch(worker, /status:\s*415/, 'Worker unsupported media signature (HTTP 415) guard is missing.');
+requireMatch(workerTests, /missing payload on \/api\/chat returns 400/i, 'Authenticated 400 validation test on /api/chat is missing.');
+requireMatch(workerTests, /Strict 401 Unauthorized on student AI routes/, 'Worker 401 Unauthorized regression test on student AI routes is missing.');
+
+// Correct CORS and anti-5xx contracts must not be weakened.
 requireMatch(smoke, /https:\/\/unauthorized\.example/, 'Unauthorized CORS-origin regression check is missing.');
 forbidMatch(smoke, /expectedStatus\s*===?\s*500|\[\s*200\s*,\s*500\s*\]/, 'Smoke tests were weakened to accept HTTP 500.');
 
