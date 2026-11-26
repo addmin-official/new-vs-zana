@@ -35,6 +35,7 @@ import { DownloadManager } from "../components/DownloadManager.tsx";
 import { StudentGamificationCard } from "../components/StudentGamificationCard.tsx";
 import { useTheme } from "../context/ThemeContext.tsx";
 import { DataPrivacySection } from "../features/student/DataPrivacySection.tsx";
+import { useIsAdmin } from "../hooks/useIsAdmin.ts";
 
 export interface ProfileAndSettingsProps {
   profile?: StudentProfile;
@@ -63,6 +64,7 @@ export function ProfileAndSettings({
   const { t, locale, changeLanguage, useEasternNumerals, setUseEasternNumerals } = useTranslation();
   const { profile: masteryProfile } = useStudentMastery(studentProfile?.id || "default-guest");
   const userProgress = useAppStore((state) => state.userProgress);
+  const { isAdmin: isAuthorizedAdmin } = useIsAdmin();
   const authUser = getCurrentUser();
   const [serverProfile, setServerProfile] = useState<{
     id: string;
@@ -1024,6 +1026,16 @@ export function ProfileAndSettings({
           <DataPrivacySection
             profile={studentProfile}
             masteryProfile={masteryProfile || null}
+            verifiedContext={{
+              name: effectiveName,
+              email: realEmail,
+              schoolName: effectiveSchool,
+              grade: effectiveGrade,
+              stream: effectiveStream,
+              isServerVerified: Boolean(serverProfile),
+              syncError: profileLoadError,
+            }}
+            canViewDeveloperDiagnostics={isAuthorizedAdmin}
           />
 
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-6">
