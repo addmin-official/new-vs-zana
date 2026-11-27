@@ -338,6 +338,26 @@ export async function resolveKvNamespace(options = {}) {
   const baseConfig = parseJsonc(wranglerContent);
   const workerName = baseConfig.name || "zana-api-worker";
   const canonicalTitle = `${workerName}-LEARNING_RECORDS_KV`;
+  const strictProductionKv =
+    options.strictProductionKv ?? (env.CI === "true" || env.STRICT_PRODUCTION_KV === "true");
+  const baseKvList = Array.isArray(baseConfig.kv_namespaces) ? baseConfig.kv_namespaces : [];
+  const pinnedLearningKv = baseKvList.find((kv) => kv && kv.binding === "LEARNING_RECORDS_KV");
+  const pinnedProductionKvId =
+    pinnedLearningKv && typeof pinnedLearningKv.id === "string" && pinnedLearningKv.id.trim()
+      ? pinnedLearningKv.id.trim()
+      : null;
+
+  if (strictProductionKv && !pinnedProductionKvId) {
+    throw new Error(
+      "Confirmed Production LEARNING_RECORDS_KV namespace is missing from wrangler.jsonc; failing closed."
+    );
+  }
+
+  if (strictProductionKv && pinnedProductionKvId && configuredKvId && configuredKvId !== pinnedProductionKvId) {
+    throw new Error(
+      `CLOUDFLARE_KV_NAMESPACE_ID override (${maskId(configuredKvId)}) conflicts with confirmed Production LEARNING_RECORDS_KV namespace (${maskId(pinnedProductionKvId)}).`
+    );
+  }
 
   let resolvedId = null;
   let strategy = null;
@@ -347,7 +367,7 @@ export async function resolveKvNamespace(options = {}) {
     const namespaces = await fetchKvNamespaces(accountId, token, fetchImpl);
     const matched = namespaces.find((ns) => ns.id === configuredKvId);
     if (!matched) {
-      throw new Error(`Configured KV namespace ID '${configuredKvId}' does not exist in Cloudflare account '${accountId}'`);
+      throw new Error(`Configured KV namespace ID '${maskId(configuredKvId)}' does not exist in Cloudflare account '${maskId(accountId)}'`);
     }
     resolvedId = configuredKvId;
     strategy = "configured_id";
@@ -375,20 +395,31 @@ export async function resolveKvNamespace(options = {}) {
       resolvedId = matches[0].id;
       strategy = "exact_title_match";
     } else if (matches.length > 1) {
-      const ids = matches.map((m) => m.id).join(", ");
+      const ids = matches.map((m) => maskId(m.id)).join(", ");
       throw new Error(`Ambiguity error: Multiple KV namespaces (${matches.length}) match title '${canonicalTitle}': [${ids}]`);
     }
   }
 
-  // Strategy D: Explicit Creation
+  // Strategy D: Explicit Creation (blocked in strict production mode if Production ID is pinned)
   if (!resolvedId) {
+    if (strictProductionKv && pinnedProductionKvId) {
+      throw new Error(
+        `Refusing to create a new KV namespace when Production LEARNING_RECORDS_KV (${maskId(pinnedProductionKvId)}) is pinned in wrangler.jsonc.`
+      );
+    }
     resolvedId = await createKvNamespace(accountId, canonicalTitle, token, fetchImpl);
     strategy = "created_namespace";
   }
 
   const hex32Regex = /^[0-9a-fA-F]{32}$/;
   if (!resolvedId || !hex32Regex.test(resolvedId)) {
-    throw new Error(`Failed to resolve valid 32-hex KV namespace ID. Got: '${resolvedId}'`);
+    throw new Error(`Failed to resolve valid 32-hex KV namespace ID.`);
+  }
+
+  if (strictProductionKv && pinnedProductionKvId && resolvedId !== pinnedProductionKvId) {
+    throw new Error(
+      `Resolved LEARNING_RECORDS_KV namespace (${maskId(resolvedId)}) conflicts with confirmed Production namespace (${maskId(pinnedProductionKvId)}).`
+    );
   }
 
   return {
@@ -477,7 +508,7 @@ export async function main() {
   }
 
   try {
-    const result = await resolveKvNamespace();
+    const result = await resolveKvNamespace({ strictProductionKv: true });
     generateProductionConfig(result.baseConfig, result.resolvedId);
 
     console.log(`Wrangler version: ${wranglerVersion}`);

@@ -10,6 +10,10 @@
   "workers_dev": true,
   "routes": [
     {
+      "pattern": "zana-ai.tech",
+      "custom_domain": true
+    },
+    {
       "pattern": "zana.idggov.tech",
       "custom_domain": true
     }
@@ -84,7 +88,7 @@
     },
     {
       "binding": "LEARNING_RECORDS_KV",
-      "id": "a29b305980c94e169a741f4b29b9516e"
+      "id": "9ff7b6464e6c458b996c5ad1110ed4df"
     }
   ],
   "r2_buckets": [

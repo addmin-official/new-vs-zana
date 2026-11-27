@@ -103,4 +103,34 @@ describe("ZANA Domain Configuration & Gated Workflow Verification", () => {
     expect(deployJob).toContain("VITE_API_BASE_URL");
     expect(deployJob).toContain("npx wrangler deploy --config wrangler.production.json --keep-vars");
   });
+
+  it("reconciles wrangler.jsonc Custom Domains and Production KV bindings safely", () => {
+    const rawWrangler = fs.readFileSync(path.join(process.cwd(), "wrangler.jsonc"), "utf8");
+    const stripped = rawWrangler
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/.*$/gm, "")
+      .replace(/,\s*([}\]])/g, "$1");
+    const cfg = JSON.parse(stripped) as {
+      routes?: Array<{ pattern: string; custom_domain?: boolean }>;
+      kv_namespaces?: Array<{ binding: string; id: string; preview_id?: string }>;
+    };
+
+    const routes = cfg.routes || [];
+    expect(routes).toEqual([
+      { pattern: "zana-ai.tech", custom_domain: true },
+      { pattern: "zana.idggov.tech", custom_domain: true },
+    ]);
+    expect(routes.some((r) => r.pattern === "www.zana-ai.tech")).toBe(false);
+
+    const kvs = cfg.kv_namespaces || [];
+    expect(kvs.find((k) => k.binding === "LEARNING_RECORDS_KV")).toEqual({
+      binding: "LEARNING_RECORDS_KV",
+      id: "9ff7b6464e6c458b996c5ad1110ed4df",
+    });
+    expect(kvs.find((k) => k.binding === "RATE_LIMIT_KV")).toEqual({
+      binding: "RATE_LIMIT_KV",
+      id: "02f342188c8740b0ada898c36791e4a3",
+      preview_id: "30c8a380662b489d85edc0dafc5b3858",
+    });
+  });
 });

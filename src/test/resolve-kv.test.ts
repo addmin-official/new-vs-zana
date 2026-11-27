@@ -139,7 +139,7 @@ test("5. Strategy A Failure: Fails when configured KV namespace ID does not exis
 
   await assert.rejects(
     () => resolveKvNamespace({ env, fetchImpl: mockFetch as unknown as typeof fetch }),
-    /Configured KV namespace ID 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' does not exist in Cloudflare account/
+    /Configured KV namespace ID '\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*aaaaaa' does not exist in Cloudflare account/
   );
 });
 
@@ -429,4 +429,68 @@ test("14. Production Config Generation: Preserves assets, name, vars, and does n
       fs.unlinkSync(tempProdPath);
     }
   }
+});
+
+test("15. Strict Production KV Lock: Fails closed without exposing secrets when override conflicts with Production namespace", async () => {
+  const conflictingId = VALID_KV_ID_1;
+  const env = {
+    CLOUDFLARE_ACCOUNT_ID: VALID_ACCOUNT_ID,
+    CLOUDFLARE_API_TOKEN: VALID_TOKEN,
+    CLOUDFLARE_KV_NAMESPACE_ID: conflictingId,
+    CI: "true",
+  };
+
+  let fetchCalled = false;
+  const mockFetch = async () => {
+    fetchCalled = true;
+    throw new Error("Should fail closed before network calls");
+  };
+
+  await assert.rejects(
+    () => resolveKvNamespace({ env, fetchImpl: mockFetch as unknown as typeof fetch }),
+    (err: Error) => {
+      assert.match(err.message, /conflicts with confirmed Production LEARNING_RECORDS_KV namespace/);
+      assert.doesNotMatch(err.message, new RegExp(conflictingId));
+      assert.doesNotMatch(err.message, /9ff7b6464e6c458b996c5ad1110ed4df/);
+      assert.doesNotMatch(err.message, new RegExp(VALID_TOKEN));
+      assert.match(err.message, /\*\*\*\*\*\*0ed4df/);
+      return true;
+    }
+  );
+  assert.equal(fetchCalled, false);
+});
+
+test("16. Strict Production KV Lock: Fails closed when live binding does not match confirmed Production namespace", async () => {
+  const env = {
+    CLOUDFLARE_ACCOUNT_ID: VALID_ACCOUNT_ID,
+    CLOUDFLARE_API_TOKEN: VALID_TOKEN,
+    STRICT_PRODUCTION_KV: "true",
+  };
+
+  const mockFetch = async (url: string) => {
+    if (url.includes("/workers/scripts/new-vs-zana/bindings")) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          result: [{ type: "kv_namespace", name: "LEARNING_RECORDS_KV", namespace_id: VALID_KV_ID_2 }],
+        })
+      );
+    }
+    if (url.includes("/storage/kv/namespaces")) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          result: [{ id: VALID_KV_ID_2, title: "wrong-namespace" }],
+        })
+      );
+    }
+    throw new Error(`Unexpected URL: ${url}`);
+  };
+
+  await assert.rejects(
+    () => resolveKvNamespace({ env, fetchImpl: mockFetch as unknown as typeof fetch }),
+    /conflicts with confirmed Production namespace/
+  );
 });

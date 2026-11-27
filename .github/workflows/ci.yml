@@ -439,9 +439,29 @@ jobs:
           set -euo pipefail
           node scripts/resolve-kv.js
           
-          # Verify production config validity
+          # Verify production config validity & preserved custom domains + KV bindings
           jq empty wrangler.production.json
-          echo "Generated config validation: PASS"
+          node -e '
+            const fs = require("fs");
+            const cfg = JSON.parse(fs.readFileSync("wrangler.production.json", "utf8"));
+            const routes = Array.isArray(cfg.routes) ? cfg.routes : [];
+            const customDomains = routes.filter((r) => r && typeof r === "object" && r.custom_domain === true).map((r) => r.pattern);
+            const workerRoutes = routes.filter((r) => !(r && typeof r === "object" && r.custom_domain === true));
+            if (workerRoutes.length > 0) throw new Error("wrangler.production.json must not define non-custom-domain Worker Routes");
+            if (!customDomains.includes("zana-ai.tech") || !customDomains.includes("zana.idggov.tech") || customDomains.includes("www.zana-ai.tech")) {
+              throw new Error("wrangler.production.json custom_domain routes mismatch");
+            }
+            const kvs = Array.isArray(cfg.kv_namespaces) ? cfg.kv_namespaces : [];
+            const learning = kvs.find((k) => k && k.binding === "LEARNING_RECORDS_KV");
+            const rate = kvs.find((k) => k && k.binding === "RATE_LIMIT_KV");
+            if (!learning || learning.id !== "9ff7b6464e6c458b996c5ad1110ed4df") {
+              throw new Error("LEARNING_RECORDS_KV does not match confirmed Production namespace");
+            }
+            if (!rate || rate.id !== "02f342188c8740b0ada898c36791e4a3" || rate.preview_id !== "30c8a380662b489d85edc0dafc5b3858") {
+              throw new Error("RATE_LIMIT_KV production or preview binding mismatch");
+            }
+            console.log("Generated config validation: PASS");
+          '
           
           # Dry run with wrangler deployment config
           npx wrangler deploy --config wrangler.production.json --dry-run
