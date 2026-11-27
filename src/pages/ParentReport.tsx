@@ -18,6 +18,7 @@ import {
 import { StudentProfile } from "../features/student/studentTypes.ts";
 import { useStudentProfile } from "../features/student/useStudentProfile.ts";
 import { useAppStore } from "../store/appStore.ts";
+import { CANONICAL_APP_ORIGIN } from "../config/domains.ts";
 
 export interface ParentReportProps {
   profile?: StudentProfile;
@@ -74,7 +75,7 @@ export function ParentReport({ profile: propProfile }: ParentReportProps = {}) {
 
   const handleShareTelegram = () => {
     const text = encodeURIComponent(getShareText());
-    window.open(`https://t.me/share/url?url=https://zana.idggov.tech&text=${text}`, "_blank");
+    window.open(`https://t.me/share/url?url=${encodeURIComponent(CANONICAL_APP_ORIGIN)}&text=${text}`, "_blank");
     setIsShareModalOpen(false);
   };
 

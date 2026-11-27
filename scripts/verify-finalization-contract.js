@@ -39,7 +39,8 @@ try {
 requireMatch(wrangler, /"name"\s*:\s*"(?:new-vs-zana|zana-api-worker)"/, 'Cloudflare Worker name must be new-vs-zana or zana-api-worker.');
 requireMatch(wrangler, /"main"\s*:\s*"src\/worker\/index\.ts"/, 'Cloudflare Worker entrypoint must remain src/worker/index.ts.');
 requireMatch(wrangler, /"directory"\s*:\s*"\.\/dist\/client"/, 'Static Assets must remain bound to ./dist/client.');
-requireMatch(wrangler, /https:\/\/zana\.idggov\.tech/, 'Canonical frontend origin https://zana.idggov.tech is missing from Wrangler configuration.');
+requireMatch(wrangler, /https:\/\/www\.zana-ai\.tech/, 'Canonical frontend origin https://www.zana-ai.tech is missing from Wrangler configuration.');
+requireMatch(wrangler, /https:\/\/zana\.idggov\.tech/, 'Legacy supported origin https://zana.idggov.tech is missing from Wrangler configuration.');
 const allowedOrigins = (wrangler.match(/"ALLOWED_ORIGINS"\s*:\s*"([^"]+)"/) || [])[1] || '';
 forbidMatch(allowedOrigins, /localhost|127\.0\.0\.1|\.web\.app|firebaseapp\.com/i, 'Production Wrangler configuration contains localhost, emulator, or Firebase Hosting routing.');
 forbidMatch(wrangler, /"vars"[\s\S]*?"VITE_FIREBASE_API_KEY"/, 'VITE_FIREBASE_API_KEY must not be defined in wrangler.jsonc vars; it must be a Cloudflare Secret.');
@@ -68,6 +69,9 @@ requireMatch(workflow, /Generate Release Tag & Metadata/, 'Release metadata gate
 requireMatch(workflow, /workflow_dispatch:/, 'Manual workflow_dispatch trigger is required for controlled deployment.');
 requireMatch(workflow, /confirm_deploy\s*==\s*'DEPLOY'/, 'Production deployment must require explicit DEPLOY confirmation.');
 requireMatch(workflow, /needs:\s*\[validate,\s*build,\s*wrangler-dry-run,\s*security-checks\]/, 'Production deploy job must depend on validate, build, dry-run, and security checks.');
+requireMatch(workflow, /wrangler-dry-run:[\s\S]{0,250}?workflow_dispatch[\s\S]{0,160}?confirm_deploy\s*==\s*'DEPLOY'/, 'wrangler-dry-run must also run on gated workflow_dispatch deployments.');
+requireMatch(workflow, /verify-worker:[\s\S]{0,200}?workflow_dispatch[\s\S]{0,160}?confirm_deploy\s*==\s*'DEPLOY'/, 'verify-worker must be gated on workflow_dispatch + DEPLOY.');
+requireMatch(workflow, /smoke-tests:[\s\S]{0,200}?workflow_dispatch[\s\S]{0,160}?confirm_deploy\s*==\s*'DEPLOY'/, 'smoke-tests must be gated on workflow_dispatch + DEPLOY.');
 requireMatch(workflow, /wrangler deploy --config wrangler\.production\.json/, 'Production deployment must use Wrangler and wrangler.production.json.');
 requireMatch(workflow, /wrangler d1 migrations apply DB --remote --config wrangler\.production\.json/, 'Production deployment must run remote D1 database migrations before deploy.');
 requireMatch(wrangler, /"binding"\s*:\s*"DB"/, 'D1 database binding DB is missing from wrangler.jsonc.');

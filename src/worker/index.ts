@@ -1,6 +1,11 @@
 import { ProviderAdapter } from "../server/ai/AiProvider.ts";
 import { classifyError, getClientSafeErrorMessage, type SafeErrorCategory } from "../server/ai/AiErrors.ts";
 import { resolvePrimaryModel } from "../server/config/aiModels.ts";
+import {
+  ALLOWED_PRODUCTION_ORIGINS,
+  CANONICAL_APP_ORIGIN,
+  LEGACY_APP_ORIGIN,
+} from "../config/domains.ts";
 export { classifyError, getClientSafeErrorMessage, type SafeErrorCategory };
 import { PersistentLearningRecordProvider } from "../learning/providers/LearningRecordProvider.ts";
 import { AdaptiveLearningEngine } from "../learning/engine/AdaptiveLearningEngine.ts";
@@ -241,8 +246,7 @@ function isOriginAllowed(origin: string | null, env: Env): boolean {
 
   const allowed = [
     ...(env.ALLOWED_ORIGINS || "").split(","),
-    "https://new-vs-zana.zana-platform.workers.dev",
-    "https://zana.idggov.tech",
+    ...ALLOWED_PRODUCTION_ORIGINS,
   ]
     .map((o) => o.trim().toLowerCase().replace(/\/$/, ""))
     .filter(Boolean);
@@ -267,7 +271,7 @@ function getCorsHeaders(origin: string | null, env: Env): Headers {
   headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
   headers.set(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.firebaseapp.com https://*.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.workers.dev https://*.firebaseio.com https://*.googleapis.com https://identitytoolkit.googleapis.com;"
+    `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.firebaseapp.com https://*.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' ${CANONICAL_APP_ORIGIN} ${LEGACY_APP_ORIGIN} https://*.workers.dev https://*.firebaseio.com https://*.googleapis.com https://identitytoolkit.googleapis.com;`
   );
   headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");

@@ -12,6 +12,7 @@ import {
 import { NavItemKey } from "./Sidebar.tsx";
 import { useAppStore } from "../store/appStore.ts";
 import { useSoundEffects } from "../hooks/useSoundEffects.ts";
+import { CANONICAL_APP_HOSTNAME, CANONICAL_APP_ORIGIN } from "../config/domains.ts";
 
 export interface DevQuickToolbarProps {
   activeTab: NavItemKey;
@@ -274,13 +275,13 @@ export function DevQuickToolbar({
               <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
                 <span>وەشانی نوێی زانا v2.0 •</span>
                 <a
-                  href="https://zana.idggov.tech"
+                  href={CANONICAL_APP_ORIGIN}
                   target="_blank"
                   rel="noopener noreferrer"
                   dir="ltr"
                   className="font-mono text-indigo-600 hover:underline inline-flex items-center gap-1"
                 >
-                  <code>zana.idggov.tech</code>
+                  <code>{CANONICAL_APP_HOSTNAME}</code>
                 </a>
               </div>
               <button

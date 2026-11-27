@@ -299,7 +299,7 @@ jobs:
   wrangler-dry-run:
     name: Cloudflare Worker Dry-Run
     needs: build
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'pull_request'
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.event.inputs.confirm_deploy == 'DEPLOY')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -487,19 +487,19 @@ jobs:
   verify-worker:
     name: Verify Worker Live Health & Exposure
     needs: deploy-worker
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.event.inputs.confirm_deploy == 'DEPLOY'
     runs-on: ubuntu-latest
     environment: Production
     steps:
       - name: Verify Worker Health & CORS
         env:
           CLEANED_URL: ${{ secrets.VITE_API_BASE_URL }}
-          CANONICAL_FRONTEND_ORIGIN: ${{ secrets.ZANA_FRONTEND_ORIGIN || 'https://zana.idggov.tech' }}
+          CANONICAL_FRONTEND_ORIGIN: ${{ secrets.ZANA_FRONTEND_ORIGIN || 'https://www.zana-ai.tech' }}
         run: |
           set -euo pipefail
           
           CLEANED_URL=$(echo "$CLEANED_URL" | sed 's/\/$//')
-          FRONTEND_ORIGIN="${CANONICAL_FRONTEND_ORIGIN:-https://zana.idggov.tech}"
+          FRONTEND_ORIGIN="${CANONICAL_FRONTEND_ORIGIN:-https://www.zana-ai.tech}"
           export CLEANED_URL FRONTEND_ORIGIN
           echo "Verifying live Cloudflare Worker at: $CLEANED_URL"
           echo "Using canonical frontend origin: $FRONTEND_ORIGIN"
@@ -636,12 +636,12 @@ jobs:
       - name: Verify Production Provider Preflight
         env:
           CLEANED_URL: ${{ secrets.VITE_API_BASE_URL }}
-          CANONICAL_FRONTEND_ORIGIN: ${{ secrets.ZANA_FRONTEND_ORIGIN || 'https://zana.idggov.tech' }}
+          CANONICAL_FRONTEND_ORIGIN: ${{ secrets.ZANA_FRONTEND_ORIGIN || 'https://www.zana-ai.tech' }}
           PROVIDER_PREFLIGHT_TOKEN: ${{ secrets.PROVIDER_PREFLIGHT_TOKEN }}
         run: |
           set -euo pipefail
           CLEANED_URL=$(echo "$CLEANED_URL" | sed 's/\/$//')
-          FRONTEND_ORIGIN="${CANONICAL_FRONTEND_ORIGIN:-https://zana.idggov.tech}"
+          FRONTEND_ORIGIN="${CANONICAL_FRONTEND_ORIGIN:-https://www.zana-ai.tech}"
           echo "Verifying production AI provider preflight at ${CLEANED_URL}/api/provider/preflight..."
           
           # 1. Unauthenticated check (must fail with 401)
@@ -752,7 +752,7 @@ jobs:
   smoke-tests:
     name: Run Production Smoke Tests
     needs: verify-worker
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.event.inputs.confirm_deploy == 'DEPLOY'
     runs-on: ubuntu-latest
     environment: Production
     steps:
@@ -782,7 +782,7 @@ jobs:
       - name: Run Production Smoke Tests
         env:
           API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
-          ZANA_FRONTEND_ORIGIN: ${{ secrets.ZANA_FRONTEND_ORIGIN || 'https://zana.idggov.tech' }}
+          ZANA_FRONTEND_ORIGIN: ${{ secrets.ZANA_FRONTEND_ORIGIN || 'https://www.zana-ai.tech' }}
         run: |
           set -euo pipefail
           npm run test:smoke 2>&1 | tee smoke-test-report.log
@@ -859,7 +859,7 @@ jobs:
   release:
     name: Generate Release Tag & Metadata
     needs: [validate, build, deploy-worker, verify-worker, smoke-tests, security-checks]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.event.inputs.confirm_deploy == 'DEPLOY'
     runs-on: ubuntu-latest
     environment: Production
     permissions: write-all

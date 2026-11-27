@@ -4,6 +4,12 @@
  * URL allowlisting, age-appropriateness for Grade 9–12, and Gemini safety thresholds.
  */
 
+import {
+  APEX_APP_HOSTNAME,
+  CANONICAL_APP_HOSTNAME,
+  LEGACY_APP_HOSTNAME,
+} from "../config/domains.ts";
+
 export const GEMINI_SAFETY_SETTINGS = [
   {
     category: "HARM_CATEGORY_HARASSMENT",
@@ -30,6 +36,9 @@ export interface ContentValidationResult {
 }
 
 const ALLOWED_URL_DOMAINS = [
+  CANONICAL_APP_HOSTNAME,
+  APEX_APP_HOSTNAME,
+  LEGACY_APP_HOSTNAME,
   "zana.krd",
   "edu.gov.krd",
   "parwarda.org",
