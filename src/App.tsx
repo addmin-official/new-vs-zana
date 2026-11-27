@@ -24,6 +24,7 @@ import { FeatureFlagProvider } from "./features/flags/index.ts";
 import { ProtectedStudentRoute } from "./routes/ProtectedStudentRoute.tsx";
 import type { PedagogyPillarTab } from "./screens/PedagogicalHubScreen.tsx";
 import { lazyWithRetry } from "./utils/lazyWithRetry.ts";
+import { ZanaSmartBoard } from "./features/smartboard/ZanaSmartBoard.tsx";
 
 // Lazy-loaded routes with automatic retry and reload on new version deployments
 const Home = lazyWithRetry(() => import("./pages/Home.tsx").then((m) => ({ default: m.Home })));
@@ -866,6 +867,7 @@ export default function App() {
         </AppShell>
       </div>
       <PwaInstallPrompt />
+      <ZanaSmartBoard />
       {import.meta.env.DEV && (
         <DevQuickToolbar
           activeTab={activeTab}

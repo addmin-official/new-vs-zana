@@ -15,6 +15,7 @@ import {
   LogIn,
   Lock,
   CreditCard,
+  PenTool,
 } from "lucide-react";
 import { useAppStore } from "../store/appStore.ts";
 import { useSoundEffects } from "../hooks/useSoundEffects.ts";
@@ -36,6 +37,7 @@ import { StudentGamificationCard } from "../components/StudentGamificationCard.t
 import { useTheme } from "../context/ThemeContext.tsx";
 import { DataPrivacySection } from "../features/student/DataPrivacySection.tsx";
 import { useIsAdmin } from "../hooks/useIsAdmin.ts";
+import { useSmartBoardPreference } from "../features/smartboard/smartBoardPreference.ts";
 
 export interface ProfileAndSettingsProps {
   profile?: StudentProfile;
@@ -61,6 +63,7 @@ export function ProfileAndSettings({
   const clearChatHistory = useAppStore((state) => state.clearChatHistory);
   const logout = useAppStore((state) => state.logout);
   const { soundEnabled, toggleSound, playSuccess } = useSoundEffects();
+  const [smartBoardEnabled, setSmartBoardEnabled] = useSmartBoardPreference();
   const { t, locale, changeLanguage, useEasternNumerals, setUseEasternNumerals } = useTranslation();
   const { profile: masteryProfile } = useStudentMastery(studentProfile?.id || "default-guest");
   const userProgress = useAppStore((state) => state.userProgress);
@@ -872,6 +875,56 @@ export function ProfileAndSettings({
                   <span>دەنگی وەڵامی زانا</span>
                 </button>
               </div>
+            </div>
+          </div>
+
+          {/* ZANA Smart Board Setting */}
+          <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <h3 className="font-sans font-bold text-xs text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+              <PenTool className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+              <span>{t("settings.smartBoard.title")}</span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-50 dark:bg-cyan-950/60 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800">
+                {t("settings.smartBoard.badge")}
+              </span>
+            </h3>
+
+            <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-sans">
+              <div className="space-y-1">
+                <span className="font-bold text-slate-900 dark:text-white block">
+                  {t("settings.smartBoard.title")}
+                </span>
+                <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                  {t("settings.smartBoard.description")}
+                </p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                  {t("settings.smartBoard.sessionNote")}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                role="switch"
+                aria-checked={smartBoardEnabled}
+                aria-label={t("settings.smartBoard.toggleLabel")}
+                data-testid="smartboard-settings-toggle"
+                onClick={() => setSmartBoardEnabled(!smartBoardEnabled)}
+                className={`px-4 py-2 rounded-xl font-bold text-xs cursor-pointer transition-colors shrink-0 flex items-center justify-center gap-2 ${
+                  smartBoardEnabled
+                    ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+                    : "bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200"
+                }`}
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    smartBoardEnabled ? "bg-white" : "bg-slate-400 dark:bg-slate-500"
+                  }`}
+                />
+                <span>
+                  {smartBoardEnabled
+                    ? t("settings.smartBoard.enabled")
+                    : t("settings.smartBoard.disabled")}
+                </span>
+              </button>
             </div>
           </div>
 
