@@ -89,4 +89,18 @@ describe("ZANA Domain Configuration & Gated Workflow Verification", () => {
       /release:[\s\S]{0,250}if: github\.event_name == 'workflow_dispatch' && github\.ref == 'refs\/heads\/main' && github\.event\.inputs\.confirm_deploy == 'DEPLOY'/
     );
   });
+
+  it("keeps deploy-worker strictly code-only with zero remote D1 migrations or secret mutations", () => {
+    const ciYml = fs.readFileSync(path.join(process.cwd(), ".github/workflows/ci.yml"), "utf8");
+    const deployMatch = ciYml.match(/\n  deploy-worker:\n([\s\S]*?)\n  verify-worker:/);
+    expect(deployMatch).not.toBeNull();
+    const deployJob = deployMatch ? deployMatch[1] : "";
+
+    expect(deployJob).not.toMatch(/wrangler\s+d1/i);
+    expect(deployJob).not.toMatch(/wrangler\s+secret\s+put/i);
+    expect(deployJob).toContain("CLOUDFLARE_API_TOKEN");
+    expect(deployJob).toContain("CLOUDFLARE_ACCOUNT_ID");
+    expect(deployJob).toContain("VITE_API_BASE_URL");
+    expect(deployJob).toContain("npx wrangler deploy --config wrangler.production.json --keep-vars");
+  });
 });

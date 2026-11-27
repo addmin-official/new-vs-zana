@@ -73,7 +73,8 @@ requireMatch(workflow, /wrangler-dry-run:[\s\S]{0,250}?workflow_dispatch[\s\S]{0
 requireMatch(workflow, /verify-worker:[\s\S]{0,200}?workflow_dispatch[\s\S]{0,160}?confirm_deploy\s*==\s*'DEPLOY'/, 'verify-worker must be gated on workflow_dispatch + DEPLOY.');
 requireMatch(workflow, /smoke-tests:[\s\S]{0,200}?workflow_dispatch[\s\S]{0,160}?confirm_deploy\s*==\s*'DEPLOY'/, 'smoke-tests must be gated on workflow_dispatch + DEPLOY.');
 requireMatch(workflow, /wrangler deploy --config wrangler\.production\.json/, 'Production deployment must use Wrangler and wrangler.production.json.');
-requireMatch(workflow, /wrangler d1 migrations apply DB --remote --config wrangler\.production\.json/, 'Production deployment must run remote D1 database migrations before deploy.');
+forbidMatch(workflow, /wrangler\s+d1\s+migrations\s+apply\b[\s\S]*--remote/i, 'Code-only Worker deployment workflow must NOT execute remote D1 database migrations.');
+forbidMatch(workflow, /wrangler\s+secret\s+put/i, 'Code-only Worker deployment workflow must NOT mutate Worker secrets.');
 requireMatch(wrangler, /"binding"\s*:\s*"DB"/, 'D1 database binding DB is missing from wrangler.jsonc.');
 requireMatch(wrangler, /"name"\s*:\s*"ADMIN_COMMAND_DO"/, 'Durable Object binding ADMIN_COMMAND_DO is missing from wrangler.jsonc.');
 forbidMatch(workflow, /firebase\s+deploy|hosting:|functions:/i, 'CI contains a forbidden Firebase Hosting or Functions deployment.');
