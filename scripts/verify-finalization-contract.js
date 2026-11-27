@@ -68,8 +68,10 @@ requireMatch(workflow, /Verify Production Exposure Security/, 'Production securi
 requireMatch(workflow, /Generate Release Tag & Metadata/, 'Release metadata gate is missing.');
 requireMatch(workflow, /workflow_dispatch:/, 'Manual workflow_dispatch trigger is required for controlled deployment.');
 requireMatch(workflow, /confirm_deploy\s*==\s*'DEPLOY'/, 'Production deployment must require explicit DEPLOY confirmation.');
+requireMatch(workflow, /confirm_deploy:[\s\S]{0,200}?type:\s*choice[\s\S]{0,160}?- "DEPLOY"/, 'confirm_deploy workflow_dispatch input must provide explicit DEPLOY choice option.');
 requireMatch(workflow, /needs:\s*\[validate,\s*build,\s*wrangler-dry-run,\s*security-checks\]/, 'Production deploy job must depend on validate, build, dry-run, and security checks.');
-requireMatch(workflow, /wrangler-dry-run:[\s\S]{0,250}?workflow_dispatch[\s\S]{0,160}?confirm_deploy\s*==\s*'DEPLOY'/, 'wrangler-dry-run must also run on gated workflow_dispatch deployments.');
+requireMatch(workflow, /wrangler-dry-run:[\s\S]{0,250}?github\.event_name\s*==\s*'workflow_dispatch'\s*&&\s*github\.ref\s*==\s*'refs\/heads\/main'/, 'wrangler-dry-run must also run on main workflow_dispatch runs.');
+requireMatch(workflow, /report-status:[\s\S]{0,220}?release/, 'report-status must include release in needs.');
 requireMatch(workflow, /verify-worker:[\s\S]{0,200}?workflow_dispatch[\s\S]{0,160}?confirm_deploy\s*==\s*'DEPLOY'/, 'verify-worker must be gated on workflow_dispatch + DEPLOY.');
 requireMatch(workflow, /smoke-tests:[\s\S]{0,200}?workflow_dispatch[\s\S]{0,160}?confirm_deploy\s*==\s*'DEPLOY'/, 'smoke-tests must be gated on workflow_dispatch + DEPLOY.');
 requireMatch(workflow, /wrangler deploy --config wrangler\.production\.json/, 'Production deployment must use Wrangler and wrangler.production.json.');

@@ -8,9 +8,13 @@ on:
   workflow_dispatch:
     inputs:
       confirm_deploy:
-        description: "Type DEPLOY to authorize production Worker deployment"
+        description: "Select DEPLOY to deploy to Production Worker, or DRY_RUN_ONLY to validate and dry-run without deploying"
+        type: choice
         required: true
-        default: ""
+        default: "DRY_RUN_ONLY"
+        options:
+          - "DRY_RUN_ONLY"
+          - "DEPLOY"
 
 concurrency:
   group: production-deployment
@@ -134,7 +138,7 @@ jobs:
           npx playwright test --project=chromium 2>&1 | tee playwright.log
 
       - name: Save Pipeline Start Time
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
         run: |
           set -euo pipefail
           mkdir -p deployment-started
@@ -299,7 +303,7 @@ jobs:
   wrangler-dry-run:
     name: Cloudflare Worker Dry-Run
     needs: build
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.event.inputs.confirm_deploy == 'DEPLOY')
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -703,7 +707,8 @@ jobs:
               fi
               echo "Production provider preflight check PASSED successfully!"
             else
-              echo "Provider preflight status: $HTTP_STATUS"
+              echo "::error::Provider preflight returned unexpected status $HTTP_STATUS"
+              exit 1
             fi
           fi
 
@@ -875,11 +880,12 @@ jobs:
 
   release:
     name: Generate Release Tag & Metadata
-    needs: [validate, build, deploy-worker, verify-worker, smoke-tests, security-checks]
+    needs: [validate, build, wrangler-dry-run, deploy-worker, verify-worker, smoke-tests, security-checks]
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.event.inputs.confirm_deploy == 'DEPLOY'
     runs-on: ubuntu-latest
     environment: Production
-    permissions: write-all
+    permissions:
+      contents: write
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -966,7 +972,7 @@ jobs:
 
   report-status:
     name: Report Pipeline Status
-    needs: [validate, build, wrangler-dry-run, deploy-worker, verify-worker, smoke-tests, security-checks]
+    needs: [validate, build, wrangler-dry-run, deploy-worker, verify-worker, smoke-tests, security-checks, release]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -975,6 +981,9 @@ jobs:
       - name: Report Statuses to GitHub
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          CONFIRM_DEPLOY: ${{ github.event.inputs.confirm_deploy }}
           VALIDATE_STATUS: ${{ needs.validate.result }}
           BUILD_STATUS: ${{ needs.build.result }}
           WRANGLER_DRY_RUN_STATUS: ${{ needs.wrangler-dry-run.result }}
@@ -985,9 +994,15 @@ jobs:
           RELEASE_STATUS: ${{ needs.release.result }}
         run: |
           set -euo pipefail
-          
+
+          DEPLOY_AUTHORIZED="false"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$REF" = "refs/heads/main" ] && [ "${CONFIRM_DEPLOY:-}" = "DEPLOY" ]; then
+            DEPLOY_AUTHORIZED="true"
+          fi
+
           map_status() {
             local status="$1"
+            local gated="${2:-false}"
             case "$status" in
               success)
                 echo "success"
@@ -995,15 +1010,25 @@ jobs:
               failure)
                 echo "failure"
                 ;;
+              skipped)
+                if [ "$gated" = "true" ] && [ "$DEPLOY_AUTHORIZED" = "false" ] \
+                  && [ "$VALIDATE_STATUS" = "success" ] && [ "$BUILD_STATUS" = "success" ] \
+                  && [ "$WRANGLER_DRY_RUN_STATUS" = "success" ] && [ "$SECURITY_STATUS" = "success" ]; then
+                  echo "success"
+                else
+                  echo "error"
+                fi
+                ;;
               *)
                 echo "error"
                 ;;
             esac
           }
-          
+
           map_description() {
             local status="$1"
             local job_name="$2"
+            local gated="${3:-false}"
             case "$status" in
               success)
                 echo "$job_name passed successfully"
@@ -1012,7 +1037,11 @@ jobs:
                 echo "$job_name failed"
                 ;;
               skipped)
-                echo "$job_name was skipped"
+                if [ "$gated" = "true" ] && [ "$DEPLOY_AUTHORIZED" = "false" ]; then
+                  echo "$job_name skipped (manual DEPLOY confirmation required)"
+                else
+                  echo "$job_name was skipped"
+                fi
                 ;;
               cancelled)
                 echo "$job_name was cancelled"
@@ -1031,11 +1060,12 @@ jobs:
           post_status() {
             local context="$1"
             local raw_status="$2"
-            local state=$(map_status "$raw_status")
-            local desc=$(map_description "$raw_status" "$context")
-            
+            local gated="${3:-false}"
+            local state=$(map_status "$raw_status" "$gated")
+            local desc=$(map_description "$raw_status" "$context" "$gated")
+
             echo "Publishing status to $context: state=$state, desc='$desc'"
-            
+
             gh api --method POST \
               -H "Accept: application/vnd.github+json" \
               "/repos/${REPO}/statuses/${SHA}" \
@@ -1045,11 +1075,29 @@ jobs:
               -f target_url="$TARGET_URL" > /dev/null
           }
 
-          post_status "ZANA/validate" "$VALIDATE_STATUS"
-          post_status "ZANA/build" "$BUILD_STATUS"
-          post_status "ZANA/wrangler-dry-run" "$WRANGLER_DRY_RUN_STATUS"
-          post_status "ZANA/deploy" "$DEPLOY_STATUS"
-          post_status "ZANA/verify" "$VERIFY_STATUS"
-          post_status "ZANA/smoke" "$SMOKE_STATUS"
-          post_status "ZANA/security" "$SECURITY_STATUS"
-          post_status "ZANA/release" "$RELEASE_STATUS"
+          post_status "ZANA/validate" "$VALIDATE_STATUS" "false"
+          post_status "ZANA/build" "$BUILD_STATUS" "false"
+          post_status "ZANA/wrangler-dry-run" "$WRANGLER_DRY_RUN_STATUS" "false"
+          post_status "ZANA/deploy" "$DEPLOY_STATUS" "true"
+          post_status "ZANA/verify" "$VERIFY_STATUS" "true"
+          post_status "ZANA/smoke" "$SMOKE_STATUS" "true"
+          post_status "ZANA/security" "$SECURITY_STATUS" "false"
+          post_status "ZANA/release" "$RELEASE_STATUS" "true"
+
+          {
+            echo "## Unified CI/CD Pipeline Summary"
+            echo ""
+            echo "- Event: \`$EVENT_NAME\`"
+            echo "- Deployment Authorized (\`confirm_deploy=DEPLOY\`): \`$DEPLOY_AUTHORIZED\`"
+            echo "- Validate: \`$VALIDATE_STATUS\` | Security: \`$SECURITY_STATUS\` | Build: \`$BUILD_STATUS\` | Dry-Run: \`$WRANGLER_DRY_RUN_STATUS\`"
+            echo "- Deploy: \`$DEPLOY_STATUS\` | Verify: \`$VERIFY_STATUS\` | Smoke: \`$SMOKE_STATUS\` | Release: \`$RELEASE_STATUS\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$DEPLOY_AUTHORIZED" = "false" ]; then
+            echo "::notice title=Deployment Not Authorized::confirm_deploy was '${CONFIRM_DEPLOY:-empty}'. Deployment jobs skipped cleanly; select confirm_deploy=DEPLOY on branch main to deploy Production Worker."
+          fi
+
+          if [ "$DEPLOY_AUTHORIZED" = "true" ] && [ "$DEPLOY_STATUS" != "success" ]; then
+            echo "::error::Deployment was authorized (confirm_deploy=DEPLOY), but deploy-worker status was '$DEPLOY_STATUS'."
+            exit 1
+          fi

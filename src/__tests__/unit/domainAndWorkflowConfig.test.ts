@@ -70,11 +70,12 @@ describe("ZANA Domain Configuration & Gated Workflow Verification", () => {
     }
   });
 
-  it("repairs ci.yml conditions so dry-run, deploy, verify, smoke-tests, and release run on gated workflow_dispatch only for deploy", () => {
+  it("repairs ci.yml conditions so dry-run runs on main dispatches while deploy, verify, smoke-tests, and release require DEPLOY confirmation", () => {
     const ciYml = fs.readFileSync(path.join(process.cwd(), ".github/workflows/ci.yml"), "utf8");
 
+    expect(ciYml).toMatch(/confirm_deploy:[\s\S]{0,200}type: choice[\s\S]{0,160}- "DEPLOY"/);
     expect(ciYml).toMatch(
-      /wrangler-dry-run:[\s\S]{0,250}workflow_dispatch[\s\S]{0,160}confirm_deploy == 'DEPLOY'/
+      /wrangler-dry-run:\s*\n\s*name: Cloudflare Worker Dry-Run\s*\n\s*needs: build\s*\n\s*if: \(github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'\) \|\| github\.event_name == 'pull_request' \|\| \(github\.event_name == 'workflow_dispatch' && github\.ref == 'refs\/heads\/main'\)/
     );
     expect(ciYml).toMatch(
       /deploy-worker:\s*\n\s*name: Deploy Cloudflare Worker\s*\n\s*needs: \[validate, build, wrangler-dry-run, security-checks\]\s*\n\s*if: github\.event_name == 'workflow_dispatch' && github\.ref == 'refs\/heads\/main' && github\.event\.inputs\.confirm_deploy == 'DEPLOY'/
@@ -87,6 +88,9 @@ describe("ZANA Domain Configuration & Gated Workflow Verification", () => {
     );
     expect(ciYml).toMatch(
       /release:[\s\S]{0,250}if: github\.event_name == 'workflow_dispatch' && github\.ref == 'refs\/heads\/main' && github\.event\.inputs\.confirm_deploy == 'DEPLOY'/
+    );
+    expect(ciYml).toMatch(
+      /report-status:\s*\n\s*name: Report Pipeline Status\s*\n\s*needs: \[validate, build, wrangler-dry-run, deploy-worker, verify-worker, smoke-tests, security-checks, release\]/
     );
   });
 
